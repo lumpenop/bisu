@@ -42,6 +42,20 @@ let hiddenAt = 0;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const withTimeout = (p, ms, fallback) => Promise.race([p.catch(() => fallback), sleep(ms).then(() => fallback)]);
 
+// Launched from Finder there is no terminal to read, so everything worth diagnosing goes here.
+let logFile = null;
+function log(...parts) {
+  const line = `${new Date().toISOString()} ${parts.join(' ')}`;
+  try {
+    if (!logFile) logFile = path.join(app.getPath('logs'), 'bisu.log');
+    fs.mkdirSync(path.dirname(logFile), {recursive: true});
+    const st = fs.statSync(logFile, {throwIfNoEntry: false});
+    if (st && st.size > 512 * 1024) fs.renameSync(logFile, logFile + '.1');
+    fs.appendFileSync(logFile, line + '\n');
+  } catch {}
+  if (!app.isPackaged || process.env.BISU_DEBUG) console.error(line);
+}
+
 // ---- state ----
 const statePath = () => path.join(app.getPath('userData'), 'desktop.json');
 function readState() { try { return JSON.parse(fs.readFileSync(statePath(), 'utf8')) || {} } catch { return {} } }
@@ -58,26 +72,50 @@ function defaultCwd() {
 }
 
 // ---- engine ----
-function run(cmd, args, timeout = 5000) {
+function run(cmd, args, timeout = 5000, env = null) {
   return new Promise(resolve => {
     const {execFile} = require('node:child_process');
-    execFile(cmd, args, {timeout, maxBuffer: 1 << 20, encoding: 'utf8'}, (err, stdout) => resolve({ok: !err, out: (stdout || '').trim(), err: err ? String(err.message || err) : null}));
+    execFile(cmd, args, {timeout, maxBuffer: 1 << 20, encoding: 'utf8', env: env || process.env}, (err, stdout) => resolve({ok: !err, out: (stdout || '').trim(), err: err ? String(err.message || err) : null}));
   });
+}
+
+// Finder and Spotlight start an app with almost no PATH, so node, claude and dec-secret would all
+// be missing. Ask the login shell once what it actually has and hand that to the engine.
+let shellPath = null;
+async function resolvePath() {
+  if (shellPath) return shellPath;
+  const parts = (process.env.PATH || '').split(':').filter(Boolean);
+  for (const flags of ['-ilc', '-lc']) {
+    const r = await run('/bin/zsh', [flags, 'print -r -- $PATH'], 8000);
+    if (r.ok && r.out.includes('/')) {
+      for (const d of r.out.split('\n').pop().split(':')) if (d && !parts.includes(d)) parts.push(d);
+      break;
+    }
+  }
+  for (const d of ['/opt/homebrew/bin', '/usr/local/bin', path.join(os.homedir(), '.local', 'bin')]) if (!parts.includes(d)) parts.push(d);
+  shellPath = parts.join(':');
+  return shellPath;
 }
 
 let nodeBin = null;
 async function resolveNode() {
   if (nodeBin) return nodeBin;
+  const pathEnv = await resolvePath();
   const tries = [];
-  const login = await run('/bin/zsh', ['-lc', 'command -v node'], 8000);
+  const login = await run('/bin/zsh', ['-ilc', 'command -v node'], 8000);
   if (login.ok && login.out) tries.push(login.out.split('\n').pop().trim());
-  for (const d of (process.env.PATH || '').split(':')) if (d) tries.push(path.join(d, 'node'));
-  tries.push('/opt/homebrew/bin/node', '/usr/local/bin/node', '/usr/bin/node');
+  for (const d of pathEnv.split(':')) if (d) tries.push(path.join(d, 'node'));
   for (const c of tries) {
     if (!path.isAbsolute(c)) continue;
     try { fs.accessSync(c, fs.constants.X_OK) } catch { continue }
     const v = await run(c, ['-v'], 4000);
-    if (v.ok && /^v\d+\./.test(v.out)) { nodeBin = c; return c }
+    if (v.ok && /^v\d+\./.test(v.out)) {
+      nodeBin = c;
+      // fnm/nvm keep node outside the usual PATH; make sure the engine can find it too.
+      const dir = path.dirname(c);
+      if (!pathEnv.split(':').includes(dir)) shellPath = pathEnv + ':' + dir;
+      return c;
+    }
   }
   throw Error('node was not found (bisu needs Node.js 18 or newer for its engine)');
 }
@@ -99,7 +137,7 @@ async function startEngine() {
   if (engine) { try { engine.kill('SIGTERM') } catch {} engine = null }
   engineReady = false;
   const node = await resolveNode();
-  const env = {...process.env};
+  const env = {...process.env, PATH: await resolvePath()};
   // A host app's Claude/Anthropic login would win over OpenRouter, and Electron's own
   // variables must not reach the plain Node engine.
   for (const k of Object.keys(env)) if (/^(CLAUDE|ANTHROPIC|ELECTRON_)/.test(k)) delete env[k];
@@ -113,14 +151,16 @@ async function startEngine() {
   }
 
   engineLog = '';
+  log(`engine start: ${cmd} ${args.slice(0, 3).join(' ')}`);
   engine = spawn(cmd, args, {cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe']});
   engine.stdout.on('data', d => { engineLog = (engineLog + d).slice(-4000) });
-  engine.stderr.on('data', d => { engineLog = (engineLog + d).slice(-4000) });
-  engine.on('error', e => { engineLog += '\n' + e.message });
+  engine.stderr.on('data', d => { engineLog = (engineLog + d).slice(-4000); log('engine:', String(d).trim()) });
+  engine.on('error', e => { engineLog += '\n' + e.message; log('engine spawn error:', e.message) });
   engine.on('exit', (code, signal) => {
     engineReady = false;
     engine = null;
     if (quitting) return;
+    log(`engine exited (${signal || code})`);
     restartEngine(`engine exited (${signal || code})`);
   });
 
@@ -147,6 +187,7 @@ async function restartEngine(reason) {
         return;
       } catch (e) {
         engineLog += `\n${String(e.message || e)}`;
+        log('engine failed:', String(e.message || e));
         await sleep(1500);
       }
     }
@@ -365,7 +406,7 @@ function createTray() {
   // Proof for the log that the item really sits on screen, not just that a Tray object exists.
   setTimeout(() => {
     const b = tray.getBounds();
-    console.error(`bisu: tray at ${b.x},${b.y} ${b.width}x${b.height}`);
+    log(`tray at ${b.x},${b.y} ${b.width}x${b.height}`);
   }, 1200);
 }
 
@@ -432,7 +473,7 @@ if (!app.requestSingleInstanceLock()) {
 
     const ok = globalShortcut.register(SHORTCUT, () => showPanel());
     if (!ok) tray?.setToolTip(`bisu · ${SHORTCUT} is taken by another app`);
-    console.error(`bisu: engine on ${BASE}, ${SHORTCUT} ${globalShortcut.isRegistered(SHORTCUT) ? 'ready' : 'unavailable'}`);
+    log(`engine on ${BASE}, ${SHORTCUT} ${globalShortcut.isRegistered(SHORTCUT) ? 'ready' : 'unavailable'}`);
 
     try {
       await startEngine();

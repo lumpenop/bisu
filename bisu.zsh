@@ -35,20 +35,32 @@ bisu() {
     else node "$_bisu_dir/ui/server.mjs" "$@"; fi
     return
   fi
-  # bisu app: the same engine in a menu-bar app (⌥Space), with selection/clipboard as context.
-  # Installs Electron on first run.
+  # bisu app: the same bisu as a menu-bar app (⌥Space) with what you were looking at as context.
+  #   bisu app          open the installed app (~/Applications/bisu.app), building it if missing
+  #   bisu app install  rebuild the .app from this folder (after changing bisu)
+  #   bisu app dev      run the working tree directly in Electron
   if [ "$1" = app ] || [ "$1" = desktop ]; then
     shift
     local appdir="$_bisu_dir/mac"
-    local log="$HOME/Library/Logs/bisu-app.log"
     local el="$appdir/node_modules/.bin/electron"
+    local bundle="${BISU_APP_DIR:-$HOME/Applications}/bisu.app"
     if [ ! -x "$el" ]; then
       command -v npm >/dev/null 2>&1 || { echo "bisu app needs node and npm" >&2; return 1; }
       echo "bisu app: installing Electron (first run, ~120 MB)…" >&2
       ( cd "$appdir" && npm install --no-audit --no-fund ) || return 1
     fi
-    mkdir -p "${log:h}"
-    ( cd "$appdir" && nohup "$el" . "$@" >>"$log" 2>&1 & )
+    if [ "$1" = dev ]; then
+      shift
+      ( cd "$appdir" && exec "$el" . "$@" )
+    fi
+    if [ "$1" = install ] || { [ "$1" != open ] && [ ! -d "$bundle" ]; }; then
+      [ "$1" = install ] && shift
+      "$appdir/install-app.sh" || return 1
+      [ "$#" -gt 0 ] || return 0
+    else
+      [ "$1" = open ] && shift
+    fi
+    open -a "$bundle" --args "$@"
     return 0
   fi
   saved="$(_bisu_config)"

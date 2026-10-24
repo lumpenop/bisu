@@ -75,18 +75,25 @@ The page's API needs a token that only the page gets, and refuses other hosts an
 ## `bisu app` — the same bisu in the menu bar
 
 ```sh
-bisu app        # first run installs Electron (~120 MB); log: ~/Library/Logs/bisu-app.log
+bisu app            # open it (~/Applications/bisu.app), building it on first run
+bisu app install    # rebuild the app after changing bisu
+bisu app dev        # run the working tree in Electron, for editing
 ```
 
-Same engine, same models, same approvals as `bisu ui` — but a menu-bar app instead of a browser tab. It starts its own engine on 127.0.0.1:7879, so both can run at once.
+A real `.app` in `~/Applications`, so macOS calls it **bisu** in Accessibility and Automation prompts, System Settings and Activity Monitor. The menu bar icon opens a popover with ⌥Space; there is no Dock icon.
+
+It is a proper bundle, not a shortcut: `install-app.sh` clones Electron (APFS copy-on-write, so it costs almost no disk) and drops in this folder's engine. That means the app is a snapshot — rebuild after editing — or use `bisu app dev` to run the working tree directly while you work.
+
+Same engine, same models, same approvals as `bisu ui` — but a menu-bar app instead of a browser tab. It starts its own engine on 127.0.0.1:7879, so both can run at once. Problems go to `~/Library/Logs/bisu/bisu.log`.
 
 - **⌥Space** opens a panel under the icon; clicking away or Escape puts it away.
 - **Context you don't have to explain:** the panel carries over the app you were in and the text you had selected or copied, so "이거 요약해" is enough. The selection is read through the Accessibility API — bisu never presses ⌘C and never touches the pasteboard, so nothing needs restoring. It needs Accessibility consent for `bisu` the first time; an app that doesn't expose its selection just reports nothing. The context is appended after your message, so chat titles stay your own words.
 - **Approvals** look the same as in `bisu ui`. If one is waiting while the panel is hidden, the icon shows a dot and macOS notifies you; clicking the notification opens it.
 - **One continuing conversation:** the Claude Code session id is kept in the app's folder, so quitting and coming back resumes the same thread. "Working folder…" in the menu changes where it works (default `~/bisu`).
-- The menu (right-click the icon) also has the full window for History and Settings, today's OpenRouter spend, and "Restart engine" — which is what to press after a key change or a long sleep.
+- The menu (right-click the icon) also has the full window for History and Settings, today's OpenRouter spend, "Working folder…", and "Restart engine" — which is what to press after a key change or a long sleep.
+- **Launched from Finder** the app has almost no `PATH`, so it asks your login shell for one before starting the engine; `node`, `claude` and `dec-secret` are found the same way they are in a terminal.
 
-The shell lives in [mac/](mac): Electron main, a preload that only exposes shell chrome, and the context capture. It adds nothing to the engine except an optional `BISU_UI_TOKEN` and a `?panel=1` layout.
+The shell lives in [mac/](mac): Electron main, a preload that only exposes shell chrome, the context capture, and `install-app.sh`. It adds nothing to the engine except an optional `BISU_UI_TOKEN` and a `?panel=1` layout.
 
 ## Honest limits
 
