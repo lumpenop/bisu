@@ -98,6 +98,10 @@ td .p{color:var(--muted);font-size:12px;display:-webkit-box;-webkit-line-clamp:2
 .chip{display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:11px;background:var(--chip);border-radius:4px;padding:1px 6px;margin:1px 2px 1px 0;white-space:nowrap}
 /* desktop shell (mac/): the popover under the menu bar icon */
 body.panel header,body.panel aside{display:none}
+.dragbar{display:none}
+body.panel .dragbar{display:block;height:9px;flex:none;-webkit-app-region:drag;background:transparent}
+body.desktop .chathead{-webkit-app-region:drag}
+body.desktop .chathead button,body.desktop .chathead input{-webkit-app-region:no-drag}
 body.panel .chathead{padding:8px 12px;gap:8px;border-bottom:1px solid var(--line)}
 body.panel .chathead .s{display:none}
 body.panel #msgs{padding:10px 12px}
@@ -117,6 +121,7 @@ body.panel .res,body.panel .sys{font-size:11.5px}
 </style>
 </head>
 <body>
+<div class="dragbar" aria-hidden="true"></div>
 <header>
  <h1>bisu</h1>
  <nav><button data-view="chat" class="on">Chat</button><button data-view="history">History</button><button data-view="settings">Settings</button></nav>
@@ -183,6 +188,7 @@ const PANEL=Q.get('panel')==='1';
 const HOST=window.bisuHost||null;
 const CTX_OPEN='<bisu-context>',CTX_CLOSE='</bisu-context>';
 if(PANEL)document.body.classList.add('panel');
+if(HOST)document.body.classList.add('desktop');
 const ROLE_INFO={
  BISU_MODEL:['Assistant · 비서','Talks with you, decides, hands work to the agents below and checks what comes back. Doesn\'t write code itself.'],
  BISU_DEV_MODEL:['Development · 개발','The developer agent: writing, fixing and debugging code, tests, scripts, and most hands-on work. Also Claude Code\'s background calls.'],

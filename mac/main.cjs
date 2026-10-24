@@ -75,47 +75,73 @@ function defaultCwd() {
 function run(cmd, args, timeout = 5000, env = null) {
   return new Promise(resolve => {
     const {execFile} = require('node:child_process');
-    execFile(cmd, args, {timeout, maxBuffer: 1 << 20, encoding: 'utf8', env: env || process.env}, (err, stdout) => resolve({ok: !err, out: (stdout || '').trim(), err: err ? String(err.message || err) : null}));
+    // SIGKILL, because a login shell can ignore SIGTERM and leave this promise pending forever,
+    // and stdin ignored, because an interactive zsh with a pipe for stdin is unpredictable.
+    execFile(cmd, args, {
+      timeout, killSignal: 'SIGKILL', maxBuffer: 1 << 20, encoding: 'utf8',
+      env: env || process.env, stdio: ['ignore', 'pipe', 'pipe'],
+    }, (err, stdout, stderr) => resolve({
+      ok: !err, out: (stdout || '').trim(),
+      err: err ? String((stderr || '').trim() || err.message || err).slice(0, 300) : null,
+    }));
   });
 }
 
-// Finder and Spotlight start an app with almost no PATH, so node, claude and dec-secret would all
-// be missing. Ask the login shell once what it actually has and hand that to the engine.
-let shellPath = null;
-async function resolvePath() {
-  if (shellPath) return shellPath;
-  const parts = (process.env.PATH || '').split(':').filter(Boolean);
-  for (const flags of ['-ilc', '-lc']) {
-    const r = await run('/bin/zsh', [flags, 'print -r -- $PATH'], 8000);
-    if (r.ok && r.out.includes('/')) {
-      for (const d of r.out.split('\n').pop().split(':')) if (d && !parts.includes(d)) parts.push(d);
-      break;
-    }
-  }
-  for (const d of ['/opt/homebrew/bin', '/usr/local/bin', path.join(os.homedir(), '.local', 'bin')]) if (!parts.includes(d)) parts.push(d);
-  shellPath = parts.join(':');
-  return shellPath;
+// Where node, claude and dec-secret usually live. Finder and Spotlight start an app with almost
+// no PATH, so the engine would not find any of them; these are found by reading the filesystem
+// rather than by starting a shell, which cannot hang.
+function versionManagers(home) {
+  const out = [];
+  const scan = (base, make) => {
+    let names = [];
+    try { names = fs.readdirSync(base) } catch { return }
+    const byTime = names.map(n => {
+      const p = path.join(base, n);
+      let t = 0;
+      try { t = fs.statSync(p).mtimeMs } catch {}
+      return {p, t};
+    }).sort((a, b) => b.t - a.t);
+    // Newest first, and only the few newest: fnm leaves one directory per shell ever started.
+    for (const {p} of byTime.slice(0, 8)) out.push(make(p));
+  };
+  scan(path.join(home, '.local', 'state', 'fnm_multishells'), p => path.join(p, 'bin', 'node'));
+  scan(path.join(home, '.nvm', 'versions', 'node'), p => path.join(p, 'bin', 'node'));
+  scan(path.join(home, '.asdf', 'installs', 'nodejs'), p => path.join(p, 'bin', 'node'));
+  scan(path.join(home, '.local', 'share', 'mise', 'installs', 'node'), p => path.join(p, 'bin', 'node'));
+  out.push(path.join(home, '.volta', 'bin', 'node'));
+  return out;
+}
+
+function searchPath(nodeDir) {
+  const home = os.homedir();
+  const dirs = [];
+  const add = d => { if (d && !dirs.includes(d)) dirs.push(d) };
+  if (nodeDir) add(nodeDir);
+  for (const d of ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', path.join(home, '.local', 'bin'), path.join(home, '.claude', 'local')]) add(d);
+  for (const d of (process.env.PATH || '').split(':')) add(d);
+  for (const d of ['/usr/bin', '/bin', '/usr/sbin', '/sbin']) add(d);
+  return dirs.join(':');
 }
 
 let nodeBin = null;
 async function resolveNode() {
   if (nodeBin) return nodeBin;
-  const pathEnv = await resolvePath();
+  const home = os.homedir();
   const tries = [];
-  const login = await run('/bin/zsh', ['-ilc', 'command -v node'], 8000);
-  if (login.ok && login.out) tries.push(login.out.split('\n').pop().trim());
-  for (const d of pathEnv.split(':')) if (d) tries.push(path.join(d, 'node'));
+  for (const d of (process.env.PATH || '').split(':')) if (d) tries.push(path.join(d, 'node'));
+  tries.push('/opt/homebrew/bin/node', '/usr/local/bin/node', ...versionManagers(home));
   for (const c of tries) {
     if (!path.isAbsolute(c)) continue;
     try { fs.accessSync(c, fs.constants.X_OK) } catch { continue }
     const v = await run(c, ['-v'], 4000);
-    if (v.ok && /^v\d+\./.test(v.out)) {
-      nodeBin = c;
-      // fnm/nvm keep node outside the usual PATH; make sure the engine can find it too.
-      const dir = path.dirname(c);
-      if (!pathEnv.split(':').includes(dir)) shellPath = pathEnv + ':' + dir;
-      return c;
-    }
+    if (v.ok && /^v\d+\./.test(v.out) && Number(v.out.slice(1).split('.')[0]) >= 18) { nodeBin = c; return c }
+  }
+  // Last resort: ask a non-interactive login shell, which cannot sit waiting for input.
+  const sh = await run('/bin/zsh', ['-lc', 'command -v node'], 3000);
+  const c = sh.ok ? sh.out.split('\n').pop().trim() : '';
+  if (c && path.isAbsolute(c)) {
+    const v = await run(c, ['-v'], 4000);
+    if (v.ok && /^v\d+\./.test(v.out)) { nodeBin = c; return c }
   }
   throw Error('node was not found (bisu needs Node.js 18 or newer for its engine)');
 }
@@ -126,28 +152,38 @@ function decSecret() {
   return null;
 }
 
-async function decRef(bin) {
-  const r = await run(bin, ['list'], 8000);
-  if (!r.ok) return null;
-  const line = r.out.split('\n').find(l => /\s+https:\/\/openrouter\.ai\s*$/.test(l));
-  return line ? line.trim().split(/\s+/)[0] : null;
+// How to launch the engine through dec-secret, or null. dec-secret's files live under ~/Desktop,
+// which macOS refuses to let a Finder-launched app read (Privacy & Security → Files and Folders);
+// install-app.sh keeps a readable copy in the app's support folder, and that copy is preferred.
+// Only a dev run (started from a terminal, which already has access) may use the original.
+function decPrefix(node) {
+  const bridge = path.join(app.getPath('userData'), 'dec', 'sdk', 'dec-secret.mjs');
+  if (fs.existsSync(bridge)) return {cmd: node, args: [bridge, 'run', '--', node, SERVER]};
+  const shim = decSecret();
+  if (shim && !app.isPackaged) return {cmd: shim, args: ['run', '--', node, SERVER]};
+  return null;
 }
 
 async function startEngine() {
   if (engine) { try { engine.kill('SIGTERM') } catch {} engine = null }
   engineReady = false;
   const node = await resolveNode();
-  const env = {...process.env, PATH: await resolvePath()};
+  const env = {...process.env, PATH: searchPath(path.dirname(node))};
   // A host app's Claude/Anthropic login would win over OpenRouter, and Electron's own
   // variables must not reach the plain Node engine.
   for (const k of Object.keys(env)) if (/^(CLAUDE|ANTHROPIC|ELECTRON_)/.test(k)) delete env[k];
   Object.assign(env, {BISU_UI_NO_OPEN: '1', BISU_UI_PORT: String(PORT), BISU_UI_TOKEN: TOKEN});
 
   let cmd = node, args = [SERVER];
-  const dec = decSecret();
+  // Through dec-secret when it is installed: the app only ever holds a one-time token, never the
+  // key. The reference is what bisu.zsh exports too, so both paths use the same stored credential.
+  const dec = decPrefix(node);
   if (dec) {
-    const ref = await decRef(dec);
-    if (ref) { env.OPENROUTER_API_KEY = ref; cmd = dec; args = ['run', '--', node, SERVER] }
+    if (!/^dec:\/\//.test(env.OPENROUTER_API_KEY || '')) env.OPENROUTER_API_KEY = 'dec://OPENROUTER_API_KEY';
+    cmd = dec.cmd;
+    args = dec.args;
+  } else if (!env.OPENROUTER_API_KEY) {
+    throw Error('bisu could not reach dec-secret: macOS blocks the copy in ~/Desktop from a Finder-launched app. Run `bisu app install` in Terminal once to give it a readable copy.');
   }
 
   engineLog = '';
@@ -265,12 +301,35 @@ function createPanel() {
   panel.on('blur', () => {
     if (quitting || !panel || panel.webContents.isDevToolsOpened()) return;
     hiddenAt = Date.now();
+    log('panel blur → hidden');
     panel.hide();
   });
   panel.on('resize', savePanelBounds);
-  panel.on('move', savePanelBounds);
+  panel.on('move', () => {
+    if (positioning || !panel || !panel.isVisible()) return;
+    // Dragged by hand: remember that, so the next ⌥Space reopens where it was left
+    // instead of snapping back under the icon.
+    saveState({panelMoved: true});
+    savePanelBounds();
+  });
   panel.on('closed', () => { panel = null });
   harden(panel);
+}
+
+// True while the shell itself is placing the window, so its own setBounds/setPosition does not
+// read as a drag.
+let positioning = false;
+function placeAt(bounds) {
+  if (!panel) return;
+  const b = panel.getBounds();
+  const next = {...b, ...bounds};
+  const area = screen.getDisplayMatching(next).workArea;
+  next.x = Math.round(Math.min(Math.max(next.x, area.x), area.x + area.width - next.width));
+  next.y = Math.round(Math.min(Math.max(next.y, area.y), area.y + area.height - next.height));
+  positioning = true;
+  panel.setBounds(next);
+  setTimeout(() => { positioning = false }, 200);
+  log(`panel placed at ${next.x},${next.y} ${next.width}x${next.height}`);
 }
 
 let boundsTimer = null;
@@ -278,7 +337,10 @@ function savePanelBounds() {
   if (!panel) return;
   clearTimeout(boundsTimer);
   boundsTimer = setTimeout(() => {
-    if (panel && panel.isVisible()) saveState({panel: panel.getBounds()});
+    if (!panel || !panel.isVisible()) return;
+    const b = panel.getBounds();
+    log(`panel at ${b.x},${b.y} ${b.width}x${b.height}`);
+    saveState({panel: b});
   }, 500);
 }
 
@@ -300,8 +362,20 @@ function positionPanel() {
   let y = Math.round(t.y + t.height + 6);
   if (!t.width) { x = Math.round(area.x + area.width - size.width - 12); y = Math.round(area.y + 8) }
   x = Math.max(area.x + 8, Math.min(x, area.x + area.width - size.width - 8));
+  positioning = true;
   panel.setPosition(x, y, false);
   if (saved && saved.width && saved.width !== size.width) panel.setSize(saved.width, saved.height, false);
+  setTimeout(() => { positioning = false }, 200);
+  log(`panel under icon at ${x},${y}`);
+}
+
+// Where the panel goes when it opens: under the icon until the person moves it, then wherever
+// they left it (clamped onto a screen that still exists).
+function placePanel() {
+  if (!panel) return;
+  const st = readState();
+  if (st.panelMoved && st.panel && Number.isFinite(st.panel.x) && Number.isFinite(st.panel.y)) placeAt(st.panel);
+  else positionPanel();
 }
 
 async function loadPanel() {
@@ -313,20 +387,20 @@ async function showPanel({capture = true} = {}) {
   if (!engineReady) { await restartEngine('not ready'); if (!engineReady) return }
   if (!panel) { createPanel(); await loadPanel() }
   else if (activeChatId && !(panel.webContents.getURL() || '').includes(activeChatId)) await loadPanel();
-  if (panel.isVisible()) { panel.hide(); return }
+  if (panel.isVisible()) { log('panel toggled off'); panel.hide(); return }
   // Clicking the menu bar icon blurs (and hides) the panel first; that click means "hide", not "show again".
   if (Date.now() - hiddenAt < 250) return;
   pendingContext = capture
     ? await withTimeout(ctx.capture({withSelection: readState().selection !== false, selfName: SELF}), 1600, null)
     : null;
-  positionPanel();
+  placePanel();
   panel.show();
   panel.focus();
   panel.webContents.focus();
   if (pendingContext) panel.webContents.send('bisu:context', pendingContext);
 }
 
-function hidePanel() { if (panel) panel.hide() }
+function hidePanel() { if (panel) { log('panel hidden'); panel.hide() } }
 
 function openFull() {
   if (full) { full.show(); full.focus(); return }
@@ -363,6 +437,16 @@ function buildMenu() {
   return Menu.buildFromTemplate([
     {label: panel && panel.isVisible() ? 'Hide bisu' : `Show bisu   ${SHORTCUT}`, click: () => showPanel()},
     {label: 'Full window', click: openFull},
+    {
+      label: 'Put the panel back under the icon',
+      enabled: readState().panelMoved === true,
+      click: () => {
+        saveState({panelMoved: false, panel: null});
+        positioning = true;
+        if (panel && panel.isVisible()) positionPanel();
+        setTimeout(() => { positioning = false }, 200);
+      },
+    },
     {type: 'separator'},
     {label: spend == null ? 'Spend: …' : `Today: $${spend.toFixed(2)}`, enabled: false},
     {type: 'separator'},
@@ -456,7 +540,7 @@ ipcMain.handle('bisu:selection-enabled', (_e, on) => {
 ipcMain.on('bisu:session', (_e, {sessionId, cwd} = {}) => {
   if (sessionId && /^[0-9a-f-]{36}$/.test(sessionId)) saveState({sessionId, cwd: cwd || readState().cwd});
 });
-ipcMain.on('bisu:hide', () => hidePanel());
+ipcMain.on('bisu:hide', hidePanel);
 ipcMain.on('bisu:full', () => { hidePanel(); openFull() });
 
 // ---- boot ----
@@ -481,6 +565,7 @@ if (!app.requestSingleInstanceLock()) {
       if (!chat) showError('No OpenRouter key. Save one for https://openrouter.ai in Dec, then restart.');
       await loadPanel();
     } catch (e) {
+      log('boot failed:', String(e?.message || e));
       showError(e.message || String(e));
     }
 

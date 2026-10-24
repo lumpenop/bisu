@@ -87,11 +87,12 @@ It is a proper bundle, not a shortcut: `install-app.sh` clones Electron (APFS co
 Same engine, same models, same approvals as `bisu ui` — but a menu-bar app instead of a browser tab. It starts its own engine on 127.0.0.1:7879, so both can run at once. Problems go to `~/Library/Logs/bisu/bisu.log`.
 
 - **⌥Space** opens a panel under the icon; clicking away or Escape puts it away.
+- **Drag it by the header** and it stays where you left it — the next ⌥Space opens there instead of under the icon. "Put the panel back under the icon" in the menu returns it. Dragging it to another screen works; the position is clamped so a corner can never end up offscreen.
 - **Context you don't have to explain:** the panel carries over the app you were in and the text you had selected or copied, so "이거 요약해" is enough. The selection is read through the Accessibility API — bisu never presses ⌘C and never touches the pasteboard, so nothing needs restoring. It needs Accessibility consent for `bisu` the first time; an app that doesn't expose its selection just reports nothing. The context is appended after your message, so chat titles stay your own words.
 - **Approvals** look the same as in `bisu ui`. If one is waiting while the panel is hidden, the icon shows a dot and macOS notifies you; clicking the notification opens it.
 - **One continuing conversation:** the Claude Code session id is kept in the app's folder, so quitting and coming back resumes the same thread. "Working folder…" in the menu changes where it works (default `~/bisu`).
 - The menu (right-click the icon) also has the full window for History and Settings, today's OpenRouter spend, "Working folder…", and "Restart engine" — which is what to press after a key change or a long sleep.
-- **Launched from Finder** the app has almost no `PATH`, so it asks your login shell for one before starting the engine; `node`, `claude` and `dec-secret` are found the same way they are in a terminal.
+- **Launched from Finder** the app has almost no `PATH`, so it composes one from the usual Homebrew, `~/.local/bin` and version-manager folders before starting the engine; `node`, `claude` and `dec-secret` are found without asking a shell (which can hang). `install-app.sh` also copies `dec-secret`'s three self-contained files into the app's support folder: the originals live under `~/Desktop`, and macOS refuses to let a Finder-launched app read there, so the app would otherwise wait forever on that `open()`.
 
 The shell lives in [mac/](mac): Electron main, a preload that only exposes shell chrome, the context capture, and `install-app.sh`. It adds nothing to the engine except an optional `BISU_UI_TOKEN` and a `?panel=1` layout.
 

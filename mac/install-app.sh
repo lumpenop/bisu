@@ -59,6 +59,24 @@ cat > "$app/package.json" <<JSON
 }
 JSON
 
+# ---- dec-secret bridge ----
+# dec-secret keeps its files under ~/Desktop, and macOS will not let a Finder-launched app read
+# there (Privacy & Security → Files and Folders): the open() blocks instead of prompting. The three
+# files are self-contained, so a copy in the app's own support folder is readable from anywhere.
+dec_root=""
+if [ -f "$HOME/.local/bin/dec-secret" ]; then
+  dec_mjs=$(sed -n 's/.*"\(\/[^"]*dec-secret\.mjs\)".*/\1/p' "$HOME/.local/bin/dec-secret" | head -1 || true)
+  if [ -n "${dec_mjs:-}" ]; then dec_root=$(dirname "$(dirname "$dec_mjs")"); fi
+fi
+bridge="$HOME/Library/Application Support/bisu/dec"
+if [ -n "$dec_root" ] && [ -f "$dec_root/sdk/dec-secret.mjs" ]; then
+  rm -rf "$bridge"
+  mkdir -p "$bridge/sdk" "$bridge/app/chromium"
+  cp "$dec_root/sdk/dec-secret.mjs" "$bridge/sdk/"
+  cp "$dec_root/app/chromium/secret-env-run.cjs" "$dec_root/app/chromium/key-proxy.cjs" "$bridge/app/chromium/"
+  echo "bisu: dec-secret bridged from $dec_root"
+fi
+
 # Modifying a signed bundle invalidates the signature; Apple Silicon refuses to run an unsigned
 # one, so re-sign ad hoc (this is a local build, not a distributable).
 codesign --force --deep --sign - "$tmp" >/dev/null 2>&1 || echo "bisu: ad-hoc signing failed (the app may still run)" >&2
