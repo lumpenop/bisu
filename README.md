@@ -49,7 +49,7 @@ These subagents exist only inside `bisu`; your normal `claude` never sees them.
 
 ## Honest limits
 
-- Claude Code sends a large system prompt on every call, so even a tiny task costs cents, not fractions of a cent. The Qwen role is the priciest; point `BISU_CODE_MODEL` at a cheaper coder if that matters.
+- The cost Claude Code prints (`/cost`, `total_cost_usd`) is estimated at **Claude** prices and runs several times too high here. Check real spend on your OpenRouter dashboard. Claude Code still sends a large system prompt on every call, so a small task is a few cents; the Qwen role is the priciest.
 - Claude Code is tuned for Claude. Non-Claude models are noticeably worse at its tool calls — give `bisu` mechanical work, not architecture.
 - Subscription-only features (connectors, remote control, scheduled tasks) are off in `bisu` sessions.
 - In use-only mode, responses are buffered (no streaming) and a single request is capped at ~200 s.
