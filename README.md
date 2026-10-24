@@ -47,12 +47,26 @@ BISU_CODE_MODEL=qwen/qwen3-coder-next bisu    # any OpenRouter slug per role
 
 These subagents exist only inside `bisu`; your normal `claude` never sees them.
 
+## `bisu ui`
+
+```sh
+bisu ui        # opens http://127.0.0.1:7878 (BISU_UI_PORT to change)
+```
+
+One local page (Node, no dependencies, 127.0.0.1 only) for everything:
+
+- **Chat:** pick a folder and talk to bisu. Each chat is a real headless Claude Code run with the same models and agents as `bisu`, so it reads, edits and runs things in that folder. Before it edits a file or runs a command that needs permission, the page shows exactly what it wants to do (the command, the diff, the new file) with **Allow**, **Allow for this chat** and **Deny**. **Stop** interrupts the current answer. Read-only tools that Claude Code allows by itself run without asking.
+- **History:** your `bisu` sessions from the last 60 days, from the terminal too (picked out of `~/.claude/projects` by their OpenRouter model names), with tokens and an estimated cost. **Continue** reopens one as a chat.
+- **Settings:** key status (use-only through Dec, or plain env; whether answers stream), real OpenRouter spend and limit, and models per role from OpenRouter's list with prices and tool-calling support. Model choices go to `~/.config/bisu/models`; exported `BISU_*` variables still win. The key itself is added or changed in Dec, never on this page.
+
+The page's API needs a token that only the page gets, and refuses other hosts and cross-site requests.
+
 ## Honest limits
 
 - The cost Claude Code prints (`/cost`, `total_cost_usd`) is estimated at **Claude** prices and runs several times too high here. Check real spend on your OpenRouter dashboard. Claude Code still sends a large system prompt on every call, so a small task is a few cents; the Qwen role is the priciest.
 - Claude Code is tuned for Claude. Non-Claude models are noticeably worse at its tool calls — give `bisu` mechanical work, not architecture.
 - Subscription-only features (connectors, remote control, scheduled tasks) are off in `bisu` sessions.
-- In use-only mode, responses are buffered (no streaming) and a single request is capped at ~200 s.
+- In use-only mode with an older `dec-secret-helper`, responses are buffered (no streaming) and a single request is capped at ~200 s. A helper with the `stream` command removes both; Settings in `bisu ui` shows which one you have.
 
 ## Why not open-codex?
 
