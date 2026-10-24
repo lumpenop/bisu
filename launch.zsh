@@ -14,7 +14,7 @@ agents="$(<"$4")"
 shift 4
 # Tools: Claude Code's core set only. The full default set (plus any MCP servers from your Claude config, which bisu can't
 # use anyway) is ~25k tokens of tool definitions sent with every request; the core set is ~6k. BISU_TOOLS=default restores it.
-tools="${BISU_TOOLS:-Bash,Read,Edit,Write,Glob,Grep,Task,TodoWrite,WebFetch,WebSearch,NotebookEdit}"
+tools="${BISU_TOOLS:-Bash,Read,Edit,Write,Glob,Grep,Task,WebFetch,WebSearch,NotebookEdit}"
 extra=()
 [ -n "$BISU_EFFORT" ] && extra+=(--effort "$BISU_EFFORT")
 exec claude --agents "$agents" --tools "$tools" --strict-mcp-config --append-system-prompt-file "${0:A:h}/prompt.md" "${extra[@]}" "$@"

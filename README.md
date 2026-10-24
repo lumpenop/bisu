@@ -49,7 +49,10 @@ These subagents exist only inside `bisu`; your normal `claude` never sees them.
 
 ## Lean and brief by default
 
-- **Core tools only:** `bisu` loads Claude Code's core tools (Bash, Read, Edit, Write, Glob, Grep, Task, TodoWrite, WebFetch, WebSearch, NotebookEdit) and no MCP servers. That cuts every request from ~25k to ~6k input tokens, so answers start sooner and cost about a quarter. `BISU_TOOLS=default bisu` brings back the full set.
+- **Core tools only, no MCP:** `bisu` keeps what a coding sidekick needs and drops the rest, cutting every request from ~25k to ~6.8k input tokens (about a quarter of the cost; with DeepSeek flash the API time per request went from ~3.2 s to ~1.8 s).
+  - Kept: `Bash`, `Read`, `Edit`, `Write`, `Glob`, `Grep`, `NotebookEdit`, `WebFetch`, `WebSearch`, and `Task` for the publisher / refactorer / helper subagents.
+  - Dropped: scheduling and background work (`CronCreate`, `CronDelete`, `CronList`, `ScheduleWakeup`, `Monitor`, `Workflow`, `TaskCreate`, `TaskGet`, `TaskList`, `TaskOutput`, `TaskStop`, `TaskUpdate`), session and app features (`SendMessage`, `PushNotification`, `EnterWorktree`, `ExitWorktree`, `Skill`, `DesignSync`, `ReportFindings`, `ShareOnboardingGuide`), and every MCP server from your Claude config (`--strict-mcp-config`); the subscription-only ones never worked in `bisu` anyway.
+  - `BISU_TOOLS=default bisu` brings back the full set, or pass your own comma-separated list.
 - **Short answers:** [prompt.md](prompt.md) is appended to Claude Code's system prompt: answer in the user's language, result first, no narration, full detail only for errors or when asked. It also holds the delegation rules. Edit it to taste.
 - **Reasoning effort:** `BISU_EFFORT=low|medium|high` passes `--effort` through. Off by default: in tests it made no measurable difference with GLM, whose reasoning can't be turned off.
 
