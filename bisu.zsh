@@ -8,8 +8,9 @@
 #
 # Models (any OpenRouter slug), one per role. The main assistant delegates on its own through agents.json:
 #   BISU_MODEL       main assistant, decides and delegates   (default: z-ai/glm-5.3)
-#   BISU_CODE_MODEL  publishing and refactoring              (default: qwen/qwen3.8-max-0902)
-#   BISU_FAST_MODEL  everything else, plus background calls  (default: deepseek/deepseek-v4.1-flash)
+#   BISU_CODE_MODEL  large publishing and refactoring jobs   (default: qwen/qwen3.8-max-0902)
+#   BISU_FAST_MODEL  other large jobs, plus background calls (default: deepseek/deepseek-v4.1-flash)
+# Small tasks stay with the main assistant: each handoff re-sends Claude Code's whole system prompt.
 
 _bisu_dir="${${(%):-%x}:A:h}"
 
@@ -27,7 +28,7 @@ _bisu_launch='
   export ANTHROPIC_DEFAULT_HAIKU_MODEL="$3"
   agents="$(<"$4")"
   shift 4
-  exec claude --agents "$agents" --append-system-prompt "Delegate on your own: send UI publishing work to the publisher agent, refactors to the refactorer agent, and routine chores to the helper agent. Do the deciding, planning and final answer yourself." "$@"'
+  exec claude --agents "$agents" --append-system-prompt "Do small tasks yourself: quick edits, single-file changes, short lookups and answers. Delegating costs a full extra setup per call, so only hand off large jobs: big UI publishing to the publisher agent, big refactors to the refactorer agent, and other big jobs (bulk reading, summarising, file chores) to the helper agent. When you delegate, give one complete brief with the files, the goal and what done looks like. When a delegated job comes back, check it yourself (read the changed files, run a quick check) before telling the user it is done. Do the deciding and the final answer yourself." "$@"'
 
 bisu() {
   local main="${BISU_MODEL:-z-ai/glm-5.3}" code="${BISU_CODE_MODEL:-qwen/qwen3.8-max-0902}"

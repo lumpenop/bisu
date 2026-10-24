@@ -32,13 +32,13 @@ bisu
 
 ## Models: one per role, delegated automatically
 
-The main assistant reads each request and hands work to the right model on its own (subagents defined in [agents.json](agents.json)):
+The main assistant does small tasks itself and hands only large jobs to a specialist (subagents defined in [agents.json](agents.json)). Every handoff re-sends Claude Code's whole system prompt, so delegating small work costs more than it saves.
 
 | Role | Default | Override |
 |---|---|---|
-| Main assistant: decides, plans, answers | `z-ai/glm-5.3` | `BISU_MODEL` |
-| Publishing (markup, CSS, components) and refactoring | `qwen/qwen3.8-max-0902` | `BISU_CODE_MODEL` |
-| Everything else: finding, reading, summarising, file chores | `deepseek/deepseek-v4.1-flash` | `BISU_FAST_MODEL` |
+| Main assistant: decides, does small tasks, checks results | `z-ai/glm-5.3` | `BISU_MODEL` |
+| Large publishing (pages, many components) and large refactors | `qwen/qwen3.8-max-0902` | `BISU_CODE_MODEL` |
+| Other large jobs: bulk reading, summarising, file chores | `deepseek/deepseek-v4.1-flash` | `BISU_FAST_MODEL` |
 
 ```sh
 bisu                                          # all defaults
