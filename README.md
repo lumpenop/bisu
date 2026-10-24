@@ -28,7 +28,7 @@ export OPENROUTER_API_KEY=sk-or-...   # in ~/.zshrc
 bisu
 ```
 
-**Use-only (recommended):** if your machine has a secret manager exposing the `dec-secret` CLI, save the key there under the name `OpenRouter` (site `https://openrouter.ai`, env var `OPENROUTER_API_KEY`). `bisu` detects it automatically and the real key is **never placed in any process environment** — the CLI only ever sees a one-time token, and a signed helper injects the key when the request leaves for openrouter.ai. Nothing to leak in logs, env dumps, or the model's own context.
+**Use-only (recommended):** if your machine has a secret manager exposing the `dec-secret` CLI, save the key there with the site `https://openrouter.ai` (any name). `bisu` detects it automatically and the real key is **never placed in any process environment** — the CLI only ever sees a one-time token, and a signed helper injects the key when the request leaves for openrouter.ai. Nothing to leak in logs, env dumps, or the model's own context.
 
 ## Pick a model
 
