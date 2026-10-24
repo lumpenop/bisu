@@ -2,8 +2,8 @@
 // bisu ui — one local page to talk to bisu, approve what it does, pick models per role, and check the key and real spend.
 // Started by `bisu ui`. Listens on 127.0.0.1 only; no dependencies.
 //  * Chat: each conversation is a real headless Claude Code run started through launch.zsh (same env, models, tools, prompt
-//    and agents as `bisu`), speaking stream-json. The process stays up between messages; after IDLE_MS without activity it
-//    stops and the next message resumes it with --resume. Tool use that needs permission comes back as a can_use_tool
+//    and agents as `bisu`), speaking stream-json. The process starts when the chat is created or opened and stays up between messages; after IDLE_MS without activity it
+//    stops; opening the chat or the next message resumes it with --resume. Tool use that needs permission comes back as a can_use_tool
 //    request and waits for the person to allow or deny it on the page.
 //  * Key: the same one bisu uses. In use-only mode (dec-secret run) this process and every chat hold a one-time token and a
 //    local OPENROUTER_BASE_URL, never the key itself. Adding or changing the key happens in Dec, not here.
@@ -84,14 +84,16 @@ function pastMessages(sessionId){const out=[];
 // One Claude Code process per chat. Events are kept (capped) so a reloaded page can replay the conversation.
 const chats=new Map();
 const MAX_EVENTS=3000;
-// A chat's process stays up between messages (no startup or cache warm-up per message) and is stopped only after this
-// long without activity; the next message then resumes the session.
-const IDLE_MS=Number(process.env.BISU_UI_IDLE_MIN||15)*60e3;
+// A chat's process is started as soon as the chat is created or opened, so the first message doesn't wait for Claude Code
+// to boot. It stays up between messages and is stopped only after this long without activity; opening the chat or sending
+// the next message starts it again with --resume.
+const IDLE_MS=Number(process.env.BISU_UI_IDLE_MIN||30)*60e3;
 function idleLater(c){clearTimeout(c.idle);c.idle=setTimeout(()=>{if(c.proc&&!c.busy&&!c.pending.size)c.proc.kill('SIGTERM')},IDLE_MS)}
 function publicChat(c){return {id:c.id,cwd:c.cwd,title:c.title,busy:c.busy,alive:!!c.proc,sessionId:c.sessionId,pending:c.pending.size,created:c.created}}
 function push(c,ev){ev.at=Date.now();c.events.push(ev);if(c.events.length>MAX_EVENTS)c.events.splice(0,c.events.length-MAX_EVENTS);
  const line=`data: ${JSON.stringify(ev)}\n\n`;for(const res of c.clients)res.write(line)}
 function setBusy(c,busy){if(c.busy===busy)return;c.busy=busy;push(c,{kind:'status',busy})}
+function warm(c){if(!c.proc&&KEY){start(c);idleLater(c)}}
 function start(c){
  const r=roles();
  const args=['-f',path.join(root,'launch.zsh'),r.BISU_MODEL.value,r.BISU_CODE_MODEL.value,r.BISU_FAST_MODEL.value,path.join(root,'agents.json'),
@@ -131,7 +133,7 @@ function newChat({cwd,resume}){
  const c={id:randomUUID(),cwd:dir,title:null,busy:false,proc:null,sessionId:resume||null,events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),turnsDone:0,costSoFar:0,created:Date.now()};
  if(resume){if(!/^[0-9a-f-]{36}$/.test(resume))throw Error('bad session id');const past=pastMessages(resume);
   c.title=past.find(m=>m.kind==='user')?.text.slice(0,60)||'Resumed session';push(c,{kind:'resumed',sessionId:resume,count:past.length});for(const m of past)push(c,{...m,past:true})}
- chats.set(c.id,c);return c}
+ chats.set(c.id,c);warm(c);return c}
 function say(c,text){
  if(!c.title)c.title=text.slice(0,60);
  clearTimeout(c.idle);if(!c.proc)start(c);
@@ -171,7 +173,7 @@ const server=http.createServer(async(req,res)=>{
   if(cm&&!c)return json(res,404,{error:'chat not found'});
   if(c&&m==='GET'&&cm[2]==='/events'){res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-store','Connection':'keep-alive'});
    res.write(`data: ${JSON.stringify({kind:'hello',chat:publicChat(c)})}\n\n`);for(const ev of c.events)res.write(`data: ${JSON.stringify(ev)}\n\n`);
-   c.clients.add(res);const ping=setInterval(()=>res.write(': ping\n\n'),20000);req.on('close',()=>{clearInterval(ping);c.clients.delete(res)});return}
+   c.clients.add(res);warm(c);const ping=setInterval(()=>res.write(': ping\n\n'),20000);req.on('close',()=>{clearInterval(ping);c.clients.delete(res)});return}
   if(c&&m==='POST'&&cm[2]==='/send'){const {text}=await body(req);if(typeof text!=='string'||!text.trim())return json(res,400,{error:'empty'});if(c.busy)return json(res,409,{error:'bisu is still working on the last message'});say(c,text.trim());return json(res,200,{ok:true})}
   if(c&&m==='POST'&&cm[2]==='/approve'){decide(c,await body(req));return json(res,200,{ok:true})}
   if(c&&m==='POST'&&cm[2]==='/stop'){stop(c);return json(res,200,{ok:true})}
