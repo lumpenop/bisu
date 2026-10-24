@@ -162,9 +162,9 @@ td .p{color:var(--muted);font-size:12px;display:-webkit-box;-webkit-line-clamp:2
 <script>
 const TOKEN='__BISU_TOKEN__';
 const ROLE_INFO={
- BISU_MODEL:['Main assistant','Decides, does small tasks itself, checks delegated work.'],
- BISU_CODE_MODEL:['Code (publisher, refactorer)','Large UI publishing and refactors. Pick something fast while answers are buffered.'],
- BISU_FAST_MODEL:['Fast (helper)','Bulk reading, summaries, file chores, background calls.']};
+ BISU_MODEL:['Assistant · 비서','Talks with you, decides, hands work to the agents below and checks what comes back. Doesn\'t write code itself.'],
+ BISU_DEV_MODEL:['Development · 개발','The developer agent: writing, fixing and debugging code, tests, scripts, and most hands-on work. Also Claude Code\'s background calls.'],
+ BISU_CODE_MODEL:['Large publishing & refactors · 대형 퍼블리싱·리팩토링','The publisher and refactorer agents: whole pages or many components, refactors across several files.']};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const usd=(v,d=2)=>v==null||isNaN(v)?'—':'$'+Number(v).toFixed(v>0&&v<0.01?4:d);

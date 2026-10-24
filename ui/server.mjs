@@ -19,17 +19,20 @@ const TOKEN=randomBytes(24).toString('hex');
 const CONFIG=path.join(process.env.XDG_CONFIG_HOME||path.join(os.homedir(),'.config'),'bisu','models');
 const PROJECTS=path.join(os.homedir(),'.claude','projects');
 const HELPER=path.join(os.homedir(),'Library','Application Support','Dec Browser','bin','dec-secret-helper');
-const ROLES={BISU_MODEL:'z-ai/glm-5.3',BISU_CODE_MODEL:'qwen/qwen3.8-max-0902',BISU_FAST_MODEL:'deepseek/deepseek-v4.1-flash'};
+const ROLES={BISU_MODEL:'z-ai/glm-5.3',BISU_DEV_MODEL:'deepseek/deepseek-v4.1-flash',BISU_CODE_MODEL:'qwen/qwen3.8-max-0902'};
+// Old names still read from the config file and the environment.
+const ALIAS={BISU_FAST_MODEL:'BISU_DEV_MODEL'};
 const SLUG=/^[a-z0-9][a-z0-9._-]*\/[A-Za-z0-9._:-]+$/;
 const KEY=process.env.OPENROUTER_API_KEY||'';
 const KEY_BASE=(process.env.OPENROUTER_BASE_URL||'https://openrouter.ai').replace(/\/$/,'');
 const keyMode=!KEY?'none':KEY.startsWith('dec-use-only-')?'use-only':'plain';
 
 // ---- models config ----
-function readConfig(){const out={};try{for(const line of fs.readFileSync(CONFIG,'utf8').split('\n')){const m=/^(BISU_[A-Z_]+)=(\S+)$/.exec(line.trim());if(m&&m[1] in ROLES&&SLUG.test(m[2]))out[m[1]]=m[2]}}catch{}return out}
+function readConfig(){const out={};try{for(const line of fs.readFileSync(CONFIG,'utf8').split('\n')){const m=/^(BISU_[A-Z_]+)=(\S+)$/.exec(line.trim());const k=m&&(ALIAS[m[1]]||m[1]);if(k in ROLES&&SLUG.test(m[2])&&!(k in out&&ALIAS[m[1]]))out[k]=m[2]}}catch{}return out}
 function writeConfig(models){fs.mkdirSync(path.dirname(CONFIG),{recursive:true});const tmp=CONFIG+'.tmp';
  fs.writeFileSync(tmp,'# bisu models, written by `bisu ui`. Exported BISU_* variables override these.\n'+Object.keys(ROLES).filter(k=>models[k]).map(k=>`${k}=${models[k]}`).join('\n')+'\n');fs.renameSync(tmp,CONFIG)}
-function roles(){const saved=readConfig();return Object.fromEntries(Object.entries(ROLES).map(([k,d])=>[k,{value:process.env[k]||saved[k]||d,saved:saved[k]||null,default:d,env:process.env[k]||null}]))}
+const envOf=k=>process.env[k]||Object.keys(ALIAS).filter(a=>ALIAS[a]===k).map(a=>process.env[a]).find(Boolean)||null;
+function roles(){const saved=readConfig();return Object.fromEntries(Object.entries(ROLES).map(([k,d])=>[k,{value:envOf(k)||saved[k]||d,saved:saved[k]||null,default:d,env:envOf(k)}]))}
 
 // ---- OpenRouter ----
 let modelCache={at:0,list:null};
@@ -96,7 +99,7 @@ function setBusy(c,busy){if(c.busy===busy)return;c.busy=busy;push(c,{kind:'statu
 function warm(c){if(!c.proc&&KEY){start(c);idleLater(c)}}
 function start(c){
  const r=roles();
- const args=['-f',path.join(root,'launch.zsh'),r.BISU_MODEL.value,r.BISU_CODE_MODEL.value,r.BISU_FAST_MODEL.value,path.join(root,'agents.json'),
+ const args=['-f',path.join(root,'launch.zsh'),r.BISU_MODEL.value,r.BISU_CODE_MODEL.value,r.BISU_DEV_MODEL.value,path.join(root,'agents.json'),
   '-p','--input-format','stream-json','--output-format','stream-json','--verbose','--include-partial-messages','--permission-prompt-tool','stdio',
   ...(c.sessionId?['--resume',c.sessionId]:[])];
  const proc=spawn('zsh',args,{cwd:c.cwd,env:process.env,stdio:['pipe','pipe','pipe']});c.proc=proc;c.models=r;c.costSoFar=0;

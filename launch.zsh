@@ -1,5 +1,5 @@
 #!/bin/zsh -f
-# Starts Claude Code against OpenRouter. Used by `bisu` and by `bisu ui`, always as: zsh -f launch.zsh MAIN CODE FAST AGENTS [claude args...]
+# Starts Claude Code against OpenRouter. Used by `bisu` and by `bisu ui`, always as: zsh -f launch.zsh MAIN CODE DEV AGENTS [claude args...]
 # Runs in a fresh zsh: drops every inherited CLAUDE*/ANTHROPIC* variable (a host app's login token would otherwise win over
 # ours), then points Claude Code at OpenRouter, or at the dec-secret proxy for it (OPENROUTER_BASE_URL + one-time token).
 for v in ${(k)parameters[(I)(CLAUDE|ANTHROPIC)*]}; do unset $v; done

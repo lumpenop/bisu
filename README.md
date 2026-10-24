@@ -32,25 +32,27 @@ bisu
 
 ## Models: one per role, delegated automatically
 
-The main assistant does small tasks itself and hands only large jobs to a specialist (subagents defined in [agents.json](agents.json)). Every handoff re-sends Claude Code's whole system prompt, so delegating small work costs more than it saves.
+The main model is the assistant: it talks with you, decides, delegates and checks results, but doesn't write code itself. Development goes to subagents defined in [agents.json](agents.json), with the rules in [prompt.md](prompt.md).
 
-| Role | Default | Override |
-|---|---|---|
-| Main assistant: decides, does small tasks, checks results | `z-ai/glm-5.3` | `BISU_MODEL` |
-| Large publishing (pages, many components) and large refactors | `qwen/qwen3.8-max-0902` | `BISU_CODE_MODEL` |
-| Other large jobs: bulk reading, summarising, file chores | `deepseek/deepseek-v4.1-flash` | `BISU_FAST_MODEL` |
+| Role | Agent | Default | Override |
+|---|---|---|---|
+| Assistant: conversation, decisions, delegation, checking results | main | `z-ai/glm-5.3` | `BISU_MODEL` |
+| Development: writing, fixing and debugging code, tests, scripts, most hands-on work | `developer` | `deepseek/deepseek-v4.1-flash` | `BISU_DEV_MODEL` |
+| Large publishing (pages, many components) and large refactors | `publisher`, `refactorer` | `qwen/qwen3.8-max-0902` | `BISU_CODE_MODEL` |
 
 ```sh
 bisu                                          # all defaults
-BISU_CODE_MODEL=qwen/qwen3-coder-next bisu    # any OpenRouter slug per role
+BISU_DEV_MODEL=qwen/qwen3-coder-next bisu     # any OpenRouter slug per role
 ```
+
+`BISU_FAST_MODEL`, the old name of `BISU_DEV_MODEL`, still works. Each handoff starts a subagent (about 2 s before it acts) and the assistant then checks the result, so a delegated task takes a few seconds longer than doing it in one model.
 
 These subagents exist only inside `bisu`; your normal `claude` never sees them.
 
 ## Lean and brief by default
 
 - **Core tools only, no MCP:** `bisu` keeps what a coding sidekick needs and drops the rest, cutting every request from ~25k to ~6.8k input tokens (about a quarter of the cost; with DeepSeek flash the API time per request went from ~3.2 s to ~1.8 s).
-  - Kept: `Bash`, `Read`, `Edit`, `Write`, `Glob`, `Grep`, `NotebookEdit`, `WebFetch`, `WebSearch`, and `Task` for the publisher / refactorer / helper subagents.
+  - Kept: `Bash`, `Read`, `Edit`, `Write`, `Glob`, `Grep`, `NotebookEdit`, `WebFetch`, `WebSearch`, and `Task` for the developer / publisher / refactorer subagents.
   - Dropped: scheduling and background work (`CronCreate`, `CronDelete`, `CronList`, `ScheduleWakeup`, `Monitor`, `Workflow`, `TaskCreate`, `TaskGet`, `TaskList`, `TaskOutput`, `TaskStop`, `TaskUpdate`), session and app features (`SendMessage`, `PushNotification`, `EnterWorktree`, `ExitWorktree`, `Skill`, `DesignSync`, `ReportFindings`, `ShareOnboardingGuide`), and every MCP server from your Claude config (`--strict-mcp-config`); the subscription-only ones never worked in `bisu` anyway.
   - `BISU_TOOLS=default bisu` brings back the full set, or pass your own comma-separated list.
 - **Short answers:** [prompt.md](prompt.md) is appended to Claude Code's system prompt: answer in the user's language, result first, no narration, full detail only for errors or when asked. It also holds the delegation rules. Edit it to taste.
