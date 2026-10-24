@@ -1,5 +1,7 @@
 # bisu (비서)
 
+**"OpenClaude"-style setup: Claude Code, open to any model.**
+
 Run **Claude Code** as a cheap autonomous sidekick on **OpenRouter** models (DeepSeek, Qwen, …) — while your real Claude subscription stays untouched for the work that deserves it.
 
 `bisu` is one shell function. Your normal `claude` keeps using your Anthropic subscription; `bisu` opens the same CLI wired to OpenRouter, so it can grind through repetitive edits, formatting, and assistant chores for pennies.
