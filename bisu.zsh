@@ -35,6 +35,22 @@ bisu() {
     else node "$_bisu_dir/ui/server.mjs" "$@"; fi
     return
   fi
+  # bisu app: the same engine in a menu-bar app (⌥Space), with selection/clipboard as context.
+  # Installs Electron on first run.
+  if [ "$1" = app ] || [ "$1" = desktop ]; then
+    shift
+    local appdir="$_bisu_dir/mac"
+    local log="$HOME/Library/Logs/bisu-app.log"
+    local el="$appdir/node_modules/.bin/electron"
+    if [ ! -x "$el" ]; then
+      command -v npm >/dev/null 2>&1 || { echo "bisu app needs node and npm" >&2; return 1; }
+      echo "bisu app: installing Electron (first run, ~120 MB)…" >&2
+      ( cd "$appdir" && npm install --no-audit --no-fund ) || return 1
+    fi
+    mkdir -p "${log:h}"
+    ( cd "$appdir" && nohup "$el" . "$@" >>"$log" 2>&1 & )
+    return 0
+  fi
   saved="$(_bisu_config)"
   local -A cfg
   local line; for line in ${(f)saved}; do cfg[${line%%=*}]="${line#*=}"; done

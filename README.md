@@ -72,6 +72,22 @@ One local page (Node, no dependencies, 127.0.0.1 only) for everything:
 
 The page's API needs a token that only the page gets, and refuses other hosts and cross-site requests.
 
+## `bisu app` — the same bisu in the menu bar
+
+```sh
+bisu app        # first run installs Electron (~120 MB); log: ~/Library/Logs/bisu-app.log
+```
+
+Same engine, same models, same approvals as `bisu ui` — but a menu-bar app instead of a browser tab. It starts its own engine on 127.0.0.1:7879, so both can run at once.
+
+- **⌥Space** opens a panel under the icon; clicking away or Escape puts it away.
+- **Context you don't have to explain:** the panel carries over the app you were in and the text you had selected or copied, so "이거 요약해" is enough. The selection is read through the Accessibility API — bisu never presses ⌘C and never touches the pasteboard, so nothing needs restoring. It needs Accessibility consent for `bisu` the first time; an app that doesn't expose its selection just reports nothing. The context is appended after your message, so chat titles stay your own words.
+- **Approvals** look the same as in `bisu ui`. If one is waiting while the panel is hidden, the icon shows a dot and macOS notifies you; clicking the notification opens it.
+- **One continuing conversation:** the Claude Code session id is kept in the app's folder, so quitting and coming back resumes the same thread. "Working folder…" in the menu changes where it works (default `~/bisu`).
+- The menu (right-click the icon) also has the full window for History and Settings, today's OpenRouter spend, and "Restart engine" — which is what to press after a key change or a long sleep.
+
+The shell lives in [mac/](mac): Electron main, a preload that only exposes shell chrome, and the context capture. It adds nothing to the engine except an optional `BISU_UI_TOKEN` and a `?panel=1` layout.
+
 ## Honest limits
 
 - The cost Claude Code prints (`/cost`, `total_cost_usd`) is estimated at **Claude** prices and runs several times too high here. Check real spend on your OpenRouter dashboard. Claude Code still sends a large system prompt on every call, so a small task is a few cents; the Qwen role is the priciest.

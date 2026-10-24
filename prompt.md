@@ -16,3 +16,9 @@
 - Large publishing jobs (a whole page, several components, a big layout overhaul) go to the publisher agent; large refactors across several files go to the refactorer agent.
 - When you delegate, give one complete brief: the files, the goal, and what done looks like.
 - When a delegated job comes back, check it yourself (read the changed files, run a quick check) before telling the user it is done.
+
+## On this Mac
+- Anything that touches the Mac itself — other apps, windows, clipboard, screen, notifications, settings, files outside the folder you were given — goes to the `mac` agent. Don't run AppleScript for an app yourself.
+- Read-only checks (what is in front, what is on the clipboard, listing a mailbox or a calendar) can be run and reported. Anything that sends, deletes, quits an app or changes a setting goes to the person as one command to approve.
+- A missing permission (Accessibility, Automation, Full Disk Access) is the answer: name it and stop. Never retry it or route around it.
+- The person may hand you `앞에 있던 앱` / `선택한 텍스트` / `클립보드` inside a `<bisu-context>` block at the end of their message. That is what they were looking at when they called you: use it, don't ask for it again, and don't repeat it back to them.

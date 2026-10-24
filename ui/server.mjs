@@ -15,7 +15,9 @@ import http from 'node:http';import fs from 'node:fs';import os from 'node:os';i
 
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.dirname(here);
 const PORT=Number(process.env.BISU_UI_PORT||7878);
-const TOKEN=randomBytes(24).toString('hex');
+// The desktop shell (mac/) starts this engine itself and needs to read /api/chats for the tray
+// and its approval notifications, so it may pass its own token. Without it, a fresh one each run.
+const TOKEN=/^[0-9a-f]{32,64}$/.test(process.env.BISU_UI_TOKEN||'')?process.env.BISU_UI_TOKEN:randomBytes(24).toString('hex');
 const CONFIG=path.join(process.env.XDG_CONFIG_HOME||path.join(os.homedir(),'.config'),'bisu','models');
 const PROJECTS=path.join(os.homedir(),'.claude','projects');
 const HELPER=path.join(os.homedir(),'Library','Application Support','Dec Browser','bin','dec-secret-helper');

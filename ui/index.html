@@ -96,6 +96,21 @@ th{font-size:12px;color:var(--muted);font-weight:600;border-top:0;white-space:no
 td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 td .p{color:var(--muted);font-size:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:420px}
 .chip{display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:11px;background:var(--chip);border-radius:4px;padding:1px 6px;margin:1px 2px 1px 0;white-space:nowrap}
+/* desktop shell (mac/): the popover under the menu bar icon */
+body.panel header,body.panel aside{display:none}
+body.panel .chathead{padding:8px 12px;gap:8px;border-bottom:1px solid var(--line)}
+body.panel .chathead .s{display:none}
+body.panel #msgs{padding:10px 12px}
+body.panel #msgs>.wrap{max-width:none;gap:8px}
+body.panel .compose{padding:8px 10px}
+body.panel .compose .row{max-width:none}
+body.panel .m.user{max-width:90%}
+body.panel .m.text pre{max-height:220px}
+body.panel .empty{margin-top:26vh;font-size:13px}
+body.panel .res,body.panel .sys{font-size:11.5px}
+.ctxbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 12px;border-top:1px solid var(--line);background:var(--accent-soft);font-size:12px;color:var(--muted)}
+.ctxbar b{color:var(--ink);font-weight:600}
+.ctxbar .x{margin-left:auto;border:0;background:none;padding:0 4px;color:var(--muted);cursor:pointer;font-size:14px;line-height:1}
 @media (max-width:760px){
  #chatView{flex-direction:column}aside{width:auto;max-height:38vh;border-right:0;border-bottom:1px solid var(--line)}
  .role,.kv{grid-template-columns:1fr}header{flex-wrap:wrap;gap:8px}}
@@ -161,12 +176,20 @@ td .p{color:var(--muted);font-size:12px;display:-webkit-box;-webkit-line-clamp:2
 
 <script>
 const TOKEN='__BISU_TOKEN__';
+// Set by the desktop shell: it opens this page in a popover (?panel=1) and hands over what the
+// person was looking at. In a browser none of this exists and nothing changes.
+const Q=new URLSearchParams(location.search);
+const PANEL=Q.get('panel')==='1';
+const HOST=window.bisuHost||null;
+const CTX_OPEN='<bisu-context>',CTX_CLOSE='</bisu-context>';
+if(PANEL)document.body.classList.add('panel');
 const ROLE_INFO={
  BISU_MODEL:['Assistant · 비서','Talks with you, decides, hands work to the agents below and checks what comes back. Doesn\'t write code itself.'],
  BISU_DEV_MODEL:['Development · 개발','The developer agent: writing, fixing and debugging code, tests, scripts, and most hands-on work. Also Claude Code\'s background calls.'],
  BISU_CODE_MODEL:['Large publishing & refactors · 대형 퍼블리싱·리팩토링','The publisher and refactorer agents: whole pages or many components, refactors across several files.']};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const stripCtx=s=>{const i=String(s??'').indexOf(CTX_OPEN);return i<0?String(s??''):String(s??'').slice(0,i).trimEnd()};
 const usd=(v,d=2)=>v==null||isNaN(v)?'—':'$'+Number(v).toFixed(v>0&&v<0.01?4:d);
 const per1M=v=>v?'$'+(v*1e6).toFixed(v*1e6<1?3:2):'free';
 const tok=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1e3)+'k':String(n);
@@ -185,6 +208,38 @@ function md(s){return String(s).split(/```/).map((part,i)=>{if(i%2){const nl=par
 
 // ---- chat ----
 let chats=[],cur=null,es=null,live=null,toolEls={};
+
+// ---- context from the app you were in (desktop shell only) ----
+let ctx=null,ctxBar=null,consumedAt=0,sent=0;
+function ensureCtxBar(){if(ctxBar)return ctxBar;
+ ctxBar=document.createElement('div');ctxBar.className='ctxbar';ctxBar.hidden=true;
+ const c=$('compose');c.parentNode.insertBefore(ctxBar,c);return ctxBar}
+function setCtx(c){
+ if(!c||c.at<=consumedAt||!(c.app||c.selection||c.clipboard)){ctx=null}
+ else ctx=c;
+ if(!PANEL)return;
+ const bar=ensureCtxBar();
+ if(!ctx){bar.hidden=true;bar.innerHTML='';return}
+ const bits=[];
+ if(ctx.app)bits.push(`<b>${esc(ctx.app)}</b>`);
+ if(ctx.selection)bits.push(`선택 ${ctx.selection.length}자`);
+ if(ctx.clipboard)bits.push(`클립보드 ${ctx.clipboard.length}자`);
+ bar.hidden=false;
+ bar.innerHTML=`<span>문맥</span>`+bits.map(b=>`<span>${b}</span>`).join('<span>·</span>')+`<button class="x" title="이번 메시지에 붙이지 않음">✕</button>`;
+ bar.querySelector('.x').onclick=()=>{consumedAt=Date.now();setCtx(null);HOST?.consume?.()};
+}
+// Appended after the message so the chat title stays the person's own words; the page strips it
+// again when showing the message.
+function withContext(t){
+ if(!ctx)return t;
+ const p=[CTX_OPEN];
+ if(ctx.app)p.push(`앞에 있던 앱: ${ctx.app}`);
+ if(ctx.selection)p.push('선택한 텍스트:\n'+ctx.selection);
+ if(ctx.clipboard)p.push('클립보드:\n'+ctx.clipboard);
+ p.push(CTX_CLOSE);
+ consumedAt=ctx.at;sent++;setCtx(null);HOST?.consume?.();
+ return t+'\n\n'+p.join('\n');
+}
 function toolSummary(name,input={}){
  if(input.command)return input.command;if(input.file_path)return short(input.file_path);if(input.pattern)return input.pattern+(input.path?'  in '+short(input.path):'');
  if(input.url)return input.url;if(input.description)return input.description;if(input.prompt)return input.prompt;return JSON.stringify(input)}
@@ -199,9 +254,10 @@ function add(html,parent,cls=''){const el=document.createElement('div');el.class
 function atBottom(){const m=$('msgs');return m.scrollHeight-m.scrollTop-m.clientHeight<80}
 function render(ev){
  switch(ev.kind){
-  case 'hello':wrap().innerHTML='';live=null;toolEls={};break;
+  case 'hello':wrap().innerHTML='';live=null;toolEls={};if(PANEL&&ev.chat?.sessionId)HOST?.session?.(ev.chat.sessionId,ev.chat.cwd);break;
+  case 'init':if(PANEL&&cur)HOST?.session?.(ev.sessionId,cur.cwd);break;
   case 'resumed':add(`Resumed an earlier session${ev.count?` · its last ${ev.count} messages are shown faded`:''}. Your next message continues it.`,null,'sys');break;
-  case 'user':live=null;add(esc(ev.text),null,'user'+(ev.past?' past':''));break;
+  case 'user':live=null;add(esc(stripCtx(ev.text)),null,'user'+(ev.past?' past':''));break;
   case 'delta':if(ev.parent)break;if(!live){live=add('',null,'text');live.dataset.raw=''}live.dataset.raw+=ev.text;live.innerHTML=md(live.dataset.raw);break;
   case 'text':if(!ev.parent&&live){live.innerHTML=md(ev.text);live=null;break}add(md(ev.text),ev.parent,'text'+(ev.past?' past':''));break;
   case 'tool':live=null;{const el=add(`<details class="tool"><summary><span class="n">${esc(ev.name)}</span><span class="a">${esc(toolSummary(ev.name,ev.input))}</span><span class="st">…</span></summary><pre>${esc(JSON.stringify(ev.input,null,2).slice(0,4000))}</pre></details>`,ev.parent);toolEls[ev.id]=el}break;
@@ -228,8 +284,8 @@ function open(id){const c=chats.find(x=>x.id===id);if(!c)return;cur=c;es?.close(
  try{localStorage.setItem('bisu.chat',id)}catch{};$('input').focus()}
 async function answer(request_id,a,el){for(const b of el.querySelectorAll('button'))b.disabled=true;
  try{await post(`/api/chats/${cur.id}/approve`,{request_id,allow:a!=='deny',always:a==='always'})}catch(e){alert(e.message);for(const b of el.querySelectorAll('button'))b.disabled=false}}
-async function sendMsg(){const t=$('input').value.trim();if(!t||!cur||cur.busy)return;$('input').value='';grow();
- try{await post(`/api/chats/${cur.id}/send`,{text:t})}catch(e){$('input').value=t;add(`<span class="err">${esc(e.message)}</span>`,null,'sys')}}
+async function sendMsg(){const raw=$('input').value.trim();if(!raw||!cur||cur.busy)return;const t=withContext(raw);$('input').value='';grow();
+ try{await post(`/api/chats/${cur.id}/send`,{text:t})}catch(e){$('input').value=raw;add(`<span class="err">${esc(e.message)}</span>`,null,'sys')}}
 async function startChat(body){try{const {chat}=await post('/api/chats',body);chats.unshift(chat);show('chat');open(chat.id)}catch(e){alert(e.message)}}
 $('newChat').onclick=()=>{const cwd=$('cwd').value.trim();try{localStorage.setItem('bisu.cwd',cwd)}catch{};startChat({cwd})};
 $('cwd').onkeydown=e=>{if(e.key==='Enter')$('newChat').click()};
@@ -289,8 +345,14 @@ async function loadRuns(){try{const {runs}=await api('/api/runs');runCache=runs;
  }catch(e){$('runs').innerHTML=`<tr><td colspan="8" class="note err">${esc(e.message)}</td></tr>`}}
 
 // ---- boot ----
+if(PANEL){ensureCtxBar();HOST?.onContext?.(c=>{if(!sent)setCtx(c)});HOST?.context?.().then(c=>{if(!sent)setCtx(c)}).catch(()=>{})}
 loadAccount();loadRuns();
-refreshChats().then(()=>{let id=null,v='chat';try{id=localStorage.getItem('bisu.chat');v=localStorage.getItem('bisu.view')||'chat'}catch{}if(id&&chats.some(c=>c.id===id))open(id);show(v)});
+refreshChats().then(()=>{let id=null,v='chat';try{id=localStorage.getItem('bisu.chat');v=localStorage.getItem('bisu.view')||'chat'}catch{}
+ const forced=Q.get('chat');
+ if(forced&&chats.some(c=>c.id===forced))open(forced);
+ else if(id&&chats.some(c=>c.id===id))open(id);
+ else if(PANEL&&chats.length)open(chats[0].id);
+ show(PANEL?'chat':v)});
 setInterval(refreshChats,5000);
 </script>
 </body>
