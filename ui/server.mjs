@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // bisu ui — one local page to talk to bisu, approve what it does, pick models per role, and check the key and real spend.
 // Started by `bisu ui`. Listens on 127.0.0.1 only; no dependencies.
-//  * Chat: each conversation is a real headless Claude Code run started through launch.zsh (same env, models and agents as
-//    `bisu`), speaking stream-json. Tool use that needs permission comes back as a can_use_tool request and waits for the
-//    person to allow or deny it on the page. A finished process is resumed with --resume on the next message.
+//  * Chat: each conversation is a real headless Claude Code run started through launch.zsh (same env, models, tools, prompt
+//    and agents as `bisu`), speaking stream-json. The process stays up between messages; after IDLE_MS without activity it
+//    stops and the next message resumes it with --resume. Tool use that needs permission comes back as a can_use_tool
+//    request and waits for the person to allow or deny it on the page.
 //  * Key: the same one bisu uses. In use-only mode (dec-secret run) this process and every chat hold a one-time token and a
 //    local OPENROUTER_BASE_URL, never the key itself. Adding or changing the key happens in Dec, not here.
 //  * Models: saved to ~/.config/bisu/models as plain KEY=value lines; bisu.zsh reads them (exported BISU_* still win).
@@ -83,6 +84,10 @@ function pastMessages(sessionId){const out=[];
 // One Claude Code process per chat. Events are kept (capped) so a reloaded page can replay the conversation.
 const chats=new Map();
 const MAX_EVENTS=3000;
+// A chat's process stays up between messages (no startup or cache warm-up per message) and is stopped only after this
+// long without activity; the next message then resumes the session.
+const IDLE_MS=Number(process.env.BISU_UI_IDLE_MIN||15)*60e3;
+function idleLater(c){clearTimeout(c.idle);c.idle=setTimeout(()=>{if(c.proc&&!c.busy&&!c.pending.size)c.proc.kill('SIGTERM')},IDLE_MS)}
 function publicChat(c){return {id:c.id,cwd:c.cwd,title:c.title,busy:c.busy,alive:!!c.proc,sessionId:c.sessionId,pending:c.pending.size,created:c.created}}
 function push(c,ev){ev.at=Date.now();c.events.push(ev);if(c.events.length>MAX_EVENTS)c.events.splice(0,c.events.length-MAX_EVENTS);
  const line=`data: ${JSON.stringify(ev)}\n\n`;for(const res of c.clients)res.write(line)}
@@ -118,7 +123,7 @@ function handle(c,j){
   const usage={};for(const [m,u] of Object.entries(j.modelUsage||{}))usage[m]={input:(u.inputTokens||0)+(u.cacheCreationInputTokens||0),cacheRead:u.cacheReadInputTokens||0,output:u.outputTokens||0};
   // modelUsage adds up over the whole process, so a turn's cost is the difference from the previous result.
   priceMap().then(price=>{const total=estimate(usage,price),cost=total==null?null:total-c.costSoFar;if(total!=null)c.costSoFar=total;
-   push(c,{kind:'result',error:!!j.is_error,subtype:j.subtype,turns:j.num_turns,ms:j.duration_ms,cost});setBusy(c,false)});return}
+   push(c,{kind:'result',error:!!j.is_error,subtype:j.subtype,turns:j.num_turns,ms:j.duration_ms,cost});setBusy(c,false);idleLater(c)});return}
 }
 function newChat({cwd,resume}){
  const dir=path.resolve(String(cwd||os.homedir()).replace(/^~(?=\/|$)/,os.homedir()));
@@ -129,7 +134,7 @@ function newChat({cwd,resume}){
  chats.set(c.id,c);return c}
 function say(c,text){
  if(!c.title)c.title=text.slice(0,60);
- if(!c.proc)start(c);
+ clearTimeout(c.idle);if(!c.proc)start(c);
  push(c,{kind:'user',text});setBusy(c,true);
  send(c,{type:'user',message:{role:'user',content:text}})}
 function decide(c,{request_id,allow,always,message}){const q=c.pending.get(request_id);if(!q)throw Error('no such approval (already answered?)');c.pending.delete(request_id);
@@ -139,7 +144,7 @@ function decide(c,{request_id,allow,always,message}){const q=c.pending.get(reque
 function stop(c){if(!c.proc)return;send(c,{type:'control_request',request_id:randomUUID(),request:{subtype:'interrupt'}});
  // A model that ignores the interrupt still gets stopped; the next message resumes the session.
  const p=c.proc;setTimeout(()=>{if(c.proc===p&&c.busy)p.kill('SIGTERM')},4000)}
-function close(c){c.proc?.kill('SIGTERM');for(const res of c.clients)res.end();chats.delete(c.id)}
+function close(c){clearTimeout(c.idle);c.proc?.kill('SIGTERM');for(const res of c.clients)res.end();chats.delete(c.id)}
 
 // ---- server ----
 const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(body))};

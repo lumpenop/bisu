@@ -47,6 +47,12 @@ BISU_CODE_MODEL=qwen/qwen3-coder-next bisu    # any OpenRouter slug per role
 
 These subagents exist only inside `bisu`; your normal `claude` never sees them.
 
+## Lean and brief by default
+
+- **Core tools only:** `bisu` loads Claude Code's core tools (Bash, Read, Edit, Write, Glob, Grep, Task, TodoWrite, WebFetch, WebSearch, NotebookEdit) and no MCP servers. That cuts every request from ~25k to ~6k input tokens, so answers start sooner and cost about a quarter. `BISU_TOOLS=default bisu` brings back the full set.
+- **Short answers:** [prompt.md](prompt.md) is appended to Claude Code's system prompt: answer in the user's language, result first, no narration, full detail only for errors or when asked. It also holds the delegation rules. Edit it to taste.
+- **Reasoning effort:** `BISU_EFFORT=low|medium|high` passes `--effort` through. Off by default: in tests it made no measurable difference with GLM, whose reasoning can't be turned off.
+
 ## `bisu ui`
 
 ```sh

@@ -12,4 +12,9 @@ export ANTHROPIC_DEFAULT_SONNET_MODEL="$2"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="$3"
 agents="$(<"$4")"
 shift 4
-exec claude --agents "$agents" --append-system-prompt "Do small tasks yourself: quick edits, single-file changes, short lookups and answers. Delegating costs a full extra setup per call, so only hand off large jobs: big UI publishing to the publisher agent, big refactors to the refactorer agent, and other big jobs (bulk reading, summarising, file chores) to the helper agent. When you delegate, give one complete brief with the files, the goal and what done looks like. When a delegated job comes back, check it yourself (read the changed files, run a quick check) before telling the user it is done. Do the deciding and the final answer yourself." "$@"
+# Tools: Claude Code's core set only. The full default set (plus any MCP servers from your Claude config, which bisu can't
+# use anyway) is ~25k tokens of tool definitions sent with every request; the core set is ~6k. BISU_TOOLS=default restores it.
+tools="${BISU_TOOLS:-Bash,Read,Edit,Write,Glob,Grep,Task,TodoWrite,WebFetch,WebSearch,NotebookEdit}"
+extra=()
+[ -n "$BISU_EFFORT" ] && extra+=(--effort "$BISU_EFFORT")
+exec claude --agents "$agents" --tools "$tools" --strict-mcp-config --append-system-prompt-file "${0:A:h}/prompt.md" "${extra[@]}" "$@"
