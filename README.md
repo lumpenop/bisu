@@ -30,15 +30,26 @@ bisu
 
 **Use-only (recommended):** if your machine has a secret manager exposing the `dec-secret` CLI, save the key there with the site `https://openrouter.ai` (any name). `bisu` detects it automatically and the real key is **never placed in any process environment** — the CLI only ever sees a one-time token, and a signed helper injects the key when the request leaves for openrouter.ai. Nothing to leak in logs, env dumps, or the model's own context.
 
-## Pick a model
+## Models: one per role, delegated automatically
+
+The main assistant reads each request and hands work to the right model on its own (subagents defined in [agents.json](agents.json)):
+
+| Role | Default | Override |
+|---|---|---|
+| Main assistant: decides, plans, answers | `z-ai/glm-5.3` | `BISU_MODEL` |
+| Publishing (markup, CSS, components) and refactoring | `qwen/qwen3.8-max-0902` | `BISU_CODE_MODEL` |
+| Everything else: finding, reading, summarising, file chores | `deepseek/deepseek-v4.1-flash` | `BISU_FAST_MODEL` |
 
 ```sh
-bisu                                  # z-ai/glm-5.3 (default)
-BISU_MODEL=deepseek/deepseek-chat bisu  # any OpenRouter slug
+bisu                                          # all defaults
+BISU_CODE_MODEL=qwen/qwen3-coder-next bisu    # any OpenRouter slug per role
 ```
+
+These subagents exist only inside `bisu`; your normal `claude` never sees them.
 
 ## Honest limits
 
+- Claude Code sends a large system prompt on every call, so even a tiny task costs cents, not fractions of a cent. The Qwen role is the priciest; point `BISU_CODE_MODEL` at a cheaper coder if that matters.
 - Claude Code is tuned for Claude. Non-Claude models are noticeably worse at its tool calls — give `bisu` mechanical work, not architecture.
 - Subscription-only features (connectors, remote control, scheduled tasks) are off in `bisu` sessions.
 - In use-only mode, responses are buffered (no streaming) and a single request is capped at ~200 s.
