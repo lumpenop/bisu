@@ -6,7 +6,7 @@
 #      the child process gets a one-time token, never the key itself.
 #   2. plain env: OPENROUTER_API_KEY is already exported in your shell.
 #
-# Model: set BISU_MODEL to any OpenRouter slug (default: deepseek/deepseek-chat).
+# Model: set BISU_MODEL to any OpenRouter slug (default: z-ai/glm-5.3).
 
 # Runs in a fresh zsh: drops every inherited CLAUDE*/ANTHROPIC* variable (a host app's login token would
 # otherwise win over ours), then points Claude Code at OpenRouter (or the dec-secret proxy for it). $1 = model.
@@ -23,7 +23,7 @@ _bisu_launch='
   exec claude "$@"'
 
 bisu() {
-  local model="${BISU_MODEL:-deepseek/deepseek-chat}" ref=""
+  local model="${BISU_MODEL:-z-ai/glm-5.3}" ref=""
   command -v dec-secret >/dev/null 2>&1 &&
     ref="$(dec-secret list 2>/dev/null | awk '$2=="https://openrouter.ai"{print $1; exit}')"
   if [ -n "$ref" ]; then

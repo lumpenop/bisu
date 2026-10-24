@@ -33,8 +33,8 @@ bisu
 ## Pick a model
 
 ```sh
-bisu                                  # deepseek/deepseek-chat (default)
-BISU_MODEL=qwen/qwen3-coder bisu      # any OpenRouter slug
+bisu                                  # z-ai/glm-5.3 (default)
+BISU_MODEL=deepseek/deepseek-chat bisu  # any OpenRouter slug
 ```
 
 ## Honest limits
