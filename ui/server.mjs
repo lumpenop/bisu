@@ -58,14 +58,46 @@ async function account(){
   keyError:key.status==='rejected'?key.reason.message:null,credits:credits.status==='fulfilled'?credits.value:null,creditsError:credits.status==='rejected'?credits.reason.message:null}}
 
 // ---- history ----
-const fileCache=new Map();// path -> {mtime,size,rows}
+const fileCache=new Map();// path -> {mtime,size,rows,count}
+// The runs list is built from ~200MB of transcripts, so a cached row keeps only the fields it needs.
+// Sizing the cache by rows rather than by transcript bytes keeps a day of heavy use from evicting it
+// and forcing the whole directory to be parsed again the next time the panel opens.
+const CACHE_FILES=400,CACHE_ROWS=400000;
+let cacheRows=0;
+function cacheTrim(){for(const [p,e] of fileCache){if(fileCache.size<=CACHE_FILES&&cacheRows<=CACHE_ROWS)break;fileCache.delete(p);cacheRows-=e.count}}
 function* jsonlFiles(dir,depth=0){let ents=[];try{ents=fs.readdirSync(dir,{withFileTypes:true})}catch{return}
  for(const e of ents){const p=path.join(dir,e.name);if(e.isDirectory()&&depth<3&&e.name!=='memory')yield* jsonlFiles(p,depth+1);else if(e.isFile()&&e.name.endsWith('.jsonl'))yield p}}
 const textOf=c=>typeof c==='string'?c:Array.isArray(c)?c.filter(b=>b?.type==='text').map(b=>b.text).join(' '):'';
-function scanFile(p,st){const hit=fileCache.get(p);if(hit&&hit.mtime===st.mtimeMs&&hit.size===st.size)return hit.rows;
+// Tool output and long assistant replies are most of a transcript's bytes, and building the runs list
+// never reads them, so they never become long-lived objects. A resumed conversation reads its own file.
+function keepRow(j){if(!j||typeof j!=='object')return null;
+ const keep={type:j.type,sessionId:j.sessionId,timestamp:j.timestamp,cwd:j.cwd,isSidechain:j.isSidechain,uuid:j.uuid};
+ if(typeof j.aiTitle==='string')keep.aiTitle=j.aiTitle;
+ const m=j.message;if(!m)return keep;
+ const msg={};
+ if(j.type==='user'){const t=textOf(m.content);if(t)msg.content=t.slice(0,2000)}
+ if(m.model)msg.model=m.model;
+ if(m.usage)msg.usage=m.usage;
+ if(m.id)msg.id=m.id;
+ if(Object.keys(msg).length)keep.message=msg;
+ return keep}
+// Parsing every transcript once leaves a few hundred megabytes of short-lived objects behind: the
+// tool output, the base64 images, the parsed content blocks. Nothing needs them after the rows are
+// built, so the engine asks for them back instead of sitting at the high-water mark all day.
+let parsedBytes=0;
+const reclaim=()=>{if(parsedBytes<8e6){parsedBytes=0;return}parsedBytes=0;try{globalThis.gc?.()}catch{}}
+function scanFile(p,st){const hit=fileCache.get(p);if(hit&&hit.mtime===st.mtimeMs&&hit.size===st.size){fileCache.delete(p);fileCache.set(p,hit);return hit.rows}
  let text='';try{text=fs.readFileSync(p,'utf8')}catch{}
- const rows=[];if(/"model":"[a-z0-9][a-z0-9._-]*\//.test(text))for(const line of text.split('\n')){if(!line)continue;let j;try{j=JSON.parse(line)}catch{continue}rows.push(j)}
- fileCache.set(p,{mtime:st.mtimeMs,size:st.size,rows});return rows}
+ const rows=[];if(/"model":"[a-z0-9][a-z0-9._-]*\//.test(text))for(const line of text.split('\n')){if(!line)continue
+  // Most of a transcript's bytes are tool results, and no row keeps them: skipping them before the
+  // parse is what keeps a 200MB history from costing 200MB of objects.
+  if(!line.includes('"model":"')&&!line.includes('"type":"user"')&&!line.includes('"ai-title"'))continue
+  if(line.includes('"tool_result"'))continue
+  let j;try{j=JSON.parse(line)}catch{continue}
+  const slim=keepRow(j);if(slim)rows.push(slim)}
+ parsedBytes+=text.length
+ const prev=fileCache.get(p);if(prev)cacheRows-=prev.count;
+ fileCache.set(p,{mtime:st.mtimeMs,size:st.size,rows,count:rows.length});cacheRows+=rows.length;cacheTrim();return rows}
 function* transcriptRows(since){for(const p of jsonlFiles(PROJECTS)){let st;try{st=fs.statSync(p)}catch{continue}if(st.mtimeMs<since)continue;yield* scanFile(p,st)}}
 async function runs(){const sessions=new Map();
  for(const j of transcriptRows(Date.now()-60*864e5)){if(!j.sessionId)continue;let s=sessions.get(j.sessionId);
@@ -76,13 +108,21 @@ async function runs(){const sessions=new Map();
   const m=j.message;if(j.type==='assistant'&&m?.model&&m.usage){const id=m.id||j.uuid;if(s.seen.has(id))continue;s.seen.add(id);if(!j.isSidechain)s.turns++;
    const u=s.usage[m.model]??={input:0,cacheRead:0,output:0};u.input+=(m.usage.input_tokens||0)+(m.usage.cache_creation_input_tokens||0);u.cacheRead+=m.usage.cache_read_input_tokens||0;u.output+=m.usage.output_tokens||0}}
  const price=await priceMap();
- return [...sessions.values()].filter(s=>Object.keys(s.usage).some(k=>SLUG.test(k))).map(s=>{const {seen,...rest}=s;return {...rest,cost:estimate(s.usage,price)}})
-  .sort((a,b)=>(b.start||0)-(a.start||0)).slice(0,100)}
+ const out=[...sessions.values()].filter(s=>Object.keys(s.usage).some(k=>SLUG.test(k))).map(s=>{const {seen,...rest}=s;return {...rest,cost:estimate(s.usage,price)}})
+  .sort((a,b)=>(b.start||0)-(a.start||0)).slice(0,100)
+ if(parsedBytes)setTimeout(reclaim,100)
+ return out}
 // The visible conversation of a past session (main thread only), for showing it again when it is resumed.
+// Reads straight from the files that mention the session, because cached rows carry no reply text.
 function pastMessages(sessionId){const out=[];
- for(const j of transcriptRows(Date.now()-60*864e5)){if(j.sessionId!==sessionId||j.isSidechain)continue;
-  if(j.type==='user'){const t=textOf(j.message?.content).trim();if(t&&!t.startsWith('<')&&!t.startsWith('[Request interrupted'))out.push({kind:'user',text:t,ts:j.timestamp})}
-  if(j.type==='assistant'){const t=textOf(j.message?.content).trim();if(t)out.push({kind:'text',text:t,ts:j.timestamp})}}
+ const since=Date.now()-60*864e5;
+ for(const p of jsonlFiles(PROJECTS)){let st;try{st=fs.statSync(p)}catch{continue}if(st.mtimeMs<since)continue;
+  let text='';try{text=fs.readFileSync(p,'utf8')}catch{continue}
+  if(!text.includes(sessionId))continue;
+  for(const line of text.split('\n')){if(!line)continue;let j;try{j=JSON.parse(line)}catch{continue}
+   if(j.sessionId!==sessionId||j.isSidechain)continue;
+   if(j.type==='user'){const t=textOf(j.message?.content).trim();if(t&&!t.startsWith('<')&&!t.startsWith('[Request interrupted'))out.push({kind:'user',text:t,ts:j.timestamp})}
+   if(j.type==='assistant'){const t=textOf(j.message?.content).trim();if(t)out.push({kind:'text',text:t,ts:j.timestamp})}}}
  return out.sort((a,b)=>Date.parse(a.ts)-Date.parse(b.ts)).slice(-60)}
 
 // ---- chats ----

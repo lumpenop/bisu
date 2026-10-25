@@ -190,12 +190,12 @@ final class Engine {
     let p = Process()
     if let bridge = decBridge() {
       p.executableURL = URL(fileURLWithPath: node)
-      p.arguments = [bridge, "run", "--", node, server.path]
+      p.arguments = [bridge, "run", "--", node, "--expose-gc", server.path]
       env["OPENROUTER_API_KEY"] = "dec://OPENROUTER_API_KEY"
       if decHas(node, "OPENAI_API_KEY") { env["OPENAI_API_KEY"] = "dec://OPENAI_API_KEY" }
     } else if let key = env["OPENROUTER_API_KEY"], !key.isEmpty {
       p.executableURL = URL(fileURLWithPath: node)
-      p.arguments = [server.path]
+      p.arguments = ["--expose-gc", server.path]
     } else {
       throw NSError(domain: "bisu", code: 3, userInfo: [NSLocalizedDescriptionKey: "dec-secret is missing: run `bisu app install` in Terminal once so bisu has a readable copy of it."])
     }
@@ -455,6 +455,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
   private var activeChatId: String?
   private var spend: String?
   private var lastHidden = Date.distantPast
+  private var showCount = 0
   private var axMenuItem: NSMenuItem?
 
   private let shortcutLabel = "⌥Space"
@@ -728,6 +729,25 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     web.evaluateJavaScript("window.bisuHost.__emit('shown')", completionHandler: nil)
     log("panel shown", "web:", NSStringFromRect(web.frame), "hidden:", String(web.isHidden),
         "inWindow:", String(web.window != nil), "panel:", NSStringFromRect(panel.frame))
+    showCount += 1
+    let n = showCount
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.debugSnapshot(tag: "show\(n)") }
+  }
+
+  /// Lets a build check what the web view actually paints: the window server can hand back a frame
+  /// without the accelerated layers in it, so a working page can look empty from a screen capture.
+  private func debugSnapshot(tag: String) {
+    guard let base = ProcessInfo.processInfo.environment["BISU_SNAPSHOT"] else { return }
+    web.takeSnapshot(with: nil) { image, error in
+      guard let image, let tiff = image.tiffRepresentation,
+            let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else {
+        log("snapshot failed:", error?.localizedDescription ?? "no image")
+        return
+      }
+      let path = base.replacingOccurrences(of: ".png", with: "-\(tag).png")
+      try? png.write(to: URL(fileURLWithPath: path))
+      log("snapshot:", path, "\(png.count) bytes")
+    }
   }
 
   func hidePanel() {
