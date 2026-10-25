@@ -97,6 +97,16 @@ th{font-size:12px;color:var(--muted);font-weight:600;border-top:0;white-space:no
 td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 td .p{color:var(--muted);font-size:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:420px}
 .chip{display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:11px;background:var(--chip);border-radius:4px;padding:1px 6px;margin:1px 2px 1px 0;white-space:nowrap}
+/* memory */
+.mem{border-top:1px solid var(--line);padding:12px 0}
+.mem:first-child{border-top:0;padding-top:0}
+.mem .h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mem .h b{font-weight:600}
+.mem .h .sp{margin-left:auto}
+.mem .b{white-space:pre-wrap;word-break:break-word;font-size:13px;margin-top:4px}
+.mem button{padding:3px 9px;font-size:12px}
+#memForm .row{display:flex;flex-direction:column;gap:8px}
+#memDigest{white-space:pre-wrap;word-break:break-word;background:var(--chip);padding:10px;border-radius:6px;margin:8px 0 0;max-height:320px;overflow:auto}
 /* desktop shell (mac/): the popover under the menu bar icon */
 body.panel header,body.panel aside{display:none}
 .dragbar{display:none}
@@ -148,7 +158,7 @@ body.panel .view.pop.on{animation:popIn .13s ease-out}
 <div class="dragbar" aria-hidden="true"></div>
 <header>
  <h1>bisu</h1>
- <nav><button data-view="chat" class="on">Chat</button><button data-view="history">History</button><button data-view="settings">Settings</button></nav>
+ <nav><button data-view="chat" class="on">Chat</button><button data-view="history">History</button><button data-view="memory">Memory</button><button data-view="settings">Settings</button></nav>
  <span id="key" class="badge">key …</span>
 </header>
 
@@ -191,6 +201,33 @@ body.panel .view.pop.on{animation:popIn .13s ease-out}
   <h2>Recent runs · last 60 days</h2>
   <div class="table"><table><thead><tr><th>When</th><th>Project · task</th><th>Models</th><th>Turns</th><th>Tokens in / out</th><th>Est. cost</th><th>Took</th><th></th></tr></thead><tbody id="runs"><tr><td colspan="8" class="note">loading…</td></tr></tbody></table></div>
   <p class="note">Includes runs from the terminal. Cost is estimated from OpenRouter list prices and the tokens in each transcript.</p>
+ </section>
+</div></div></div>
+
+<div class="view" id="memoryView"><div class="page"><div>
+ <section>
+  <h2>Memory · 모든 세션에서 기억</h2>
+  <div class="kv" id="memInfo"><div class="k">Folder</div><div class="mono">…</div></div>
+  <p class="note">Every new chat and every <code>bisu</code> run starts with these appended to its system prompt, in any folder — that is what a session carries over. A chat that is already open keeps the memory it began with. The assistant adds to them itself when you tell it something worth keeping (in a chat that write is a normal approval, so you see the file first); anything you add, edit or delete here counts from the next chat on.</p>
+ </section>
+ <section>
+  <h2 id="memFormTitle">Add a memory</h2>
+  <form id="memForm">
+   <div class="row">
+    <input type="text" id="memTitle" placeholder="제목 — e.g. 답변 방식" spellcheck="false" autocomplete="off">
+    <textarea id="memBody" rows="3" placeholder="기억할 내용. 예: 답은 항상 한국어로, 결과부터 1–3문장."></textarea>
+   </div>
+   <div class="actions"><button class="primary" id="memSave">Save</button><button type="button" id="memCancel" hidden>Cancel</button><span class="note" id="memNote" style="margin:0"></span></div>
+  </form>
+ </section>
+ <section>
+  <h2>Saved</h2>
+  <div id="memList"><p class="note">loading…</p></div>
+ </section>
+ <section>
+  <h2>What bisu is given</h2>
+  <details><summary class="note" style="cursor:pointer;margin:0">Show the exact text added to the system prompt</summary><pre id="memDigest" class="mono">…</pre></details>
+  <p class="note">Pinned first, then the most recently changed, until <code>BISU_MEMORY_CHARS</code> (default 3000 characters) is used up. This text is on every request, so it is meant to stay short.</p>
  </section>
 </div></div></div>
 
@@ -246,7 +283,7 @@ const post=(p,b)=>api(p,{method:'POST',body:JSON.stringify(b||{})});
 
 // ---- tabs ----
 function show(v){for(const b of document.querySelectorAll('nav button'))b.classList.toggle('on',b.dataset.view===v);for(const el of document.querySelectorAll('.view'))el.classList.toggle('on',el.id===v+'View');
- if(v==='history')loadRuns();if(v==='settings'){loadAccount();loadRoles()}try{localStorage.setItem('bisu.view',v)}catch{}}
+ if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='settings'){loadAccount();loadRoles()}try{localStorage.setItem('bisu.view',v)}catch{}}
 for(const b of document.querySelectorAll('nav button'))b.onclick=()=>show(b.dataset.view);
 
 // ---- light markdown: fenced code, inline code, paragraphs ----
@@ -443,6 +480,46 @@ $('save').onclick=async e=>{e.preventDefault();const body={};for(const i of $('r
  $('save').disabled=true;try{const r=await post('/api/roles',body);roles=r.roles;renderRoles();$('saveNote').textContent='Saved. New chats and bisu runs use these.'}
  catch(err){$('save').disabled=false;$('saveNote').innerHTML=`<span class="err">${esc(err.message)}</span>`}};
 
+// ---- memory ----
+// The files in ~/.config/bisu/memory, which launch.zsh folds into every new run's system prompt.
+// Editing here is the same thing as editing the markdown, so the two never disagree.
+let mem=null,memEdit=null;
+async function loadMemory(){try{mem=await api('/api/memory');renderMemory()}catch(e){$('memList').innerHTML=`<p class="note err">${esc(e.message)}</p>`}}
+const whenText=ts=>new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+new Date(ts).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+function renderMemory(){
+ const m=mem;if(!m)return;
+ $('memInfo').innerHTML=`<div class="k">Folder</div><div class="mono">${esc(short(m.dir))}</div>
+  <div class="k">In the prompt</div><div>${m.entries.length} ${m.entries.length===1?'memory':'memories'} · ${m.used.toLocaleString()} / ${m.budget.toLocaleString()} characters${m.used>m.budget?' <span class="w">· over budget: the oldest unpinned ones are left out</span>':''}</div>`;
+ $('memList').innerHTML=m.entries.length?m.entries.map(e=>`<div class="mem" data-id="${esc(e.id)}">
+   <div class="h"><b>${esc(e.title)}</b>${e.pin?'<span class="chip">pinned</span>':''}<span class="note" style="margin:0">${whenText(e.updated)}</span><span class="sp"></span>
+    <button data-a="pin">${e.pin?'Unpin':'Pin'}</button><button data-a="edit">Edit</button><button class="danger" data-a="del">Delete</button></div>
+   ${e.text?`<div class="b">${esc(e.text)}</div>`:''}</div>`).join('')
+  :'<p class="note">비어 있어요. 대화 중에 bisu가 스스로 저장하거나, 위에서 직접 추가할 수 있어요.</p>';
+ $('memDigest').textContent=m.digest||'(empty — nothing is added to the system prompt yet)';
+ for(const row of $('memList').querySelectorAll('.mem')){
+  const e=m.entries.find(x=>x.id===row.dataset.id);if(!e)continue;
+  row.querySelector('[data-a=pin]').onclick=async()=>{try{mem=await post('/api/memory',{id:e.id,pin:!e.pin});renderMemory()}catch(er){alert(er.message)}};
+  row.querySelector('[data-a=edit]').onclick=()=>memForm(e);
+  row.querySelector('[data-a=del]').onclick=async()=>{if(!confirm(`Delete “${e.title}”? bisu will not see it again.`))return;
+   try{mem=await api('/api/memory/'+encodeURIComponent(e.id),{method:'DELETE'});renderMemory();memForm(null)}catch(er){alert(er.message)}}}
+}
+function memForm(e){memEdit=e?e.id:null;
+ $('memFormTitle').textContent=e?'Edit memory':'Add a memory';
+ $('memTitle').value=e?e.title:'';$('memBody').value=e?e.text:'';
+ $('memCancel').hidden=!e;$('memNote').textContent='';
+ if(e)$('memBody').focus();else $('memTitle').focus()}
+async function saveMemory(){
+ const b={title:$('memTitle').value.trim(),body:$('memBody').value.trim()};
+ if(memEdit)b.id=memEdit;
+ if(!b.title&&!b.body){$('memNote').innerHTML='<span class="err">제목이나 내용을 적어 주세요.</span>';return}
+ $('memSave').disabled=true;
+ try{mem=await post('/api/memory',b);memForm(null);renderMemory();$('memNote').textContent='Saved. The next chat and bisu run start with it.'}
+ catch(e){$('memNote').innerHTML=`<span class="err">${esc(e.message)}</span>`}
+ finally{$('memSave').disabled=false}
+}
+$('memForm').onsubmit=e=>{e.preventDefault();saveMemory()};
+$('memCancel').onclick=()=>memForm(null);
+
 // ---- history ----
 let runCache=[];
 async function loadRuns(){try{const {runs}=await api('/api/runs');runCache=runs;
@@ -450,8 +527,8 @@ async function loadRuns(){try{const {runs}=await api('/api/runs');runCache=runs;
  if(!$('cwd').value){let last='';try{last=localStorage.getItem('bisu.cwd')||''}catch{};$('cwd').value=last||short(dirs[0]||'')}
  fillStartCwd()
  $('runs').innerHTML=runs.length?runs.map(r=>{const u=Object.values(r.usage),inp=u.reduce((a,x)=>a+x.input+x.cacheRead,0),out=u.reduce((a,x)=>a+x.output,0);
-  const mins=r.end&&r.start?Math.max(0,(r.end-r.start)/60e3):0,when=r.start?new Date(r.start):null;
-  return `<tr><td class="n">${when?when.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+when.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}):'—'}</td>
+  const mins=r.end&&r.start?Math.max(0,(r.end-r.start)/60e3):0;
+  return `<tr><td class="n">${r.start?whenText(r.start):'—'}</td>
    <td><b>${esc(r.cwd?r.cwd.split('/').pop():'?')}</b>${r.title?' · '+esc(r.title):''}<span class="p">${esc(r.prompt||'')}</span></td>
    <td>${Object.keys(r.usage).map(m=>`<span class="chip">${esc(m.split('/').pop())}</span>`).join('')}</td>
    <td class="n">${r.turns}</td><td class="n">${tok(inp)} / ${tok(out)}</td><td class="n">${usd(r.cost)}</td><td class="n">${mins<1?'<1m':Math.round(mins)+'m'}</td>

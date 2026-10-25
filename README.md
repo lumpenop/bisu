@@ -58,6 +58,17 @@ These subagents exist only inside `bisu`; your normal `claude` never sees them.
 - **Short answers:** [prompt.md](prompt.md) is appended to Claude Code's system prompt: answer in the user's language, result first, no narration, full detail only for errors or when asked. It also holds the delegation rules. Edit it to taste.
 - **Reasoning effort:** `BISU_EFFORT=low|medium|high` passes `--effort` through. Off by default: in tests it made no measurable difference with GLM, whose reasoning can't be turned off.
 
+## Memory: what a session should not forget
+
+A chat forgets. The things you would otherwise say again — 한국어로 짧게, a name, where a project lives, a correction you had to make twice — are kept as one markdown file per memory in `~/.config/bisu/memory`, and appended to the system prompt of every new chat and every terminal `bisu` run, in whatever folder. That is the whole mechanism: no database, no background process, nothing sent anywhere.
+
+- **The assistant keeps them itself.** [prompt.md](prompt.md) tells it to save what stays true beyond the conversation, to read the folder first so it updates a file instead of adding a near-duplicate, and to delete when you say to forget. It writes them with the `Write` tool it already has, so in `bisu ui` a memory is an approval like any other edit and you see the file before it exists.
+- **You keep them on the Memory tab** of `bisu ui`: add, edit, pin, delete, and see the exact block the next run will be given. The tab reads and writes the same files, so the two never disagree.
+- **Pinning** keeps an entry first however old it is; everything else is taken newest first until `BISU_MEMORY_CHARS` (3000 by default) is used up. The digest rides on every request, so it is kept short on purpose, and the tab says how much of the budget is in use.
+- **A run reads it once, at start.** A chat that is already open keeps the memory it began with, and anything you save counts from the next chat on.
+
+It deliberately does not touch `~/.claude/CLAUDE.md`, so your normal `claude` is unaffected, and it does not summarise past conversations — a memory exists because you said it, or because you added it.
+
 ## `bisu ui`
 
 ```sh
@@ -68,6 +79,7 @@ One local page (Node, no dependencies, 127.0.0.1 only) for everything:
 
 - **Chat:** pick a folder and talk to bisu. Each chat is a real headless Claude Code run with the same models and agents as `bisu`, so it reads, edits and runs things in that folder. Before it edits a file or runs a command that needs permission, the page shows exactly what it wants to do (the command, the diff, the new file) with **Allow**, **Allow for this chat** and **Deny**. Claude Code starts as soon as you open a chat and stays up between messages, so replies take about as long as the model itself (~1–1.5 s for a short answer); after 30 idle minutes it stops and picks the session back up on your next message (`BISU_UI_IDLE_MIN` to change). **Stop** interrupts the current answer. Read-only tools that Claude Code allows by itself run without asking.
 - **History:** your `bisu` sessions from the last 60 days, from the terminal too (picked out of `~/.claude/projects` by their OpenRouter model names), with tokens and an estimated cost. **Continue** reopens one as a chat.
+- **Memory:** what carries across sessions — how you like answers, names, the projects that are still going. One markdown file each in `~/.config/bisu/memory`, which the assistant adds to as you talk and every new run is given; see [Memory](#memory-what-a-session-should-not-forget).
 - **Settings:** key status (use-only through Dec, or plain env; whether answers stream), real OpenRouter spend and limit, and models per role from OpenRouter's list with prices and tool-calling support. Model choices go to `~/.config/bisu/models`; exported `BISU_*` variables still win. The key itself is added or changed in Dec, never on this page.
 
 The page's API needs a token that only the page gets, and refuses other hosts and cross-site requests.
@@ -93,7 +105,7 @@ Because the bundle is a snapshot, rebuild after editing (`bisu app install`) —
 - **Resize it from the grip** in the bottom-right corner, and it keeps that size. A frameless window has no resize border — dragging its edge moves it — so the panel draws its own handle and the shell applies the bounds.
 - **Context you don't have to explain:** the panel carries over the app you were in and the text you had selected or copied, so "이거 요약해" is enough. The selection is read through the Accessibility API in bisu's own process — it never presses ⌘C and never touches the pasteboard, so nothing needs restoring. An app that doesn't expose its selection just reports nothing. The panel has a bar with "권한 주기" that opens the macOS dialog; it appears **once** — ✕ (or granting it) and it stays gone. The menu's "접근성 허용…" keeps the same action while it is still untrusted. Without it the panel still carries the frontmost app and the clipboard.
 - **Approvals** look the same as in `bisu ui`, and a failing request says why instead of leaving a spinner.
-- **The menu** (right-click the icon) has the full window for History and Settings, today's OpenRouter spend, "선택한 텍스트 읽기", "접근성 허용…" while it is untrusted, and Quit.
+- **The menu** (right-click the icon) has the full window for History, Memory and Settings, today's OpenRouter spend, "선택한 텍스트 읽기", "접근성 허용…" while it is untrusted, and Quit.
 - **Launched from Finder** the app has almost no `PATH`, so it composes one and finds `node` in Homebrew, `~/.local/bin`, fnm, nvm, mise, asdf or Volta without asking a shell (which can hang).
 
 Two permissions are per-app and worth knowing about:
@@ -111,6 +123,7 @@ The old shell is still in [mac/](mac): Electron main, a preload that only expose
 - The cost Claude Code prints (`/cost`, `total_cost_usd`) is estimated at **Claude** prices and runs several times too high here. Check real spend on your OpenRouter dashboard. Claude Code still sends a large system prompt on every call, so a small task is a few cents; the Qwen role is the priciest.
 - Claude Code is tuned for Claude. Non-Claude models are noticeably worse at its tool calls — give `bisu` mechanical work, not architecture.
 - Subscription-only features (connectors, remote control, scheduled tasks) are off in `bisu` sessions.
+- Memory is text in the system prompt: every request pays for it, and a wrong entry is followed until you delete it. The Memory tab exists to show exactly what is there — that is the point of it.
 - In use-only mode with an older `dec-secret-helper`, responses are buffered (no streaming) and a single request is capped at ~200 s. A helper with the `stream` command removes both; Settings in `bisu ui` shows which one you have.
 
 ## Why not open-codex?

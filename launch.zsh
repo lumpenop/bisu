@@ -19,6 +19,20 @@ tools="${BISU_TOOLS:-Bash,Read,Edit,Write,Glob,Grep,Task,WebFetch,WebSearch,Note
 extra=()
 [ -n "$BISU_EFFORT" ] && extra+=(--effort "$BISU_EFFORT")
 
+# System prompt: prompt.md, then the memory the person saved (ui/memory.mjs). Built once per run,
+# because memory is what carries across sessions and Claude Code reads this file at startup only —
+# a chat that is already open keeps the memory it began with.
+# Node is optional here: the terminal bisu should still start on a Mac without it, just with no memory.
+sysprompt="$HOME/Library/Application Support/bisu/system-prompt.md"
+mkdir -p "${sysprompt:h}"
+if [ -f "$root/ui/memory.mjs" ] && command -v node >/dev/null 2>&1 &&
+   node "$root/ui/memory.mjs" prompt "$root/prompt.md" > "$sysprompt.$$.tmp" 2>/dev/null; then
+  mv -f "$sysprompt.$$.tmp" "$sysprompt"
+else
+  rm -f "$sysprompt.$$.tmp"
+  cp "$root/prompt.md" "$sysprompt"
+fi
+
 # Computer use: bisu's own MCP server, so a step on the Mac is one tool call with real coordinates
 # instead of a shell script that guesses. The read/look/act tools are pre-allowed because the person
 # already asked bisu to drive the Mac; cu_approve is deliberately absent, so running a destructive
@@ -34,4 +48,4 @@ JSON
   extra+=(--allowedTools "mcp__bisu__cu_look,mcp__bisu__cu_state,mcp__bisu__cu_decide,mcp__bisu__cu_click,mcp__bisu__cu_type,mcp__bisu__cu_key,mcp__bisu__cu_scroll,mcp__bisu__cu_wait,mcp__bisu__cu_screenshot,mcp__bisu__cu_ground")
 fi
 
-exec claude --agents "$agents" --tools "$tools" --append-system-prompt-file "$root/prompt.md" "${extra[@]}" "$@"
+exec claude --agents "$agents" --tools "$tools" --append-system-prompt-file "$sysprompt" "${extra[@]}" "$@"

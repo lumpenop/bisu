@@ -12,6 +12,7 @@
 //    OpenRouter model slugs (provider/model). Cost is an estimate from OpenRouter list prices.
 //  * Every API call carries a per-launch token that only this page knows; other hosts and cross-site origins are refused.
 import http from 'node:http';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {execFile,spawn} from 'node:child_process';import {randomBytes,randomUUID} from 'node:crypto';import {fileURLToPath} from 'node:url';
+import * as memory from './memory.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.dirname(here);
 const PORT=Number(process.env.BISU_UI_PORT||7878);
@@ -267,6 +268,12 @@ const server=http.createServer(async(req,res)=>{
   if(m==='POST'&&p==='/api/roles'){const input=await body(req),next=readConfig();
    for(const k of Object.keys(ROLES)){const v=input[k];if(v===null||v===ROLES[k])delete next[k];else if(typeof v==='string'){if(!SLUG.test(v))return json(res,400,{error:`not an OpenRouter slug: ${v}`});next[k]=v}}
    writeConfig(next);return json(res,200,{roles:roles()})}
+  // Memory: the files the assistant keeps and the exact block a new run is given. Editing here is
+  // immediate for the next chat or bisu run; a chat that is already running keeps what it started with.
+  if(m==='GET'&&p==='/api/memory')return json(res,200,memory.snapshot());
+  if(m==='POST'&&p==='/api/memory')return json(res,200,memory.save(await body(req)));
+  const mm=/^\/api\/memory\/([^/]+)$/.exec(p);
+  if(mm&&m==='DELETE')return json(res,200,memory.remove(decodeURIComponent(mm[1])));
   if(m==='GET'&&p==='/api/chats')return json(res,200,{chats:[...chats.values()].map(publicChat).sort((a,b)=>b.created-a.created),home:os.homedir()});
   if(m==='POST'&&p==='/api/chats'){if(!KEY)return json(res,400,{error:'No OpenRouter key: save one for https://openrouter.ai in Dec first.'});const c=await newChat(await body(req));return json(res,200,{chat:publicChat(c)})}
   const cm=/^\/api\/chats\/([0-9a-f-]{36})(\/[a-z]+)?$/.exec(p);const c=cm&&chats.get(cm[1]);
