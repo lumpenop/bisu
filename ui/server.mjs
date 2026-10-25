@@ -58,72 +58,48 @@ async function account(){
   keyError:key.status==='rejected'?key.reason.message:null,credits:credits.status==='fulfilled'?credits.value:null,creditsError:credits.status==='rejected'?credits.reason.message:null}}
 
 // ---- history ----
-const fileCache=new Map();// path -> {mtime,size,rows,count}
-// The runs list is built from ~200MB of transcripts, so a cached row keeps only the fields it needs.
-// Sizing the cache by rows rather than by transcript bytes keeps a day of heavy use from evicting it
-// and forcing the whole directory to be parsed again the next time the panel opens.
-const CACHE_FILES=400,CACHE_ROWS=400000;
-let cacheRows=0;
-function cacheTrim(){for(const [p,e] of fileCache){if(fileCache.size<=CACHE_FILES&&cacheRows<=CACHE_ROWS)break;fileCache.delete(p);cacheRows-=e.count}}
+// The transcripts are parsed in ui/history.mjs, a process that exits when it is done: a cold pass
+// over ~200MB of JSON grows V8 by a few hundred megabytes and never gives them back. This process
+// only asks for the result and keeps it while no transcript has changed.
+const SCAN=path.join(here,'history.mjs');
+const HISTORY_DAYS=60;
 function* jsonlFiles(dir,depth=0){let ents=[];try{ents=fs.readdirSync(dir,{withFileTypes:true})}catch{return}
  for(const e of ents){const p=path.join(dir,e.name);if(e.isDirectory()&&depth<3&&e.name!=='memory')yield* jsonlFiles(p,depth+1);else if(e.isFile()&&e.name.endsWith('.jsonl'))yield p}}
-const textOf=c=>typeof c==='string'?c:Array.isArray(c)?c.filter(b=>b?.type==='text').map(b=>b.text).join(' '):'';
-// Tool output and long assistant replies are most of a transcript's bytes, and building the runs list
-// never reads them, so they never become long-lived objects. A resumed conversation reads its own file.
-function keepRow(j){if(!j||typeof j!=='object')return null;
- const keep={type:j.type,sessionId:j.sessionId,timestamp:j.timestamp,cwd:j.cwd,isSidechain:j.isSidechain,uuid:j.uuid};
- if(typeof j.aiTitle==='string')keep.aiTitle=j.aiTitle;
- const m=j.message;if(!m)return keep;
- const msg={};
- if(j.type==='user'){const t=textOf(m.content);if(t)msg.content=t.slice(0,2000)}
- if(m.model)msg.model=m.model;
- if(m.usage)msg.usage=m.usage;
- if(m.id)msg.id=m.id;
- if(Object.keys(msg).length)keep.message=msg;
- return keep}
-// Parsing every transcript once leaves a few hundred megabytes of short-lived objects behind: the
-// tool output, the base64 images, the parsed content blocks. Nothing needs them after the rows are
-// built, so the engine asks for them back instead of sitting at the high-water mark all day.
-let parsedBytes=0;
-const reclaim=()=>{if(parsedBytes<8e6){parsedBytes=0;return}parsedBytes=0;try{globalThis.gc?.()}catch{}}
-function scanFile(p,st){const hit=fileCache.get(p);if(hit&&hit.mtime===st.mtimeMs&&hit.size===st.size){fileCache.delete(p);fileCache.set(p,hit);return hit.rows}
- let text='';try{text=fs.readFileSync(p,'utf8')}catch{}
- const rows=[];if(/"model":"[a-z0-9][a-z0-9._-]*\//.test(text))for(const line of text.split('\n')){if(!line)continue
-  // Most of a transcript's bytes are tool results, and no row keeps them: skipping them before the
-  // parse is what keeps a 200MB history from costing 200MB of objects.
-  if(!line.includes('"model":"')&&!line.includes('"type":"user"')&&!line.includes('"ai-title"'))continue
-  if(line.includes('"tool_result"'))continue
-  let j;try{j=JSON.parse(line)}catch{continue}
-  const slim=keepRow(j);if(slim)rows.push(slim)}
- parsedBytes+=text.length
- const prev=fileCache.get(p);if(prev)cacheRows-=prev.count;
- fileCache.set(p,{mtime:st.mtimeMs,size:st.size,rows,count:rows.length});cacheRows+=rows.length;cacheTrim();return rows}
-function* transcriptRows(since){for(const p of jsonlFiles(PROJECTS)){let st;try{st=fs.statSync(p)}catch{continue}if(st.mtimeMs<since)continue;yield* scanFile(p,st)}}
-async function runs(){const sessions=new Map();
- for(const j of transcriptRows(Date.now()-60*864e5)){if(!j.sessionId)continue;let s=sessions.get(j.sessionId);
-  if(!s)sessions.set(j.sessionId,s={id:j.sessionId,start:null,end:null,cwd:null,title:null,prompt:null,turns:0,seen:new Set(),usage:{}});
-  if(j.timestamp){const t=Date.parse(j.timestamp);if(!s.start||t<s.start)s.start=t;if(!s.end||t>s.end)s.end=t}
-  if(j.cwd&&!s.cwd)s.cwd=j.cwd;if(j.type==='ai-title'&&j.aiTitle)s.title=j.aiTitle;
-  if(j.type==='user'&&!j.isSidechain&&!s.prompt){const t=textOf(j.message?.content).trim();if(t&&!t.startsWith('<'))s.prompt=t.slice(0,300)}
-  const m=j.message;if(j.type==='assistant'&&m?.model&&m.usage){const id=m.id||j.uuid;if(s.seen.has(id))continue;s.seen.add(id);if(!j.isSidechain)s.turns++;
-   const u=s.usage[m.model]??={input:0,cacheRead:0,output:0};u.input+=(m.usage.input_tokens||0)+(m.usage.cache_creation_input_tokens||0);u.cacheRead+=m.usage.cache_read_input_tokens||0;u.output+=m.usage.output_tokens||0}}
- const price=await priceMap();
- const out=[...sessions.values()].filter(s=>Object.keys(s.usage).some(k=>SLUG.test(k))).map(s=>{const {seen,...rest}=s;return {...rest,cost:estimate(s.usage,price)}})
-  .sort((a,b)=>(b.start||0)-(a.start||0)).slice(0,100)
- if(parsedBytes)setTimeout(reclaim,100)
- return out}
-// The visible conversation of a past session (main thread only), for showing it again when it is resumed.
-// Reads straight from the files that mention the session, because cached rows carry no reply text.
-function pastMessages(sessionId){const out=[];
- const since=Date.now()-60*864e5;
- for(const p of jsonlFiles(PROJECTS)){let st;try{st=fs.statSync(p)}catch{continue}if(st.mtimeMs<since)continue;
-  let text='';try{text=fs.readFileSync(p,'utf8')}catch{continue}
-  if(!text.includes(sessionId))continue;
-  for(const line of text.split('\n')){if(!line)continue;let j;try{j=JSON.parse(line)}catch{continue}
-   if(j.sessionId!==sessionId||j.isSidechain)continue;
-   if(j.type==='user'){const t=textOf(j.message?.content).trim();if(t&&!t.startsWith('<')&&!t.startsWith('[Request interrupted'))out.push({kind:'user',text:t,ts:j.timestamp})}
-   if(j.type==='assistant'){const t=textOf(j.message?.content).trim();if(t)out.push({kind:'text',text:t,ts:j.timestamp})}}}
- return out.sort((a,b)=>Date.parse(a.ts)-Date.parse(b.ts)).slice(-60)}
+// Cheap enough (a few hundred stat calls) to answer "is the cached list still current?" on every open.
+function newestTranscript(){let newest=0;for(const p of jsonlFiles(PROJECTS)){try{const m=fs.statSync(p).mtimeMs;if(m>newest)newest=m}catch{}}
+ return newest}
+function scanHistory(mode,arg){return new Promise((resolve,reject)=>{
+ // A stripped environment: the reader needs nothing from this process, and the key tokens in it
+ // should not be handed to a program whose only job is reading files.
+ const env={PATH:process.env.PATH||'/usr/bin:/bin',HOME:os.homedir()};
+ execFile(process.execPath,[SCAN,mode,PROJECTS,String(HISTORY_DAYS),arg],{encoding:'utf8',env,timeout:120000,maxBuffer:32<<20},(err,out,errOut)=>{
+  if(err)return reject(Error(`history ${mode} failed: ${(errOut||err.message).trim().split('\n').pop()}`));
+  try{resolve(JSON.parse(out))}catch{reject(Error(`history ${mode} printed no json`))}})})}
+
+let history={at:0,list:null,pending:null};
+function runs(){
+ const newest=newestTranscript();
+ if(history.list&&history.at>=newest)return Promise.resolve(history.list);
+ if(history.pending)return history.pending;
+ // Stamped before the scan, so a transcript written while it runs counts as newer next time.
+ const started=Date.now();
+ const p=(async()=>{
+  try{
+   const {sessions}=await scanHistory('runs',SLUG.source);
+   const price=await priceMap();
+   const list=sessions.map(s=>({...s,cost:estimate(s.usage,price)}));
+   history={at:started,list};
+   return list;
+  }catch(e){
+   console.error('bisu history:',e.message);
+   if(history.list)return history.list;
+   throw e;
+  }finally{history.pending=null}
+ })();
+ history.pending=p;
+ return p}
+// The visible conversation of a past session, for showing it again when it is resumed.
+async function pastMessages(sessionId){return (await scanHistory('session',sessionId)).messages}
 
 // ---- chats ----
 // One Claude Code process per chat. Events are kept (capped) so a reloaded page can replay the conversation.
@@ -189,11 +165,11 @@ function handle(c,j){
   priceMap().then(price=>{const total=estimate(usage,price),cost=total==null?null:total-c.costSoFar;if(total!=null)c.costSoFar=total;
    push(c,{kind:'result',error:!!j.is_error,subtype:j.subtype,turns:j.num_turns,ms:j.duration_ms,cost});setBusy(c,false);idleLater(c)});return}
 }
-function newChat({cwd,resume}){
+async function newChat({cwd,resume}){
  const dir=path.resolve(String(cwd||os.homedir()).replace(/^~(?=\/|$)/,os.homedir()));
  if(!fs.statSync(dir,{throwIfNoEntry:false})?.isDirectory())throw Error('not a folder: '+dir);
  const c={id:randomUUID(),cwd:dir,title:null,busy:false,proc:null,sessionId:resume||null,events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),turnsDone:0,costSoFar:0,created:Date.now()};
- if(resume){if(!/^[0-9a-f-]{36}$/.test(resume))throw Error('bad session id');const past=pastMessages(resume);
+ if(resume){if(!/^[0-9a-f-]{36}$/.test(resume))throw Error('bad session id');const past=await pastMessages(resume);
   c.title=past.find(m=>m.kind==='user')?.text.slice(0,60)||'Resumed session';push(c,{kind:'resumed',sessionId:resume,count:past.length});for(const m of past)push(c,{...m,past:true})}
  chats.set(c.id,c);warm(c);return c}
 function say(c,text){
@@ -237,7 +213,7 @@ const server=http.createServer(async(req,res)=>{
    for(const k of Object.keys(ROLES)){const v=input[k];if(v===null||v===ROLES[k])delete next[k];else if(typeof v==='string'){if(!SLUG.test(v))return json(res,400,{error:`not an OpenRouter slug: ${v}`});next[k]=v}}
    writeConfig(next);return json(res,200,{roles:roles()})}
   if(m==='GET'&&p==='/api/chats')return json(res,200,{chats:[...chats.values()].map(publicChat).sort((a,b)=>b.created-a.created),home:os.homedir()});
-  if(m==='POST'&&p==='/api/chats'){if(!KEY)return json(res,400,{error:'No OpenRouter key: save one for https://openrouter.ai in Dec first.'});const c=newChat(await body(req));return json(res,200,{chat:publicChat(c)})}
+  if(m==='POST'&&p==='/api/chats'){if(!KEY)return json(res,400,{error:'No OpenRouter key: save one for https://openrouter.ai in Dec first.'});const c=await newChat(await body(req));return json(res,200,{chat:publicChat(c)})}
   const cm=/^\/api\/chats\/([0-9a-f-]{36})(\/[a-z]+)?$/.exec(p);const c=cm&&chats.get(cm[1]);
   if(cm&&!c)return json(res,404,{error:'chat not found'});
   if(c&&m==='GET'&&cm[2]==='/events'){res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-store','Connection':'keep-alive'});

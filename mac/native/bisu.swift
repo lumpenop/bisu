@@ -190,12 +190,12 @@ final class Engine {
     let p = Process()
     if let bridge = decBridge() {
       p.executableURL = URL(fileURLWithPath: node)
-      p.arguments = [bridge, "run", "--", node, "--expose-gc", server.path]
+      p.arguments = [bridge, "run", "--", node, server.path]
       env["OPENROUTER_API_KEY"] = "dec://OPENROUTER_API_KEY"
       if decHas(node, "OPENAI_API_KEY") { env["OPENAI_API_KEY"] = "dec://OPENAI_API_KEY" }
     } else if let key = env["OPENROUTER_API_KEY"], !key.isEmpty {
       p.executableURL = URL(fileURLWithPath: node)
-      p.arguments = ["--expose-gc", server.path]
+      p.arguments = [server.path]
     } else {
       throw NSError(domain: "bisu", code: 3, userInfo: [NSLocalizedDescriptionKey: "dec-secret is missing: run `bisu app install` in Terminal once so bisu has a readable copy of it."])
     }
