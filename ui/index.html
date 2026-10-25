@@ -526,8 +526,10 @@ async function loadMemory(){try{mem=await api('/api/memory');renderMemory()}catc
 const whenText=ts=>new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+new Date(ts).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
 function renderMemory(){
  const m=mem;if(!m)return;
+ const cut=m.cut||[];
  $('memInfo').innerHTML=`<div class="k">Folder</div><div class="mono">${esc(short(m.dir))}</div>
-  <div class="k">In the prompt</div><div>${m.entries.length} ${m.entries.length===1?'memory':'memories'} · ${m.used.toLocaleString()} / ${m.budget.toLocaleString()} characters${m.used>m.budget?' <span class="w">· over budget: the oldest unpinned ones are left out</span>':''}</div>`;
+  <div class="k">In the prompt</div><div>${m.entries.length} ${m.entries.length===1?'memory':'memories'} · ${m.used.toLocaleString()} / ${m.budget.toLocaleString()} characters${cut.length?` <span class="w">· ${cut.length} over the budget, sent as a title only</span>`:''}</div>
+  ${cut.length?`<div class="k">Left out</div><div>${cut.map(t=>esc(t)).join(', ')}</div>`:''}`;
  $('memList').innerHTML=m.entries.length?m.entries.map(e=>`<div class="mem" data-id="${esc(e.id)}">
    <div class="h"><b>${esc(e.title)}</b>${e.pin?'<span class="chip">pinned</span>':''}<span class="note" style="margin:0">${whenText(e.updated)}</span><span class="sp"></span>
     <button data-a="pin">${e.pin?'Unpin':'Pin'}</button><button data-a="edit">Edit</button><button class="danger" data-a="del">Delete</button></div>

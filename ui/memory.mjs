@@ -62,33 +62,71 @@ export function list() {
 }
 
 // What a new run is given. Empty when there is nothing saved, so a first install pays nothing for it.
-export function digest(budget = BUDGET) {
+// A memory longer than the room left is cut down rather than dropped: the one failure this must not
+// have is a long pinned memory making the block vanish, which leaves the model certain there is no
+// memory at all. Anything that still does not fit is named in the trailing note, so the model knows
+// to read the folder instead of assuming it has seen everything.
+const MIN_CUT = 120; // a cut shorter than this says nothing worth the characters
+const TRUNC = '…(cut to fit)';
+
+function compose(budget) {
   const all = list();
-  if (!all.length) return '';
-  const blocks = [];
+  const blocks = [], cut = [];
   let used = 0;
-  let left = 0;
   for (const e of all) {
-    const block = `### ${e.title}\n${e.text || '(no detail)'}\n`;
-    if (used + block.length > budget) { left++; continue }
-    used += block.length;
-    blocks.push(block);
+    const head = `### ${e.title}\n`;
+    const text = e.text || '(no detail)';
+    const block = head + text + '\n';
+    if (used + block.length <= budget) { used += block.length; blocks.push(block); continue }
+    const room = budget - used - head.length - TRUNC.length - 1;
+    if (room >= MIN_CUT) {
+      const part = head + text.slice(0, room).trimEnd() + TRUNC + '\n';
+      if (used + part.length <= budget) { used += part.length; blocks.push(part); continue }
+    }
+    cut.push(e.title);
   }
-  if (!blocks.length) return '';
+  return { all, blocks, cut, used };
+}
+
+// Titles, shortened, for the trailing note. Capped by characters rather than by count so the note
+// cannot grow into the thing it is describing.
+function brief(titles, cap = 240) {
+  let names = '', shown = 0;
+  for (const t of titles) {
+    const name = t.length > 30 ? t.slice(0, 30) + '…' : t;
+    if (shown && names.length + name.length > cap) break;
+    names += (shown++ ? ', ' : '') + name;
+  }
+  return names + (shown < titles.length ? ', …' : '');
+}
+
+export function digest(budget = BUDGET) {
+  const { blocks, cut, used } = compose(budget);
+  if (!blocks.length) {
+    // Nothing fitted at all, which with a sane budget means every memory is huge; still say that memory
+    // exists, because saying nothing is the one answer that is certainly wrong.
+    if (!cut.length) return '';
+    return `## Memory (기억)\n` +
+      `Facts the person asked you to keep from earlier sessions. None fit in ${budget} characters: ` +
+      `${brief(cut, used ? 240 : 240)} — read ${DIR} before answering.\n`;
+  }
+  const more = cut.length
+    ? `\n(${cut.length} more did not fit: ${brief(cut)} — read ${DIR} when they might matter.)\n`
+    : '';
   return `## Memory (기억)\n` +
     `Facts the person asked you to keep from earlier sessions, newest first. Keep to them; do not repeat them back.\n\n` +
-    blocks.join('\n') +
-    (left ? `\n(${left} more, older or unpinned, did not fit — read ${DIR} when they might matter.)\n` : '');
+    blocks.join('\n') + more;
 }
 
 export function snapshot() {
-  const entries = list();
+  const { all, cut, used } = compose(BUDGET);
   return {
     dir: DIR,
     budget: BUDGET,
     // Counted the way the budget is spent, so "3,000 of 3,000" means nothing else fits.
-    used: entries.reduce((n, e) => n + `### ${e.title}\n${e.text || '(no detail)'}\n`.length, 0),
-    entries,
+    used,
+    cut,
+    entries: all,
     digest: digest(),
   };
 }
