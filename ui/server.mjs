@@ -182,8 +182,17 @@ function start(c){
  const proc=spawn('zsh',args,{cwd:c.cwd,env:process.env,stdio:['pipe','pipe','pipe']});c.proc=proc;c.models=r;c.costSoFar=0;
  // A chat started in a folder macOS has not granted access to does not fail — zsh blocks in getcwd
  // until the permission dialog is answered, which looks like a spinner forever. Say what is happening.
- c.stall=setTimeout(()=>{if(c.proc!==proc||c.sessionId)return;
-  push(c,{kind:'error',message:`bisu is still waiting to read ${c.cwd}. macOS may be asking whether bisu may access that folder — answer the dialog, or allow bisu in System Settings → Privacy & Security → Files and Folders.`})},15000);
+ // Only when it is actually still the launcher: Claude Code says nothing until the first message, so
+ // a healthy chat that is merely waiting for one would otherwise be blamed on the folder every time.
+ c.stall=setTimeout(()=>{
+  if(c.proc!==proc||c.sessionId||c.events.some(e=>e.kind==='init'))return;
+  execFile('/bin/ps',['-o','comm=','-p',String(proc.pid)],(e,out)=>{
+   // `exec claude` in launch.zsh replaces zsh; a name that still says zsh never got to start.
+   if(c.proc!==proc||c.sessionId||c.events.some(e=>e.kind==='init'))return;
+   if(!/zsh\s*$/.test(String(out).trim()))return;
+   push(c,{kind:'error',message:`bisu is still waiting to read ${c.cwd}. macOS may be asking whether bisu may access that folder — answer the dialog, or allow bisu in System Settings → Privacy & Security → Files and Folders.`});
+  });
+ },15000);
  let buf='',err='';
  proc.stdout.on('data',d=>{buf+=d;let i;while((i=buf.indexOf('\n'))>=0){const line=buf.slice(0,i);buf=buf.slice(i+1);if(!line.trim())continue;let j;try{j=JSON.parse(line)}catch{continue}handle(c,j)}});
  proc.stderr.on('data',d=>{err=(err+d).slice(-4000)});
