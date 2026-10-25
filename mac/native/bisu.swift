@@ -357,6 +357,7 @@ let shimJS = """
     openFull: () => post('full'),
     resize: (width, height) => call('resize', {width, height}),
     bounds: () => call('bounds'),
+    pickFolder: () => call('pickFolder'),
     move: (x, y) => post('move', {x, y}),
     endMove: () => post('endMove'),
     accessibility: () => call('accessibility'),
@@ -955,6 +956,24 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     case "bounds":
       let f = panel.frame
       reply(["x": f.minX, "y": f.minY, "width": f.width, "height": f.height])
+    case "pickFolder":
+      // A folder the person picks is one macOS has already let them into, which also saves a
+      // typed path from hitting a Files-and-Folders prompt on the first message.
+      let open = NSOpenPanel()
+      open.canChooseFiles = false
+      open.canChooseDirectories = true
+      open.allowsMultipleSelection = false
+      open.canCreateDirectories = true
+      open.prompt = "Use this folder"
+      open.message = "bisu works in the folder you pick."
+      let answer: (NSApplication.ModalResponse) -> Void = { response in
+        reply(response == .OK ? open.url?.path : nil)
+      }
+      if let window = view?.window ?? panel, window.isVisible {
+        open.beginSheetModal(for: window, completionHandler: answer)
+      } else {
+        answer(open.runModal())
+      }
     case "move":
       guard let x = args["x"] as? Double, let y = args["y"] as? Double else { return }
       let size = panel.frame.size

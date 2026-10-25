@@ -37,6 +37,7 @@ input:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
 aside{width:260px;border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--card);min-height:0}
 .newchat{padding:12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
 .newchat label{font-size:12px;color:var(--muted)}
+.newchat .row{display:flex;gap:6px}.newchat .row input{flex:1;min-width:0}.newchat .row button{white-space:nowrap}
 #chatList{overflow:auto;flex:1}
 .ci{padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer}
 .ci.on{background:var(--chip)}
@@ -112,6 +113,16 @@ body.panel .m.user{max-width:90%}
 body.panel .m.text pre{max-height:220px}
 body.panel .empty{margin-top:26vh;font-size:13px}
 body.panel .res,body.panel .sys{font-size:11.5px}
+/* The panel hides the folder sidebar, so it needs its own way to start a chat — otherwise a chat
+   closed or lost (the engine is restarted with the shell) leaves the panel with nothing to click. */
+#panelStart{display:none}
+body.panel #panelStart:not([hidden]){display:flex;flex:1;justify-content:center;align-items:flex-start;padding:16px 14px}
+#panelStart .startWrap{width:100%;max-width:340px;display:flex;flex-direction:column;gap:10px;margin-top:12vh}
+#panelStart .startTitle{margin:0;text-align:center;font-weight:600}
+#panelStart .note{margin:0;text-align:center;font-size:12px;line-height:1.45}
+#panelStart .row{display:flex;gap:6px}
+#panelStart input{flex:1;min-width:0}
+#panelStart .err{margin:0;font-size:12px;min-height:0}
 .ctxbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 12px;border-top:1px solid var(--line);background:var(--accent-soft);font-size:12px;color:var(--muted)}
 .ctxbar b{color:var(--ink);font-weight:600}
 .ctxbar .x{margin-left:auto;border:0;background:none;padding:0 4px;color:var(--muted);cursor:pointer;font-size:14px;line-height:1}
@@ -145,7 +156,8 @@ body.panel .view.pop.on{animation:popIn .13s ease-out}
  <aside>
   <div class="newchat">
    <label for="cwd">Work in folder</label>
-   <input type="text" id="cwd" class="mono" list="cwdList" spellcheck="false" autocomplete="off" placeholder="~/Desktop/project">
+   <div class="row"><input type="text" id="cwd" class="mono" list="cwdList" spellcheck="false" autocomplete="off" placeholder="~/Desktop/project">
+   <button id="cwdPick" hidden>Choose…</button></div>
    <datalist id="cwdList"></datalist>
    <button class="primary" id="newChat">New chat</button>
   </div>
@@ -156,6 +168,16 @@ body.panel .view.pop.on{animation:popIn .13s ease-out}
    <div class="grow"><div class="t" id="chatTitle"></div><div class="s" id="chatSub"></div></div>
    <button id="stop" hidden>Stop</button><button class="danger" id="closeChat">Close</button>
   </div>
+  <div id="panelStart" hidden><div class="startWrap">
+   <p class="startTitle">Pick a folder and start a chat.</p>
+   <p class="note">bisu works there with Claude Code's tools, and asks you here before it edits files or runs commands.</p>
+   <div class="row">
+    <input type="text" id="startCwd" class="mono" list="cwdList" spellcheck="false" autocomplete="off" placeholder="~/Desktop/project">
+    <button id="startPick" hidden>Choose…</button>
+   </div>
+   <button class="primary" id="startNew">New chat</button>
+   <p class="err" id="startErr" hidden></p>
+  </div></div>
   <div id="msgs"><div class="wrap"><p class="empty">Pick a folder and start a chat. bisu works there with Claude Code's tools,<br>and asks you here before it edits files or runs commands.</p></div></div>
   <div class="compose" id="compose" hidden><div class="row">
    <textarea id="input" rows="1" placeholder="Message bisu  (Enter to send, Shift+Enter for a new line)"></textarea>
@@ -342,7 +364,9 @@ function render(ev){
   case 'error':live=null;add(`<span class="err">${esc(ev.message)}</span>`,null,'sys');break;
   case 'status':if(cur){cur.busy=ev.busy;chatUI()}break;
  }}
-function chatUI(){const c=cur;$('chatHead').hidden=$('compose').hidden=!c;if(!c)return;
+function chatUI(){const c=cur;$('chatHead').hidden=$('compose').hidden=!c;
+ if(PANEL){$('panelStart').hidden=!!c;$('msgs').hidden=!c;if(!c)fillStartCwd()}
+ if(!c)return;
  $('chatTitle').textContent=c.title||'New chat';$('chatSub').textContent=short(c.cwd);
  $('stop').hidden=!c.busy;$('sendBtn').disabled=c.busy;$('input').placeholder=c.busy?'bisu is working…':'Message bisu  (Enter to send, Shift+Enter for a new line)';renderList()}
 function renderList(){$('chatList').innerHTML=chats.map(c=>`<div class="ci${cur&&c.id===cur.id?' on':''}" data-id="${c.id}"><div class="t">${esc(c.title||'New chat')}</div><div class="s"><span class="dot${c.pending?' wait':c.busy?' busy':''}"></span>${esc(short(c.cwd))}</div></div>`).join('')||'<p class="note" style="padding:0 12px">No chats yet.</p>';
@@ -363,9 +387,23 @@ async function answer(request_id,a,el){for(const b of el.querySelectorAll('butto
  try{await post(`/api/chats/${cur.id}/approve`,{request_id,allow:a!=='deny',always:a==='always'})}catch(e){alert(e.message);for(const b of el.querySelectorAll('button'))b.disabled=false}}
 async function sendMsg(){const raw=$('input').value.trim();if(!raw||!cur||cur.busy)return;const t=withContext(raw);$('input').value='';grow();
  try{await post(`/api/chats/${cur.id}/send`,{text:t})}catch(e){$('input').value=raw;add(`<span class="err">${esc(e.message)}</span>`,null,'sys')}}
-async function startChat(body){try{const {chat}=await post('/api/chats',body);chats.unshift(chat);show('chat');open(chat.id)}catch(e){alert(e.message)}}
+async function startChat(body,errEl){if(errEl){errEl.hidden=true;errEl.textContent=''}try{const {chat}=await post('/api/chats',body);chats.unshift(chat);show('chat');open(chat.id)}
+ catch(e){if(errEl){errEl.textContent=e.message;errEl.hidden=false}else alert(e.message)}}
 $('newChat').onclick=()=>{const cwd=$('cwd').value.trim();try{localStorage.setItem('bisu.cwd',cwd)}catch{};startChat({cwd})};
 $('cwd').onkeydown=e=>{if(e.key==='Enter')$('newChat').click()};
+
+// The panel has no sidebar, so the start card is its whole "new chat" flow. It appears whenever no
+// chat is open — including right after the engine restarts, which is when it matters most.
+function fillStartCwd(){const i=$('startCwd');if(!i||i.value)return;
+ let last='';try{last=localStorage.getItem('bisu.cwd')||''}catch{}
+ i.value=last||short(chats[0]?.cwd||$('cwd').value||'')}
+function startFromPanel(){const cwd=$('startCwd').value.trim();try{localStorage.setItem('bisu.cwd',cwd)}catch{}
+ startChat({cwd},$('startErr'))}
+$('startNew').onclick=startFromPanel;
+$('startCwd').onkeydown=e=>{if(e.key==='Enter')startFromPanel()};
+for(const [id,target] of [['startPick','startCwd'],['cwdPick','cwd']]){
+ const b=$(id);if(!b||!HOST?.pickFolder)continue;b.hidden=false;
+ b.onclick=async()=>{try{const dir=await HOST.pickFolder();if(dir){$(target).value=short(dir);$(target).focus()}}catch(e){if(target==='startCwd'){const er=$('startErr');er.textContent=e.message;er.hidden=false}}}};
 $('sendBtn').onclick=sendMsg;
 const grow=()=>{const i=$('input');i.style.height='auto';i.style.height=Math.min(i.scrollHeight,200)+'px'};
 $('input').oninput=grow;
@@ -410,6 +448,7 @@ let runCache=[];
 async function loadRuns(){try{const {runs}=await api('/api/runs');runCache=runs;
  const dirs=[...new Set(runs.map(r=>r.cwd).filter(d=>d&&!/^\/(private\/)?(tmp|var)\//.test(d)))].slice(0,20);$('cwdList').innerHTML=dirs.map(d=>`<option value="${esc(short(d))}">`).join('');
  if(!$('cwd').value){let last='';try{last=localStorage.getItem('bisu.cwd')||''}catch{};$('cwd').value=last||short(dirs[0]||'')}
+ fillStartCwd()
  $('runs').innerHTML=runs.length?runs.map(r=>{const u=Object.values(r.usage),inp=u.reduce((a,x)=>a+x.input+x.cacheRead,0),out=u.reduce((a,x)=>a+x.output,0);
   const mins=r.end&&r.start?Math.max(0,(r.end-r.start)/60e3):0,when=r.start?new Date(r.start):null;
   return `<tr><td class="n">${when?when.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+when.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}):'—'}</td>
@@ -429,7 +468,7 @@ refreshChats().then(()=>{let id=null,v='chat';try{id=localStorage.getItem('bisu.
  if(forced&&chats.some(c=>c.id===forced))open(forced);
  else if(id&&chats.some(c=>c.id===id))open(id);
  else if(PANEL&&chats.length)open(chats[0].id);
- show(PANEL?'chat':v)});
+ show(PANEL?'chat':v);if(!cur)chatUI()});
 setInterval(refreshChats,5000);
 </script>
 </body>

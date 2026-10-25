@@ -19,6 +19,10 @@ const PORT=Number(process.env.BISU_UI_PORT||7878);
 // and its approval notifications, so it may pass its own token. Without it, a fresh one each run.
 const TOKEN=/^[0-9a-f]{32,64}$/.test(process.env.BISU_UI_TOKEN||'')?process.env.BISU_UI_TOKEN:randomBytes(24).toString('hex');
 const CONFIG=path.join(process.env.XDG_CONFIG_HOME||path.join(os.homedir(),'.config'),'bisu','models');
+// The chats themselves live in memory (each one owns a Claude Code process), but their names and
+// session ids are written down: the engine is restarted with the shell, and the panel must come back
+// with the conversations it had instead of an empty page.
+const CHATS_FILE=path.join(path.dirname(CONFIG),'chats.json');
 const PROJECTS=path.join(os.homedir(),'.claude','projects');
 const HELPER=path.join(os.homedir(),'Library','Application Support','Dec Browser','bin','dec-secret-helper');
 const ROLES={BISU_MODEL:'z-ai/glm-5.3',BISU_DEV_MODEL:'deepseek/deepseek-v4.1-flash',BISU_CODE_MODEL:'qwen/qwen3.8-max-0902'};
@@ -101,9 +105,38 @@ function runs(){
 // The visible conversation of a past session, for showing it again when it is resumed.
 async function pastMessages(sessionId){return (await scanHistory('session',sessionId)).messages}
 
+// ---- chats that outlive the engine ----
+// Only what is needed to find a conversation again: Claude Code's own transcript is the conversation,
+// so a restored chat replays it from there instead of keeping a second copy here.
+function saveChats(){
+ try{
+  // A chat that never got a session has no conversation to come back to; the next panel open
+  // should offer a folder instead of an empty one.
+  const list=[...chats.values()].filter(c=>c.sessionId).sort((a,b)=>b.created-a.created).slice(0,30)
+   .map(c=>({id:c.id,cwd:c.cwd,title:c.title,sessionId:c.sessionId,created:c.created}));
+  fs.mkdirSync(path.dirname(CHATS_FILE),{recursive:true});
+  const tmp=CHATS_FILE+'.tmp';fs.writeFileSync(tmp,JSON.stringify(list));fs.renameSync(tmp,CHATS_FILE);
+ }catch(e){console.error('bisu chats: cannot save:',e.message)}
+}
+function restoreChats(){
+ let list=[];try{list=JSON.parse(fs.readFileSync(CHATS_FILE,'utf8'))}catch{return}
+ if(!Array.isArray(list))return;
+ for(const saved of list.slice(0,30)){
+  const id=saved?.id,cwd=saved?.cwd;
+  if(typeof id!=='string'||!/^[0-9a-f-]{36}$/.test(id))continue;
+  if(typeof cwd!=='string'||!fs.statSync(cwd,{throwIfNoEntry:false})?.isDirectory())continue;
+  if(chats.has(id))continue;
+  const sessionId=typeof saved.sessionId==='string'&&/^[0-9a-f-]{36}$/.test(saved.sessionId)?saved.sessionId:null;
+  chats.set(id,{id,cwd,title:typeof saved.title==='string'?saved.title:null,busy:false,proc:null,sessionId,
+   events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),turnsDone:0,costSoFar:0,
+   created:Number(saved.created)||Date.now()});
+ }
+}
+
 // ---- chats ----
 // One Claude Code process per chat. Events are kept (capped) so a reloaded page can replay the conversation.
 const chats=new Map();
+restoreChats();
 const MAX_EVENTS=3000;
 // A chat's process is started as soon as the chat is created or opened, so the first message doesn't wait for Claude Code
 // to boot. It stays up between messages while the page is watching it, and is stopped after IDLE_MS without activity.
@@ -124,6 +157,19 @@ function idleLater(c){
 }
 function unwatched(c){clearTimeout(c.idle);if(c.proc&&!c.busy&&!c.pending.size)idleLater(c)}
 function publicChat(c){return {id:c.id,cwd:c.cwd,title:c.title,busy:c.busy,alive:!!c.proc,sessionId:c.sessionId,pending:c.pending.size,created:c.created}}
+// A restored chat has no events until it is opened; its transcript is replayed into the stream then.
+async function hydrate(c){
+ if(c.events.length||!c.sessionId)return;
+ if(c.hydrating)return c.hydrating;
+ c.hydrating=(async()=>{try{
+  const past=await pastMessages(c.sessionId);
+  if(!past.length||c.events.length)return;
+  push(c,{kind:'resumed',sessionId:c.sessionId,count:past.length});
+  for(const m of past)push(c,{...m,past:true});
+  if(!c.title){const first=past.find(m=>m.kind==='user');if(first)c.title=first.text.slice(0,60);saveChats()}
+ }catch(e){console.error('bisu resume:',e.message)}finally{c.hydrating=null}})();
+ return c.hydrating;
+}
 function push(c,ev){ev.at=Date.now();c.events.push(ev);if(c.events.length>MAX_EVENTS)c.events.splice(0,c.events.length-MAX_EVENTS);
  const line=`data: ${JSON.stringify(ev)}\n\n`;for(const res of c.clients)res.write(line)}
 function setBusy(c,busy){if(c.busy===busy)return;c.busy=busy;push(c,{kind:'status',busy})}
@@ -149,7 +195,7 @@ function start(c){
 const send=(c,obj)=>{c.proc?.stdin.write(JSON.stringify(obj)+'\n')};
 function handle(c,j){
  const parent=j.parent_tool_use_id||null;
- if(j.type==='system'&&j.subtype==='init'){c.sessionId=j.session_id;clearTimeout(c.stall);push(c,{kind:'init',sessionId:j.session_id,model:j.model,cwd:j.cwd});return}
+ if(j.type==='system'&&j.subtype==='init'){c.sessionId=j.session_id;saveChats();clearTimeout(c.stall);push(c,{kind:'init',sessionId:j.session_id,model:j.model,cwd:j.cwd});return}
  if(j.type==='stream_event'){const e=j.event;if(e?.type==='content_block_delta'&&e.delta?.type==='text_delta')push(c,{kind:'delta',text:e.delta.text,parent});return}
  if(j.type==='assistant'){for(const b of j.message?.content||[]){
    if(b.type==='text'&&b.text)push(c,{kind:'text',text:b.text,parent,model:j.message.model});
@@ -171,9 +217,9 @@ async function newChat({cwd,resume}){
  const c={id:randomUUID(),cwd:dir,title:null,busy:false,proc:null,sessionId:resume||null,events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),turnsDone:0,costSoFar:0,created:Date.now()};
  if(resume){if(!/^[0-9a-f-]{36}$/.test(resume))throw Error('bad session id');const past=await pastMessages(resume);
   c.title=past.find(m=>m.kind==='user')?.text.slice(0,60)||'Resumed session';push(c,{kind:'resumed',sessionId:resume,count:past.length});for(const m of past)push(c,{...m,past:true})}
- chats.set(c.id,c);warm(c);return c}
+ chats.set(c.id,c);saveChats();warm(c);return c}
 function say(c,text){
- if(!c.title)c.title=text.slice(0,60);
+ if(!c.title){c.title=text.slice(0,60);saveChats()}
  clearTimeout(c.idle);if(!c.proc)start(c);
  push(c,{kind:'user',text});setBusy(c,true);
  send(c,{type:'user',message:{role:'user',content:text}})}
@@ -184,7 +230,7 @@ function decide(c,{request_id,allow,always,message}){const q=c.pending.get(reque
 function stop(c){if(!c.proc)return;send(c,{type:'control_request',request_id:randomUUID(),request:{subtype:'interrupt'}});
  // A model that ignores the interrupt still gets stopped; the next message resumes the session.
  const p=c.proc;setTimeout(()=>{if(c.proc===p&&c.busy)p.kill('SIGTERM')},4000)}
-function close(c){clearTimeout(c.idle);c.proc?.kill('SIGTERM');for(const res of c.clients)res.end();chats.delete(c.id)}
+function close(c){clearTimeout(c.idle);c.proc?.kill('SIGTERM');for(const res of c.clients)res.end();chats.delete(c.id);saveChats()}
 
 // ---- server ----
 const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(body))};
@@ -216,7 +262,7 @@ const server=http.createServer(async(req,res)=>{
   if(m==='POST'&&p==='/api/chats'){if(!KEY)return json(res,400,{error:'No OpenRouter key: save one for https://openrouter.ai in Dec first.'});const c=await newChat(await body(req));return json(res,200,{chat:publicChat(c)})}
   const cm=/^\/api\/chats\/([0-9a-f-]{36})(\/[a-z]+)?$/.exec(p);const c=cm&&chats.get(cm[1]);
   if(cm&&!c)return json(res,404,{error:'chat not found'});
-  if(c&&m==='GET'&&cm[2]==='/events'){res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-store','Connection':'keep-alive'});
+  if(c&&m==='GET'&&cm[2]==='/events'){await hydrate(c);res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-store','Connection':'keep-alive'});
    res.write(`data: ${JSON.stringify({kind:'hello',chat:publicChat(c)})}\n\n`);for(const ev of c.events)res.write(`data: ${JSON.stringify(ev)}\n\n`);
    c.clients.add(res);warm(c);const ping=setInterval(()=>{try{res.write(': ping\n\n')}catch{}},20000);
    req.on('close',()=>{clearInterval(ping);c.clients.delete(res);unwatched(c)});return}
