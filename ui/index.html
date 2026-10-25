@@ -106,7 +106,7 @@ body.panel .chathead{padding:8px 12px;gap:8px;border-bottom:1px solid var(--line
 body.panel .chathead .s{display:none}
 body.panel #msgs{padding:10px 12px}
 body.panel #msgs>.wrap{max-width:none;gap:8px}
-body.panel .compose{padding:8px 10px}
+body.panel .compose{padding:8px 10px 18px}
 body.panel .compose .row{max-width:none}
 body.panel .m.user{max-width:90%}
 body.panel .m.text pre{max-height:220px}
@@ -115,6 +115,19 @@ body.panel .res,body.panel .sys{font-size:11.5px}
 .ctxbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 12px;border-top:1px solid var(--line);background:var(--accent-soft);font-size:12px;color:var(--muted)}
 .ctxbar b{color:var(--ink);font-weight:600}
 .ctxbar .x{margin-left:auto;border:0;background:none;padding:0 4px;color:var(--muted);cursor:pointer;font-size:14px;line-height:1}
+/* a permission is not a context chip: it asks for a decision and can be put away for good */
+.axbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;border-top:1px solid var(--line);background:var(--warn-soft);font-size:12px;color:var(--ink)}
+.axbar .grow{flex:1;min-width:0;color:var(--muted)}
+.axbar button{padding:4px 10px;font-size:12px}
+.axbar .x{border:0;background:none;padding:0 4px;color:var(--muted);font-size:14px;line-height:1;cursor:pointer}
+/* Frameless windows get no resize border on macOS, so the panel draws its own grip. */
+.grip{display:none}
+body.panel .grip{display:block;position:fixed;right:2px;bottom:2px;width:15px;height:15px;z-index:20;cursor:nwse-resize;-webkit-app-region:no-drag}
+body.panel .grip::after{content:'';position:absolute;right:3px;bottom:3px;width:7px;height:7px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);border-radius:0 0 1px 0;opacity:.5}
+body.resizing,body.resizing *{cursor:nwse-resize!important;user-select:none!important}
+@keyframes popIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+body.panel .view.pop.on{animation:popIn .13s ease-out}
+@media (prefers-reduced-motion:reduce){body.panel .view.pop.on{animation:none}}
 @media (max-width:760px){
  #chatView{flex-direction:column}aside{width:auto;max-height:38vh;border-right:0;border-bottom:1px solid var(--line)}
  .role,.kv{grid-template-columns:1fr}header{flex-wrap:wrap;gap:8px}}
@@ -246,6 +259,46 @@ function withContext(t){
  consumedAt=ctx.at;sent++;setCtx(null);HOST?.consume?.();
  return t+'\n\n'+p.join('\n');
 }
+
+// ---- desktop shell: the resize grip, and the one permission bisu asks for ----
+if(PANEL){
+ // Dragging the window's own border would move it, so the panel carries a grip in its corner.
+ // Sizes are sent in screen coordinates, which do not change while the window is growing.
+ const grip=document.createElement('div');grip.className='grip';grip.setAttribute('aria-hidden','true');document.body.appendChild(grip);
+ let drag=null,pending=null,frame=0;
+ const flush=()=>{frame=0;if(!pending)return;const{w,h}=pending;pending=null;HOST?.resize?.(w,h)};
+ grip.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();
+  drag={x:e.screenX,y:e.screenY,w:window.innerWidth,h:window.innerHeight};grip.setPointerCapture(e.pointerId);document.body.classList.add('resizing')});
+ grip.addEventListener('pointermove',e=>{if(!drag)return;
+  pending={w:drag.w+e.screenX-drag.x,h:drag.h+e.screenY-drag.y};if(!frame)frame=requestAnimationFrame(flush)});
+ const endDrag=e=>{if(!drag)return;drag=null;pending=null;document.body.classList.remove('resizing');try{grip.releasePointerCapture(e.pointerId)}catch{}};
+ grip.addEventListener('pointerup',endDrag);grip.addEventListener('pointercancel',endDrag);
+}
+let axBar=null;
+function ensureAxBar(){if(axBar)return axBar;
+ axBar=document.createElement('div');axBar.className='axbar';axBar.hidden=true;
+ const c=ensureCtxBar();c.parentNode.insertBefore(axBar,c);return axBar}
+function hideAxBar(){if(axBar){axBar.hidden=true;axBar.innerHTML=''}}
+// Accessibility is granted per app, and a rebuild can leave the old grant behind while the new
+// binary is still pending, so the answer is asked again each time the panel opens.
+async function checkAccessibility(){
+ if(!PANEL||!HOST?.accessibility)return;
+ let a=null;try{a=await HOST.accessibility()}catch{return}
+ if(!a||a.trusted||a.dismissed||!a.enabled)return hideAxBar();
+ const bar=ensureAxBar();
+ bar.hidden=false;
+ bar.innerHTML=`<span class="grow">선택한 텍스트까지 함께 보내려면 접근성 권한이 필요해요.</span><button class="primary" data-a="grant">권한 주기</button><button class="x" data-a="no" title="다시 묻지 않기">✕</button>`;
+ bar.querySelector('[data-a=grant]').onclick=()=>{HOST.grantAccessibility?.();hideAxBar()};
+ bar.querySelector('[data-a=no]').onclick=()=>{HOST.dismissAccessibility?.();hideAxBar()};
+}
+if(PANEL&&HOST?.onShown)HOST.onShown(()=>{
+ const v=document.querySelector('.view.on');
+ if(v&&!matchMedia('(prefers-reduced-motion: reduce)').matches){v.classList.remove('pop');void v.offsetWidth;v.classList.add('pop')}
+ const i=$('input');
+ if(i&&!$('compose').hidden)i.focus();
+ checkAccessibility();
+});
+checkAccessibility();
 function toolSummary(name,input={}){
  if(input.command)return input.command;if(input.file_path)return short(input.file_path);if(input.pattern)return input.pattern+(input.path?'  in '+short(input.path):'');
  if(input.url)return input.url;if(input.description)return input.description;if(input.prompt)return input.prompt;return JSON.stringify(input)}

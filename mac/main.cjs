@@ -6,7 +6,7 @@
 // full window for history and settings. The shell owns four things the browser page cannot:
 // the frontmost app and selection as context, a tray icon, notifications when an approval is
 // waiting, and staying alive with the engine between visits.
-const {app, BrowserWindow, Tray, Menu, globalShortcut, screen, nativeImage, Notification, ipcMain, dialog, shell, nativeTheme} = require('electron');
+const {app, BrowserWindow, Tray, Menu, globalShortcut, screen, nativeImage, Notification, ipcMain, dialog, shell, nativeTheme, systemPreferences} = require('electron');
 const {spawn} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -24,6 +24,11 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const TOKEN = crypto.randomBytes(24).toString('hex');
 const SELF = 'bisu';
 const SHORTCUT = 'Alt+Space';
+// A frameless window cannot be resized by its edges — macOS only gives frameless windows a drag
+// area, and dragging the border moves the window instead. The panel therefore resizes from a grip
+// the page draws, and these are the bounds that grip is held to.
+const MIN_W = 380;
+const MIN_H = 320;
 
 let quitting = false;
 let engine = null;
@@ -281,8 +286,8 @@ function createPanel() {
   panel = new BrowserWindow({
     width: 460,
     height: 640,
-    minWidth: 380,
-    minHeight: 320,
+    minWidth: MIN_W,
+    minHeight: MIN_H,
     show: false,
     frame: false,
     resizable: true,
@@ -301,8 +306,8 @@ function createPanel() {
   panel.on('blur', () => {
     if (quitting || !panel || panel.webContents.isDevToolsOpened()) return;
     hiddenAt = Date.now();
-    log('panel blur → hidden');
-    panel.hide();
+    log('panel blur');
+    hidePanel();
   });
   panel.on('resize', savePanelBounds);
   panel.on('move', () => {
@@ -319,11 +324,27 @@ function createPanel() {
 // True while the shell itself is placing the window, so its own setBounds/setPosition does not
 // read as a drag.
 let positioning = false;
+
+// A size that fits both the minimums and the screen the panel is on, anchored at the top-left so
+// the header never slides out from under the pointer mid-resize.
+function clampSize({width, height, x, y}) {
+  const area = screen.getDisplayMatching({x, y, width: 1, height: 1}).workArea;
+  const maxW = Math.max(MIN_W, area.x + area.width - x - 8);
+  const maxH = Math.max(MIN_H, area.y + area.height - y - 8);
+  return {
+    width: Math.round(Math.min(Math.max(width, MIN_W), maxW)),
+    height: Math.round(Math.min(Math.max(height, MIN_H), maxH)),
+  };
+}
+
 function placeAt(bounds) {
   if (!panel) return;
   const b = panel.getBounds();
   const next = {...b, ...bounds};
+  const size = clampSize({width: next.width, height: next.height, x: next.x, y: next.y});
   const area = screen.getDisplayMatching(next).workArea;
+  next.width = size.width;
+  next.height = size.height;
   next.x = Math.round(Math.min(Math.max(next.x, area.x), area.x + area.width - next.width));
   next.y = Math.round(Math.min(Math.max(next.y, area.y), area.y + area.height - next.height));
   positioning = true;
@@ -357,16 +378,19 @@ function positionPanel() {
   const saved = readState().panel;
   const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
   const size = panel.getBounds();
+  // The size is the person's too: once they resize, the panel keeps that size even though it goes
+  // back under the icon.
+  const want = saved && saved.width && saved.height ? clampSize({width: saved.width, height: saved.height, x: area.x, y: area.y}) : size;
   const t = tray.getBounds();
-  let x = Math.round(t.x + t.width / 2 - size.width / 2);
+  let x = Math.round(t.x + t.width / 2 - want.width / 2);
   let y = Math.round(t.y + t.height + 6);
-  if (!t.width) { x = Math.round(area.x + area.width - size.width - 12); y = Math.round(area.y + 8) }
-  x = Math.max(area.x + 8, Math.min(x, area.x + area.width - size.width - 8));
+  if (!t.width) { x = Math.round(area.x + area.width - want.width - 12); y = Math.round(area.y + 8) }
+  x = Math.max(area.x + 8, Math.min(x, area.x + area.width - want.width - 8));
   positioning = true;
-  panel.setPosition(x, y, false);
-  if (saved && saved.width && saved.width !== size.width) panel.setSize(saved.width, saved.height, false);
+  if (want.width !== size.width || want.height !== size.height) panel.setBounds({x, y, ...want}, false);
+  else panel.setPosition(x, y, false);
   setTimeout(() => { positioning = false }, 200);
-  log(`panel under icon at ${x},${y}`);
+  log(`panel under icon at ${x},${y} ${want.width}x${want.height}`);
 }
 
 // Where the panel goes when it opens: under the icon until the person moves it, then wherever
@@ -387,20 +411,45 @@ async function showPanel({capture = true} = {}) {
   if (!engineReady) { await restartEngine('not ready'); if (!engineReady) return }
   if (!panel) { createPanel(); await loadPanel() }
   else if (activeChatId && !(panel.webContents.getURL() || '').includes(activeChatId)) await loadPanel();
-  if (panel.isVisible()) { log('panel toggled off'); panel.hide(); return }
+  if (panel.isVisible()) { log('panel toggled off'); hidePanel(); return }
   // Clicking the menu bar icon blurs (and hides) the panel first; that click means "hide", not "show again".
   if (Date.now() - hiddenAt < 250) return;
   pendingContext = capture
     ? await withTimeout(ctx.capture({withSelection: readState().selection !== false, selfName: SELF}), 1600, null)
     : null;
   placePanel();
+  panel.setOpacity(0);
   panel.show();
   panel.focus();
   panel.webContents.focus();
+  fadePanelIn();
+  panel.webContents.send('bisu:shown');
   if (pendingContext) panel.webContents.send('bisu:context', pendingContext);
 }
 
-function hidePanel() { if (panel) { log('panel hidden'); panel.hide() } }
+// A short fade, because the window is opaque and would otherwise appear as a finished rectangle
+// while the page is still coming back from a hidden state. Opacity is animated in the shell and the
+// content in the page; neither is long enough to feel like waiting.
+let fadeTimer = null;
+function fadePanelIn() {
+  clearInterval(fadeTimer);
+  if (!panel || process.env.BISU_NO_ANIM) { panel?.setOpacity(1); return }
+  let step = 0;
+  fadeTimer = setInterval(() => {
+    step++;
+    if (!panel || panel.isDestroyed()) { clearInterval(fadeTimer); return }
+    if (step >= 4) { clearInterval(fadeTimer); panel.setOpacity(1); return }
+    panel.setOpacity(step / 4);
+  }, 20);
+}
+
+function hidePanel() {
+  if (!panel) return;
+  clearInterval(fadeTimer);
+  panel.setOpacity(1);
+  log('panel hidden');
+  panel.hide();
+}
 
 function openFull() {
   if (full) { full.show(); full.focus(); return }
@@ -426,6 +475,7 @@ function showError(message) {
   <b>bisu could not start</b><pre style="white-space:pre-wrap;font:12px ui-monospace;color:#333">${String(message).replace(/[<&]/g, c => c === '<' ? '&lt;' : '&amp;')}</pre>
   <p style="color:#666">Fix it, then choose “Restart engine” from the menu bar icon.</p></body>`;
   if (!panel) createPanel();
+  panel.setOpacity(1);
   panel.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
   positionPanel();
   panel.show();
@@ -456,6 +506,12 @@ function buildMenu() {
       checked: readState().selection !== false,
       click: item => saveState({selection: item.checked}),
     },
+    ...(axTrusted() ? [] : [{
+      // Only when macOS has not granted it: a menu item that is always there would read as a
+      // setting, and this is not a setting, it is a permission the person has to give once.
+      label: 'Grant Accessibility access…',
+      click: () => askForAccessibility(),
+    }]),
     {
       label: 'Working folder…',
       click: async () => {
@@ -530,6 +586,25 @@ async function readSpend() {
   } catch { spend = null }
 }
 
+// ---- accessibility ----
+// Reading the selection needs the Accessibility toggle in System Settings. macOS shows that dialog
+// only once per app version; after a rebuild the toggle can even stay on while the new binary is
+// still pending, so this reports the live answer rather than what was granted before.
+function axTrusted() {
+  if (process.platform !== 'darwin') return true;
+  try { return systemPreferences.isTrustedAccessibilityClient(false) } catch { return true }
+}
+
+function askForAccessibility() {
+  if (process.platform !== 'darwin') return;
+  try {
+    // true here is what makes macOS put up its own "grant access" dialog.
+    if (!systemPreferences.isTrustedAccessibilityClient(true)) {
+      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
+    }
+  } catch {}
+}
+
 // ---- ipc ----
 ipcMain.handle('bisu:context', () => pendingContext);
 ipcMain.handle('bisu:consume', () => { pendingContext = null; return true });
@@ -537,6 +612,23 @@ ipcMain.handle('bisu:selection-enabled', (_e, on) => {
   if (typeof on === 'boolean') saveState({selection: on});
   return readState().selection !== false;
 });
+// The grip in the page sends a size, not a delta: the window's own size is the source of truth,
+// and sending a size keeps the two in step even when a frame is dropped.
+ipcMain.handle('bisu:resize', (_e, {width, height} = {}) => {
+  if (!panel) return null;
+  const b = panel.getBounds();
+  const next = clampSize({width: Number(width) || b.width, height: Number(height) || b.height, x: b.x, y: b.y});
+  if (next.width === b.width && next.height === b.height) return b;
+  panel.setSize(next.width, next.height, false);
+  return panel.getBounds();
+});
+ipcMain.handle('bisu:accessibility', () => ({
+  trusted: axTrusted(),
+  enabled: readState().selection !== false,
+  dismissed: readState().axDismissed === true,
+}));
+ipcMain.on('bisu:ax-dismiss', () => saveState({axDismissed: true}));
+ipcMain.on('bisu:ax-grant', () => askForAccessibility());
 ipcMain.on('bisu:session', (_e, {sessionId, cwd} = {}) => {
   if (sessionId && /^[0-9a-f-]{36}$/.test(sessionId)) saveState({sessionId, cwd: cwd || readState().cwd});
 });
@@ -558,6 +650,7 @@ if (!app.requestSingleInstanceLock()) {
     const ok = globalShortcut.register(SHORTCUT, () => showPanel());
     if (!ok) tray?.setToolTip(`bisu · ${SHORTCUT} is taken by another app`);
     log(`engine on ${BASE}, ${SHORTCUT} ${globalShortcut.isRegistered(SHORTCUT) ? 'ready' : 'unavailable'}`);
+    log(`accessibility ${axTrusted() ? 'granted' : 'not granted (selection capture will be empty)'}`);
 
     try {
       await startEngine();

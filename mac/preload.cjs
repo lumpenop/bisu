@@ -5,8 +5,10 @@
 const {contextBridge, ipcRenderer} = require('electron');
 
 const onContext = new Set();
+const onShown = new Set();
 
 ipcRenderer.on('bisu:context', (_e, ctx) => {for (const fn of onContext) try {fn(ctx)} catch {}});
+ipcRenderer.on('bisu:shown', () => {for (const fn of onShown) try {fn()} catch {}});
 
 contextBridge.exposeInMainWorld('bisuHost', {
   panel: true,
@@ -16,7 +18,12 @@ contextBridge.exposeInMainWorld('bisuHost', {
   session: (sessionId, cwd) => ipcRenderer.send('bisu:session', {sessionId, cwd}),
   hide: () => ipcRenderer.send('bisu:hide'),
   openFull: () => ipcRenderer.send('bisu:full'),
+  resize: (width, height) => ipcRenderer.invoke('bisu:resize', {width, height}),
+  accessibility: () => ipcRenderer.invoke('bisu:accessibility'),
+  grantAccessibility: () => ipcRenderer.send('bisu:ax-grant'),
+  dismissAccessibility: () => ipcRenderer.send('bisu:ax-dismiss'),
   onContext: fn => {onContext.add(fn); return () => onContext.delete(fn)},
+  onShown: fn => {onShown.add(fn); return () => onShown.delete(fn)},
   selectionEnabled: () => ipcRenderer.invoke('bisu:selection-enabled'),
   setSelectionEnabled: on => ipcRenderer.invoke('bisu:selection-enabled', !!on),
 });
