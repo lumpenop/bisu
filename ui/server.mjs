@@ -273,6 +273,9 @@ const server=http.createServer(async(req,res)=>{
   // immediate for the next chat or bisu run; a chat that is already running keeps what it started with.
   if(m==='GET'&&p==='/api/memory')return json(res,200,memory.snapshot());
   if(m==='POST'&&p==='/api/memory')return json(res,200,memory.save(await body(req)));
+  // What already looks like the memory being written. Returns candidates and never writes, so the page
+  // decides: edit the one that is there, or keep both.
+  if(m==='POST'&&p==='/api/memory/check')return json(res,200,{candidates:memory.check(await body(req))});
   const mm=/^\/api\/memory\/([^/]+)$/.exec(p);
   if(mm&&m==='DELETE')return json(res,200,memory.remove(decodeURIComponent(mm[1])));
   // Proactive suggestions: what bisu brings without being asked. The run itself is read-only and
@@ -311,7 +314,7 @@ const server=http.createServer(async(req,res)=>{
   if(c&&m==='POST'&&cm[2]==='/stop'){stop(c);return json(res,200,{ok:true})}
   if(c&&m==='DELETE'&&!cm[2]){close(c);return json(res,200,{ok:true})}
   json(res,404,{error:'not found'})
- }catch(e){json(res,e.status||(e instanceof SyntaxError?400:502),{error:String(e?.message||e)})}
+ }catch(e){json(res,e.status||(e instanceof SyntaxError?400:502),{error:String(e?.message||e),...(e.holder?{holder:e.holder}:{})})}
 });
 server.on('error',e=>{console.error(e.code==='EADDRINUSE'?`bisu ui: port ${PORT} is busy (set BISU_UI_PORT)`:`bisu ui: ${e.message}`);process.exit(1)});
 server.listen(PORT,'127.0.0.1',()=>{const u=`http://127.0.0.1:${PORT}`;console.error(`bisu ui → ${u}  (key: ${keyMode}; Ctrl-C to stop)`);

@@ -123,6 +123,12 @@ body.panel .sugBody{max-height:4.4em}
 .mem .b{white-space:pre-wrap;word-break:break-word;font-size:13px;margin-top:4px}
 .mem button{padding:3px 9px;font-size:12px}
 #memForm .row{display:flex;flex-direction:column;gap:8px}
+#memCands{border:1px solid var(--warn);border-radius:8px;padding:10px 12px;margin:10px 0 0;font-size:13px}
+#memCands .c{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-top:6px}
+#memCands .c b{font-weight:600}
+#memCands .c .sp{margin-left:auto}
+#memCands .c button{padding:2px 8px;font-size:12px}
+#memCands .why{font-size:12px;color:var(--muted)}
 #memDigest{white-space:pre-wrap;word-break:break-word;background:var(--chip);padding:10px;border-radius:6px;margin:8px 0 0;max-height:320px;overflow:auto}
 /* desktop shell (mac/): the popover under the menu bar icon */
 body.panel header,body.panel aside{display:none}
@@ -233,8 +239,10 @@ body.panel .view.pop.on{animation:popIn .13s ease-out}
   <form id="memForm">
    <div class="row">
     <input type="text" id="memTitle" placeholder="제목 — e.g. 답변 방식" spellcheck="false" autocomplete="off">
+    <input type="text" id="memKey" placeholder="key (선택) — 같은 주제는 이 이름으로 갱신됩니다, e.g. reply-style" spellcheck="false" autocomplete="off">
     <textarea id="memBody" rows="3" placeholder="기억할 내용. 예: 답은 항상 한국어로, 결과부터 1–3문장."></textarea>
    </div>
+   <div id="memCands" hidden></div>
    <div class="actions"><button class="primary" id="memSave">Save</button><button type="button" id="memCancel" hidden>Cancel</button><span class="note" id="memNote" style="margin:0"></span></div>
   </form>
  </section>
@@ -313,7 +321,7 @@ const usd=(v,d=2)=>v==null||isNaN(v)?'—':'$'+Number(v).toFixed(v>0&&v<0.01?4:d
 const per1M=v=>v?'$'+(v*1e6).toFixed(v*1e6<1?3:2):'free';
 const tok=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1e3)+'k':String(n);
 const short=p=>p?p.replace(/^\/Users\/[^/]+/,'~'):'';
-const api=async(p,o={})=>{const r=await fetch(p,{...o,headers:{'X-Bisu-Token':TOKEN,...(o.body?{'Content-Type':'application/json'}:{}),...o.headers}});const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||r.status);return j};
+const api=async(p,o={})=>{const r=await fetch(p,{...o,headers:{'X-Bisu-Token':TOKEN,...(o.body?{'Content-Type':'application/json'}:{}),...o.headers}});const j=await r.json().catch(()=>({}));if(!r.ok){const e=Error(j.error||r.status);if(j.holder)e.holder=j.holder;throw e}return j};
 const post=(p,b)=>api(p,{method:'POST',body:JSON.stringify(b||{})});
 
 // ---- tabs ----
@@ -531,7 +539,7 @@ function renderMemory(){
   <div class="k">In the prompt</div><div>${m.entries.length} ${m.entries.length===1?'memory':'memories'} · ${m.used.toLocaleString()} / ${m.budget.toLocaleString()} characters${cut.length?` <span class="w">· ${cut.length} over the budget, sent as a title only</span>`:''}</div>
   ${cut.length?`<div class="k">Left out</div><div>${cut.map(t=>esc(t)).join(', ')}</div>`:''}`;
  $('memList').innerHTML=m.entries.length?m.entries.map(e=>`<div class="mem" data-id="${esc(e.id)}">
-   <div class="h"><b>${esc(e.title)}</b>${e.pin?'<span class="chip">pinned</span>':''}<span class="note" style="margin:0">${whenText(e.updated)}</span><span class="sp"></span>
+   <div class="h"><b>${esc(e.title)}</b>${e.pin?'<span class="chip">pinned</span>':''}${e.key?`<span class="chip">key ${esc(e.key)}</span>`:''}<span class="note" style="margin:0">${whenText(e.updated)}</span><span class="sp"></span>
     <button data-a="pin">${e.pin?'Unpin':'Pin'}</button><button data-a="edit">Edit</button><button class="danger" data-a="del">Delete</button></div>
    ${e.text?`<div class="b">${esc(e.text)}</div>`:''}</div>`).join('')
   :'<p class="note">비어 있어요. 대화 중에 bisu가 스스로 저장하거나, 위에서 직접 추가할 수 있어요.</p>';
@@ -546,16 +554,65 @@ function renderMemory(){
 function memForm(e){memEdit=e?e.id:null;
  $('memFormTitle').textContent=e?'Edit memory':'Add a memory';
  $('memTitle').value=e?e.title:'';$('memBody').value=e?e.text:'';
+ $('memKey').value=e&&e.key?e.key:'';
+ $('memCands').hidden=true;$('memCands').innerHTML='';memPending=null;
  $('memCancel').hidden=!e;$('memNote').textContent='';
  if(e)$('memBody').focus();else $('memTitle').focus()}
+
+// A near-duplicate is shown, never merged: in Korean a contradiction ("답변은 한국어로" / "답변은
+// 영어로") overlaps as much as a repeat does, so the decision is the person's. The one case the code
+// decides is a key, which names a topic — two memories cannot both own one.
+let memPending=null;
+const MEM_WHY={key:'같은 key',title:'같은 제목',similar:'내용이 겹침'};
+function renderCands(cands){
+ const el=$('memCands');el.hidden=false;
+ el.innerHTML=`<b>이미 있는 기억과 겹쳐 보여요.</b>
+  <div class="why">합치지 않고 알려만 드려요 — 고칠지, 따로 둘지 정해 주세요.</div>`+
+  cands.map(c=>`<div class="c"><b>${esc(c.title)}</b>
+    <span class="chip">${c.reasons.map(r=>MEM_WHY[r]||r).join(' · ')}${c.score>=0.5?` ${Math.round(c.score*100)}%`:''}</span>
+    ${c.key?`<span class="note mono" style="margin:0">${esc(c.key)}</span>`:''}
+    <span class="sp"></span><button type="button" data-edit="${esc(c.id)}">이 기억 고치기</button></div>`).join('')+
+  `<div class="actions" style="margin-top:8px"><button type="button" class="primary" id="memAnyway">따로 저장</button><button type="button" id="memDrop">취소</button></div>`;
+ for(const b of el.querySelectorAll('[data-edit]'))b.onclick=()=>editExisting(b.dataset.edit);
+ $('memAnyway').onclick=()=>{const b=memPending;memPending=null;el.hidden=true;if(b)writeMemory(b)};
+ $('memDrop').onclick=()=>{memPending=null;el.hidden=true;el.innerHTML=''};
+}
+function editExisting(id){
+ const e=mem.entries.find(x=>x.id===id);
+ if(!e)return;
+ memForm(e);
+ $('memNote').textContent='저장하면 이 기억이 갱신됩니다.';
+}
 async function saveMemory(){
- const b={title:$('memTitle').value.trim(),body:$('memBody').value.trim()};
+ const b={title:$('memTitle').value.trim(),body:$('memBody').value.trim(),key:$('memKey').value.trim()};
  if(memEdit)b.id=memEdit;
  if(!b.title&&!b.body){$('memNote').innerHTML='<span class="err">제목이나 내용을 적어 주세요.</span>';return}
  $('memSave').disabled=true;
- try{mem=await post('/api/memory',b);memForm(null);renderMemory();$('memNote').textContent='Saved. The next chat and bisu run start with it.'}
- catch(e){$('memNote').innerHTML=`<span class="err">${esc(e.message)}</span>`}
+ try{
+  // Editing a memory already names the file to write, so asking again would only interrupt: a
+  // duplicate elsewhere is a cleanup the page shows in the list, not a reason to block the save.
+  if(!memEdit){
+   const {candidates}=await post('/api/memory/check',b);
+   if(candidates.length){memPending=b;renderCands(candidates);return}
+  }
+  await writeMemory(b);
+ }catch(e){$('memNote').innerHTML=`<span class="err">${esc(e.message)}</span>`}
  finally{$('memSave').disabled=false}
+}
+async function writeMemory(b){
+ $('memSave').disabled=true;
+ try{
+  mem=await post('/api/memory',b);
+  const merged=mem.updatedInPlace;
+  memPending=null;$('memCands').hidden=true;$('memCands').innerHTML='';
+  memForm(null);renderMemory();
+  $('memNote').textContent=merged?`기존 “${merged.title}” 기억을 갱신했어요. 다음 대화부터 적용됩니다.`:'Saved. The next chat and bisu run start with it.';
+ }catch(e){
+  // A key belongs to one memory: point at the holder rather than leaving a bare error.
+  const holder=e.holder?mem.entries.find(x=>x.id===e.holder):null;
+  $('memNote').innerHTML=`<span class="err">${esc(e.message)}</span>`+(holder?`<button type="button" id="memHolder" style="margin-left:8px">“${esc(holder.title)}” 고치기</button>`:'');
+  if(holder)$('memHolder').onclick=()=>editExisting(holder.id);
+ }finally{$('memSave').disabled=false}
 }
 $('memForm').onsubmit=e=>{e.preventDefault();saveMemory()};
 $('memCancel').onclick=()=>memForm(null);

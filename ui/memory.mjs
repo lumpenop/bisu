@@ -24,15 +24,17 @@ export const BUDGET = Number(process.env.BISU_MEMORY_CHARS) || 3000;
 export const DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu', 'memory');
 
 // One memory, from the file and its stat. The first non-empty line is the title (`# 제목` or plain),
-// the rest is the fact; frontmatter only carries `pin`.
+// the rest is the fact; frontmatter carries `pin` and, when the memory belongs to a topic, `key`.
 function parse(id, raw, st) {
   const text = String(raw).replace(/\r\n/g, '\n');
   const fm = /^---\n([\s\S]*?)\n---\n?/.exec(text);
-  let pin = false;
+  let pin = false, key = null;
   if (fm) {
     for (const line of fm[1].split('\n')) {
       const m = /^([a-z_]+)\s*:\s*(.*)$/.exec(line.trim());
-      if (m && m[1] === 'pin') pin = /^(true|yes|1)$/i.test(m[2].trim());
+      if (!m) continue;
+      if (m[1] === 'pin') pin = /^(true|yes|1)$/i.test(m[2].trim());
+      if (m[1] === 'key') key = topicKey(m[2]) || null;
     }
   }
   const lines = (fm ? text.slice(fm[0].length) : text).split('\n');
@@ -40,7 +42,35 @@ function parse(id, raw, st) {
   if (at < 0) return null;
   const title = lines[at].replace(/^#+\s*/, '').trim().slice(0, 100);
   const body = lines.slice(at + 1).join('\n').trim();
-  return { id, title, text: body, pin, created: Math.round(st.birthtimeMs || st.mtimeMs), updated: Math.round(st.mtimeMs) };
+  return { id, title, text: body, pin, key, created: Math.round(st.birthtimeMs || st.mtimeMs), updated: Math.round(st.mtimeMs) };
+}
+
+// A topic id, so "Reply Style", "reply style" and "reply_style" are the same thing. Names the
+// subject a memory is about; a second memory about that subject updates the file instead of sitting
+// next to it. Matching topics is exact and cheap, which is the point — see check() below for why
+// similarity is not used for this.
+export function topicKey(v) {
+  return String(v ?? '').normalize('NFC').toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+}
+
+// Character bigrams, not words. Korean preference sentences are short and their meaning turns on one
+// word ("한국어로" / "영어로"), so this is deliberately only ever used to *show* a near miss, never to
+// merge or delete anything.
+const grams = s => {
+  const t = String(s ?? '').normalize('NFC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  const out = new Set();
+  for (let i = 0; i < t.length - 1; i++) out.add(t.slice(i, i + 2));
+  return out;
+};
+function overlap(a, b) {
+  const A = grams(a), B = grams(b);
+  if (!A.size || !B.size) return 0;
+  let c = 0;
+  for (const x of A) if (B.has(x)) c++;
+  return (2 * c) / (A.size + B.size);
 }
 
 // Pinned first, then whichever was touched last — the order the digest spends its budget in.
@@ -147,19 +177,55 @@ function uniqueId(title) {
   while (fs.existsSync(path.join(DIR, id + '.md'))) id = `${base}-${n++}`;
   return id;
 }
-function write(id, title, text, pin) {
+function write(id, title, text, pin, key) {
   fs.mkdirSync(DIR, { recursive: true, mode: 0o700 });
   const file = path.join(DIR, id + '.md');
   const tmp = file + '.' + process.pid + '.tmp';
-  fs.writeFileSync(tmp, `---\npin: ${pin}\n---\n# ${title}\n${text ? '\n' + text + '\n' : ''}`, { mode: 0o600 });
+  const fm = `---\npin: ${pin}\n${key ? `key: ${key}\n` : ''}---\n`;
+  fs.writeFileSync(tmp, `${fm}# ${title}\n${text ? '\n' + text + '\n' : ''}`, { mode: 0o600 });
   fs.renameSync(tmp, file);
+}
+
+// What already looks like this, so the page can say so before writing. Every reason is stated, and
+// none of them is acted on here: a merge or a delete needs the person, because in Korean a
+// contradiction ("답변은 한국어로" / "답변은 영어로") overlaps as much as a duplicate does.
+export function check({ id, title, key, body } = {}) {
+  const k = topicKey(key);
+  const t = String(title ?? '').normalize('NFC').trim().toLowerCase();
+  const probe = `${title ?? ''} ${body ?? ''}`;
+  const out = [];
+  for (const e of list()) {
+    if (id && e.id === id) continue;
+    const reasons = [];
+    if (k && e.key === k) reasons.push('key');
+    if (t && e.title.normalize('NFC').trim().toLowerCase() === t) reasons.push('title');
+    const score = Math.round(overlap(probe, `${e.title} ${e.text || ''}`) * 100) / 100;
+    if (score >= 0.5) reasons.push('similar');
+    if (reasons.length) out.push({ id: e.id, title: e.title, key: e.key, pin: e.pin, updated: e.updated, reasons, score });
+  }
+  // Same topic first, then the strongest overlap: that is the order worth reading.
+  return out.sort((a, b) => (b.reasons.includes('key') - a.reasons.includes('key')) || b.score - a.score);
 }
 
 // Create, edit, or re-pin. Anything left out of the request keeps its saved value, which is what lets
 // the page flip `pin` without sending the text back.
-export function save({ id, title, body, pin } = {}) {
-  const old = id ? list().find(e => e.id === id) : null;
+export function save({ id, title, body, pin, key } = {}) {
+  let old = id ? list().find(e => e.id === id) : null;
   if (id && !old) throw Object.assign(Error('no such memory: ' + id), { status: 404 });
+  const k = key === undefined ? (old?.key ?? null) : (topicKey(key) || null);
+  // A key names a subject, so a second memory about it updates the file: no near-duplicate can be
+  // created by wording something differently. Only for a new memory — an explicit id wins.
+  let inPlace = null;
+  if (!old && k) {
+    inPlace = list().find(e => e.key === k) || null;
+    if (inPlace) old = inPlace;
+  }
+  // Two files can never claim one topic: that would make "the file for this subject" ambiguous, and
+  // the digest would send both. Refused with the name of the holder so the page can offer to edit it.
+  if (k) {
+    const holder = list().find(e => e.key === k && e.id !== old?.id);
+    if (holder) throw Object.assign(Error(`key “${k}” is already used by “${holder.title}”`), { status: 409, holder: holder.id });
+  }
   let t = String(title ?? old?.title ?? '').trim().slice(0, 100);
   let text = String(body ?? old?.text ?? '').trim();
   if (!t && !text) throw Object.assign(Error('a memory needs a title or some text'), { status: 400 });
@@ -171,8 +237,8 @@ export function save({ id, title, body, pin } = {}) {
     text = lines.filter((_, i) => i !== at).join('\n').trim();
   }
   const pinned = pin === undefined ? !!old?.pin : !!pin;
-  write(old ? old.id : uniqueId(t), t, text, pinned);
-  return snapshot();
+  write(old ? old.id : uniqueId(t), t, text, pinned, k);
+  return { ...snapshot(), updatedInPlace: inPlace ? { id: inPlace.id, title: inPlace.title } : null };
 }
 
 export function remove(id) {
