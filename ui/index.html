@@ -77,6 +77,12 @@ aside{width:260px;border-right:1px solid var(--line);display:flex;flex-direction
 .compose{border-top:1px solid var(--line);padding:12px 16px;background:var(--card)}
 .compose .row{max-width:820px;margin:0 auto;display:flex;gap:8px;align-items:flex-end}
 .compose textarea{resize:none;min-height:42px;max-height:200px}
+.tasks{max-width:820px;margin:0 auto 8px;display:flex;flex-direction:column;gap:4px}
+.task{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);background:var(--chip);border-radius:6px;padding:5px 10px}
+.task b{color:var(--ink);font-weight:600;white-space:nowrap}.task .d{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.task .e{font-variant-numeric:tabular-nums}
+.task .spin{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.2s ease-in-out infinite;flex:none}
+@keyframes pulse{50%{opacity:.25}}
+.m.user.queued{opacity:.6}.m.user .q{display:block;font-size:11px;color:var(--muted);margin-top:2px}
 .empty{color:var(--muted);text-align:center;margin-top:18vh}
 /* settings, history */
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
@@ -213,7 +219,7 @@ body.panel .view.pop.on{animation:popIn .13s ease-out}
   </div></div>
   <div id="msgs"><div class="wrap"><p class="empty">Pick a folder and start a chat. bisu works there with Claude Code's tools,<br>and asks you here before it edits files or runs commands.</p></div></div>
   <div id="sug" hidden></div>
-  <div class="compose" id="compose" hidden><div class="row">
+  <div class="compose" id="compose" hidden><div class="tasks" id="tasks"></div><div class="row">
    <textarea id="input" rows="1" placeholder="Message bisu  (Enter to send, Shift+Enter for a new line)"></textarea>
    <button class="primary" id="sendBtn">Send</button>
   </div></div>
@@ -429,10 +435,13 @@ function add(html,parent,cls=''){const el=document.createElement('div');el.class
 function atBottom(){const m=$('msgs');return m.scrollHeight-m.scrollTop-m.clientHeight<80}
 function render(ev){
  switch(ev.kind){
-  case 'hello':wrap().innerHTML='';live=null;toolEls={};if(PANEL&&ev.chat?.sessionId)HOST?.session?.(ev.chat.sessionId,ev.chat.cwd);break;
+  case 'hello':wrap().innerHTML='';live=null;toolEls={};tasks=[];renderTasks();if(PANEL&&ev.chat?.sessionId)HOST?.session?.(ev.chat.sessionId,ev.chat.cwd);break;
   case 'init':if(PANEL&&cur)HOST?.session?.(ev.sessionId,cur.cwd);break;
   case 'resumed':add(`Resumed an earlier session${ev.count?` · its last ${ev.count} messages are shown faded`:''}. Your next message continues it.`,null,'sys');break;
-  case 'user':live=null;add(esc(stripCtx(ev.text)),null,'user'+(ev.past?' past':''));break;
+  case 'user':live=null;{const el=add(esc(stripCtx(ev.text))+(ev.queued?'<span class="q">대기 중 · waits for bisu to finish the current reply</span>':''),null,'user'+(ev.past?' past':'')+(ev.queued?' queued':''));if(ev.queued)el.dataset.q=ev.queued}break;
+  case 'queue':for(const el of wrap().querySelectorAll('.m.user.queued'))if(!ev.ids.includes(el.dataset.q)){el.classList.remove('queued');el.querySelector('.q')?.remove()}break;
+  case 'tasks':tasks=ev.tasks;renderTasks();break;
+  case 'task_done':add(`${ev.status==='completed'||!ev.status?'✓':'✕'} ${esc(agentName(ev.agent))} ${ev.status==='completed'||!ev.status?'finished':esc(ev.status)}: ${esc(ev.description||'')}`,null,'sys');break;
   case 'delta':if(ev.parent)break;if(!live){live=add('',null,'text');live.dataset.raw=''}live.dataset.raw+=ev.text;live.innerHTML=md(live.dataset.raw);break;
   case 'text':if(!ev.parent&&live){live.innerHTML=md(ev.text);live=null;break}add(md(ev.text),ev.parent,'text'+(ev.past?' past':''));break;
   case 'tool':live=null;{const el=add(`<details class="tool"><summary><span class="n">${esc(ev.name)}</span><span class="a">${esc(toolSummary(ev.name,ev.input))}</span><span class="st">…</span></summary><pre>${esc(JSON.stringify(ev.input,null,2).slice(0,4000))}</pre></details>`,ev.parent);toolEls[ev.id]=el}break;
@@ -447,18 +456,27 @@ function render(ev){
   case 'error':live=null;add(`<span class="err">${esc(ev.message)}</span>`,null,'sys');break;
   case 'status':if(cur){cur.busy=ev.busy;chatUI()}break;
  }}
+// Background agents keep working after the assistant's turn ends; the bar shows who is on what, so the person
+// knows the conversation is free while it runs.
+let tasks=[];
+const AGENTS={developer:'개발 · developer',publisher:'퍼블리싱 · publisher',refactorer:'리팩토링 · refactorer',mac:'Mac'};
+const agentName=a=>AGENTS[a]||a||'agent';
+const elapsed=t=>{const s=Math.max(0,Math.round((Date.now()-t)/1000));return s<60?s+'s':Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s'};
+function renderTasks(){const box=$('tasks');if(!box)return;
+ box.innerHTML=tasks.map(t=>`<div class="task"><span class="spin"></span><b>${esc(t.type==='local_agent'?agentName(t.agent):'shell')}</b><span class="d">${esc(t.description)}${t.step?' · '+esc(t.step):''}</span><span class="e" data-t="${t.started}">${elapsed(t.started)}</span></div>`).join('')}
+setInterval(()=>{for(const el of document.querySelectorAll('.task .e'))el.textContent=elapsed(Number(el.dataset.t))},1000);
 function chatUI(){const c=cur;$('chatHead').hidden=$('compose').hidden=!c;
  if(PANEL){$('panelStart').hidden=!!c;$('msgs').hidden=!c;if(!c)fillStartCwd()}
  if(!c)return;
  $('chatTitle').textContent=c.title||'New chat';$('chatSub').textContent=short(c.cwd);
- $('stop').hidden=!c.busy;$('sendBtn').disabled=c.busy;$('input').placeholder=c.busy?'bisu is working…':'Message bisu  (Enter to send, Shift+Enter for a new line)';renderList()}
-function renderList(){$('chatList').innerHTML=chats.map(c=>`<div class="ci${cur&&c.id===cur.id?' on':''}" data-id="${c.id}"><div class="t">${esc(c.title||'New chat')}</div><div class="s"><span class="dot${c.pending?' wait':c.busy?' busy':''}"></span>${esc(short(c.cwd))}</div></div>`).join('')||'<p class="note" style="padding:0 12px">No chats yet.</p>';
+ $('stop').hidden=!c.busy;$('input').placeholder=c.busy?'bisu is replying — you can still send; it reads this next':'Message bisu  (Enter to send, Shift+Enter for a new line)';renderList()}
+function renderList(){$('chatList').innerHTML=chats.map(c=>`<div class="ci${cur&&c.id===cur.id?' on':''}" data-id="${c.id}"><div class="t">${esc(c.title||'New chat')}</div><div class="s"><span class="dot${c.pending?' wait':c.busy||c.tasks?' busy':''}"></span>${esc(short(c.cwd))}</div></div>`).join('')||'<p class="note" style="padding:0 12px">No chats yet.</p>';
  for(const el of $('chatList').querySelectorAll('.ci'))el.onclick=()=>open(el.dataset.id)}
 async function refreshChats(){try{const r=await api('/api/chats');chats=r.chats;if(cur){const c=chats.find(x=>x.id===cur.id);if(c)cur=c}renderList()}catch{}}
 function listen(id){
  es?.close();
  es=new EventSource(`/api/chats/${id}/events?token=${TOKEN}`);
- es.onmessage=e=>{const ev=JSON.parse(e.data);const stick=atBottom();if(ev.kind==='hello'){cur={...cur,...ev.chat}}render(ev);if(ev.kind==='hello'||stick)$('msgs').scrollTop=$('msgs').scrollHeight;if(['status','approval','approval_done','user'].includes(ev.kind))refreshChats()};
+ es.onmessage=e=>{const ev=JSON.parse(e.data);const stick=atBottom();if(ev.kind==='hello'){cur={...cur,...ev.chat}}render(ev);if(ev.kind==='hello'||stick)$('msgs').scrollTop=$('msgs').scrollHeight;if(['status','approval','approval_done','user','tasks'].includes(ev.kind))refreshChats()};
 }
 function open(id){const c=chats.find(x=>x.id===id);if(!c)return;cur=c;wrap().innerHTML='';chatUI();listen(id);
  try{localStorage.setItem('bisu.chat',id)}catch{};$('input').focus()}
@@ -468,7 +486,7 @@ function open(id){const c=chats.find(x=>x.id===id);if(!c)return;cur=c;wrap().inn
 function detach(){es?.close();es=null}
 async function answer(request_id,a,el){for(const b of el.querySelectorAll('button'))b.disabled=true;
  try{await post(`/api/chats/${cur.id}/approve`,{request_id,allow:a!=='deny',always:a==='always'})}catch(e){alert(e.message);for(const b of el.querySelectorAll('button'))b.disabled=false}}
-async function sendMsg(){const raw=$('input').value.trim();if(!raw||!cur||cur.busy)return;const t=withContext(raw);$('input').value='';grow();
+async function sendMsg(){const raw=$('input').value.trim();if(!raw||!cur)return;const t=withContext(raw);$('input').value='';grow();
  try{await post(`/api/chats/${cur.id}/send`,{text:t})}catch(e){$('input').value=raw;add(`<span class="err">${esc(e.message)}</span>`,null,'sys')}}
 async function startChat(body,errEl){if(errEl){errEl.hidden=true;errEl.textContent=''}try{const {chat}=await post('/api/chats',body);chats.unshift(chat);show('chat');open(chat.id)}
  catch(e){if(errEl){errEl.textContent=e.message;errEl.hidden=false}else alert(e.message)}}

@@ -130,7 +130,7 @@ function restoreChats(){
   if(chats.has(id))continue;
   const sessionId=typeof saved.sessionId==='string'&&/^[0-9a-f-]{36}$/.test(saved.sessionId)?saved.sessionId:null;
   chats.set(id,{id,cwd,title:typeof saved.title==='string'?saved.title:null,busy:false,proc:null,sessionId,
-   events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),turnsDone:0,costSoFar:0,
+   events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),tasks:new Map(),queued:[],turnsDone:0,costSoFar:0,
    created:Number(saved.created)||Date.now()});
  }
 }
@@ -148,7 +148,7 @@ const IDLE_MS=Number(process.env.BISU_UI_IDLE_MIN||30)*60e3;
 // running, so let go after this grace instead of waiting out the full IDLE_MS. Reopening starts it again.
 const PARK_MS=Number(process.env.BISU_UI_PARK_SEC||60)*1e3;
 function reap(c){
- if(!c.proc||c.busy||c.pending.size)return;
+ if(!c.proc||c.busy||c.pending.size||c.tasks?.size)return;
  // SIGTERM only: a half-written turn should still be able to flush.
  try{c.proc.kill('SIGTERM')}catch{}
 }
@@ -157,8 +157,8 @@ function idleLater(c){
  // Watched: keep it warm between messages. Unwatched: a much shorter grace, because the process is pure idle cost then.
  c.idle=setTimeout(()=>reap(c),c.clients.size?IDLE_MS:PARK_MS);
 }
-function unwatched(c){clearTimeout(c.idle);if(c.proc&&!c.busy&&!c.pending.size)idleLater(c)}
-function publicChat(c){return {id:c.id,cwd:c.cwd,title:c.title,busy:c.busy,alive:!!c.proc,sessionId:c.sessionId,pending:c.pending.size,created:c.created}}
+function unwatched(c){clearTimeout(c.idle);if(c.proc&&!c.busy&&!c.pending.size&&!c.tasks?.size)idleLater(c)}
+function publicChat(c){return {id:c.id,cwd:c.cwd,title:c.title,busy:c.busy,alive:!!c.proc,sessionId:c.sessionId,pending:c.pending.size,tasks:c.tasks?.size||0,queued:c.queued?.length||0,created:c.created}}
 // A restored chat has no events until it is opened; its transcript is replayed into the stream then.
 async function hydrate(c){
  if(c.events.length||!c.sessionId)return;
@@ -176,10 +176,13 @@ function push(c,ev){ev.at=Date.now();c.events.push(ev);if(c.events.length>MAX_EV
  const line=`data: ${JSON.stringify(ev)}\n\n`;for(const res of c.clients)res.write(line)}
 function setBusy(c,busy){if(c.busy===busy)return;c.busy=busy;push(c,{kind:'status',busy})}
 function warm(c){if(!c.proc&&KEY){start(c);idleLater(c)}}
+// Chats run delegated work in the background (see background-agents.mjs), which is what keeps the assistant free to talk.
+const BACKGROUND_AGENTS=JSON.stringify({hooks:{PreToolUse:[{matcher:'Agent|Task',hooks:[{type:'command',command:`'${process.execPath}' '${path.join(here,'background-agents.mjs').replace(/'/g,"'\\''")}'`}]}]}});
 function start(c){
  const r=roles();
  const args=['-f',path.join(root,'launch.zsh'),r.BISU_MODEL.value,r.BISU_CODE_MODEL.value,r.BISU_DEV_MODEL.value,path.join(root,'agents.json'),
-  '-p','--input-format','stream-json','--output-format','stream-json','--verbose','--include-partial-messages','--permission-prompt-tool','stdio',
+  '-p','--input-format','stream-json','--output-format','stream-json','--verbose','--include-partial-messages','--permission-prompt-tool','stdio','--replay-user-messages',
+  '--settings',BACKGROUND_AGENTS,
   ...(c.sessionId?['--resume',c.sessionId]:[])];
  const proc=spawn('zsh',args,{cwd:c.cwd,env:process.env,stdio:['pipe','pipe','pipe']});c.proc=proc;c.models=r;c.costSoFar=0;
  // A chat started in a folder macOS has not granted access to does not fail — zsh blocks in getcwd
@@ -200,17 +203,40 @@ function start(c){
  proc.stderr.on('data',d=>{err=(err+d).slice(-4000)});
  proc.stdin.on('error',()=>{});
  proc.on('close',code=>{clearTimeout(c.stall);if(c.proc!==proc)return;c.proc=null;for(const id of c.pending.keys())push(c,{kind:'approval_done',request_id:id,allow:false,reason:'stopped'});c.pending.clear();
+  if(c.tasks.size){c.tasks.clear();pushTasks(c)}if(c.queued.length){c.queued=[];push(c,{kind:'queue',ids:[]})}
   if(code&&code!==143){const msg=err.split('\n').filter(l=>l.trim()&&!/connectors are disabled/.test(l)).slice(-3).join('\n');push(c,{kind:'error',message:`bisu stopped (exit ${code})${msg?': '+msg:''}`})}
   setBusy(c,false)});
 }
 const send=(c,obj)=>{c.proc?.stdin.write(JSON.stringify(obj)+'\n')};
+// Background work (subagents started with run_in_background, background shell commands). The assistant's own turn ends
+// while they run, so the person can keep talking; Claude Code wakes the assistant again when one finishes.
+function pushTasks(c){push(c,{kind:'tasks',tasks:[...c.tasks.values()]})}
+function tasksEvent(c,j){
+ if(j.subtype==='task_started'){c.tasks.set(j.task_id,{id:j.task_id,type:j.task_type,agent:j.subagent_type||null,description:j.description||'',started:Date.now()});pushTasks(c)}
+ else if(j.subtype==='task_progress'){const t=c.tasks.get(j.task_id);if(t){t.step=j.description||'';pushTasks(c)}}
+ else if(j.subtype==='task_notification'||(j.subtype==='task_updated'&&/completed|failed|killed|stopped/.test(j.patch?.status||''))){
+  const t=c.tasks.get(j.task_id);if(!t)return;c.tasks.delete(j.task_id);if(t.type==='local_agent')push(c,{kind:'task_done',agent:t.agent,description:t.description,status:j.status||j.patch?.status});pushTasks(c)}
+ else if(j.subtype==='background_tasks_changed'){const live=new Set((j.tasks||[]).map(t=>t.task_id));let changed=false;for(const id of c.tasks.keys())if(!live.has(id)){c.tasks.delete(id);changed=true}if(changed)pushTasks(c)}
+ if(!c.tasks.size&&!c.busy&&!c.pending.size)idleLater(c)}
+// Messages sent while the assistant is busy wait inside Claude Code and are taken together at the next turn.
+// --replay-user-messages echoes each message when it is taken, which is when it stops being "waiting".
+function replayed(c,content){
+ const text=typeof content==='string'?content:Array.isArray(content)?content.filter(b=>b?.type==='text').map(b=>b.text).join('\n'):'';
+ if(!text||Array.isArray(content)&&content.some(b=>b?.type==='tool_result'))return false;
+ const taken=c.queued.filter(q=>text.includes(q.text));
+ if(taken.length){c.queued=c.queued.filter(q=>!taken.includes(q));push(c,{kind:'queue',ids:c.queued.map(q=>q.id)})}
+ return true}
 function handle(c,j){
  const parent=j.parent_tool_use_id||null;
  if(j.type==='system'&&j.subtype==='init'){c.sessionId=j.session_id;saveChats();clearTimeout(c.stall);push(c,{kind:'init',sessionId:j.session_id,model:j.model,cwd:j.cwd});return}
+ if(j.type==='system'&&/^task_|^background_tasks_changed$/.test(j.subtype||'')){tasksEvent(c,j);return}
+ // A finished background task wakes the assistant up without a message from the person: that is a turn too.
+ if(!parent&&!c.busy&&(j.type==='stream_event'||j.type==='assistant'))setBusy(c,true);
  if(j.type==='stream_event'){const e=j.event;if(e?.type==='content_block_delta'&&e.delta?.type==='text_delta')push(c,{kind:'delta',text:e.delta.text,parent});return}
  if(j.type==='assistant'){for(const b of j.message?.content||[]){
    if(b.type==='text'&&b.text)push(c,{kind:'text',text:b.text,parent,model:j.message.model});
    else if(b.type==='tool_use')push(c,{kind:'tool',id:b.id,name:b.name,input:b.input,parent})}return}
+ if(j.type==='user'&&!parent&&replayed(c,j.message?.content))return;
  if(j.type==='user'){const content=j.message?.content;if(Array.isArray(content))for(const b of content)if(b.type==='tool_result'){
    const text=typeof b.content==='string'?b.content:Array.isArray(b.content)?b.content.map(x=>x.text||'').join('\n'):'';push(c,{kind:'tool_result',id:b.tool_use_id,text:text.slice(0,4000),error:!!b.is_error,parent})}return}
  if(j.type==='control_request'&&j.request?.subtype==='can_use_tool'){const q=j.request;
@@ -225,14 +251,15 @@ function handle(c,j){
 async function newChat({cwd,resume}){
  const dir=path.resolve(String(cwd||os.homedir()).replace(/^~(?=\/|$)/,os.homedir()));
  if(!fs.statSync(dir,{throwIfNoEntry:false})?.isDirectory())throw Error('not a folder: '+dir);
- const c={id:randomUUID(),cwd:dir,title:null,busy:false,proc:null,sessionId:resume||null,events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),turnsDone:0,costSoFar:0,created:Date.now()};
+ const c={id:randomUUID(),cwd:dir,title:null,busy:false,proc:null,sessionId:resume||null,events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),tasks:new Map(),queued:[],turnsDone:0,costSoFar:0,created:Date.now()};
  if(resume){if(!/^[0-9a-f-]{36}$/.test(resume))throw Error('bad session id');const past=await pastMessages(resume);
   c.title=past.find(m=>m.kind==='user')?.text.slice(0,60)||'Resumed session';push(c,{kind:'resumed',sessionId:resume,count:past.length});for(const m of past)push(c,{...m,past:true})}
  chats.set(c.id,c);saveChats();warm(c);return c}
 function say(c,text){
  if(!c.title){c.title=text.slice(0,60);saveChats()}
  clearTimeout(c.idle);if(!c.proc)start(c);
- push(c,{kind:'user',text});setBusy(c,true);
+ if(c.busy){const id=randomUUID();c.queued.push({id,text});push(c,{kind:'user',text,queued:id})}
+ else{push(c,{kind:'user',text});setBusy(c,true)}
  send(c,{type:'user',message:{role:'user',content:text}})}
 function decide(c,{request_id,allow,always,message}){const q=c.pending.get(request_id);if(!q)throw Error('no such approval (already answered?)');c.pending.delete(request_id);
  if(allow&&always)c.allowTools.add(q.tool_name);
@@ -309,7 +336,7 @@ const server=http.createServer(async(req,res)=>{
    res.write(`data: ${JSON.stringify({kind:'hello',chat:publicChat(c)})}\n\n`);for(const ev of c.events)res.write(`data: ${JSON.stringify(ev)}\n\n`);
    c.clients.add(res);warm(c);const ping=setInterval(()=>{try{res.write(': ping\n\n')}catch{}},20000);
    req.on('close',()=>{clearInterval(ping);c.clients.delete(res);unwatched(c)});return}
-  if(c&&m==='POST'&&cm[2]==='/send'){const {text}=await body(req);if(typeof text!=='string'||!text.trim())return json(res,400,{error:'empty'});if(c.busy)return json(res,409,{error:'bisu is still working on the last message'});say(c,text.trim());return json(res,200,{ok:true})}
+  if(c&&m==='POST'&&cm[2]==='/send'){const {text}=await body(req);if(typeof text!=='string'||!text.trim())return json(res,400,{error:'empty'});say(c,text.trim());return json(res,200,{ok:true})}
   if(c&&m==='POST'&&cm[2]==='/approve'){decide(c,await body(req));return json(res,200,{ok:true})}
   if(c&&m==='POST'&&cm[2]==='/stop'){stop(c);return json(res,200,{ok:true})}
   if(c&&m==='DELETE'&&!cm[2]){close(c);return json(res,200,{ok:true})}
