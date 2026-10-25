@@ -1,1 +1,3 @@
 node_modules/
+mac/native/.build/
+mac/node_modules/

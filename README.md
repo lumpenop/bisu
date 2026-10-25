@@ -77,25 +77,32 @@ The page's API needs a token that only the page gets, and refuses other hosts an
 ```sh
 bisu app            # open it (~/Applications/bisu.app), building it on first run
 bisu app install    # rebuild the app after changing bisu
-bisu app dev        # run the working tree in Electron, for editing
+bisu app electron   # run the working tree in the old Electron shell, for comparison
 ```
 
 A real `.app` in `~/Applications`, so macOS calls it **bisu** in Accessibility and Automation prompts, System Settings and Activity Monitor. The menu bar icon opens a popover with ⌥Space; there is no Dock icon.
 
-It is a proper bundle, not a shortcut: `install-app.sh` clones Electron (APFS copy-on-write, so it costs almost no disk) and drops in this folder's engine. That means the app is a snapshot — rebuild after editing — or use `bisu app dev` to run the working tree directly while you work.
+The shell is AppKit, not Electron: [mac/native/bisu.swift](mac/native/bisu.swift) is one process with a `WKWebView` showing the same page, and it is what starts the engine, owns the panel, and reads what you were looking at. That is ~75 MB for the shell and ~48 MB for WebKit, against ~430 MB of Chromium processes before — the engine and `dec-secret` (~165 MB together) are the same either way, so an idle bisu went from ~470–520 MB to ~290 MB, in 4 processes instead of 6. `swiftc` is the only build requirement; there is no npm step and no 120 MB download.
 
-Same engine, same models, same approvals as `bisu ui` — but a menu-bar app instead of a browser tab. It starts its own engine on 127.0.0.1:7879, so both can run at once. Problems go to `~/Library/Logs/bisu/bisu.log`.
+Because the bundle is a snapshot, rebuild after editing (`bisu app install`) — or run the working tree directly with `bisu app electron` while you work. Same engine, same models, same approvals as `bisu ui`, but a menu-bar app instead of a browser tab. It starts its own engine on a **random loopback port**, so both can run at once and nothing else on the machine can find it. Problems go to `~/Library/Logs/bisu/bisu.log`.
 
 - **⌥Space** opens a panel under the icon; clicking away or Escape puts it away.
-- **Drag it by the header** and it stays where you left it — the next ⌥Space opens there instead of under the icon. "Put the panel back under the icon" in the menu returns it. Dragging it to another screen works; the position is clamped so a corner can never end up offscreen.
+- **Drag it by the header** and it stays where you left it — the next ⌥Space opens there instead of under the icon. Dragging it to another screen works too; the position is clamped so a corner can never end up offscreen.
 - **Resize it from the grip** in the bottom-right corner, and it keeps that size. A frameless window has no resize border — dragging its edge moves it — so the panel draws its own handle and the shell applies the bounds.
-- **Context you don't have to explain:** the panel carries over the app you were in and the text you had selected or copied, so "이거 요약해" is enough. The selection is read through the Accessibility API — bisu never presses ⌘C and never touches the pasteboard, so nothing needs restoring. An app that doesn't expose its selection just reports nothing. Accessibility consent is granted per app, so `bisu` asks for it itself: a bar in the panel with "권한 주기" opens the macOS dialog, and it appears **once** — ✕ (or granting it) and it stays gone, since a prompt on every open would be nagging. The menu's "Grant Accessibility access…" keeps the same action while it is still untrusted. Without it the panel still carries the frontmost app and the clipboard. The context is appended after your message, so chat titles stay your own words.
-- **Approvals** look the same as in `bisu ui`. If one is waiting while the panel is hidden, the icon shows a dot and macOS notifies you; clicking the notification opens it.
-- **One continuing conversation:** the Claude Code session id is kept in the app's folder, so quitting and coming back resumes the same thread. "Working folder…" in the menu changes where it works (default `~/bisu`).
-- The menu (right-click the icon) also has the full window for History and Settings, today's OpenRouter spend, "Working folder…", and "Restart engine" — which is what to press after a key change or a long sleep. "Grant Accessibility access…" only appears while macOS has not granted it.
-- **Launched from Finder** the app has almost no `PATH`, so it composes one from the usual Homebrew, `~/.local/bin` and version-manager folders before starting the engine; `node`, `claude` and `dec-secret` are found without asking a shell (which can hang). `install-app.sh` also copies `dec-secret`'s three self-contained files into the app's support folder: the originals live under `~/Desktop`, and macOS refuses to let a Finder-launched app read there, so the app would otherwise wait forever on that `open()`.
+- **Context you don't have to explain:** the panel carries over the app you were in and the text you had selected or copied, so "이거 요약해" is enough. The selection is read through the Accessibility API in bisu's own process — it never presses ⌘C and never touches the pasteboard, so nothing needs restoring. An app that doesn't expose its selection just reports nothing. The panel has a bar with "권한 주기" that opens the macOS dialog; it appears **once** — ✕ (or granting it) and it stays gone. The menu's "접근성 허용…" keeps the same action while it is still untrusted. Without it the panel still carries the frontmost app and the clipboard.
+- **Approvals** look the same as in `bisu ui`, and a failing request says why instead of leaving a spinner.
+- **The menu** (right-click the icon) has the full window for History and Settings, today's OpenRouter spend, "선택한 텍스트 읽기", "접근성 허용…" while it is untrusted, and Quit.
+- **Launched from Finder** the app has almost no `PATH`, so it composes one and finds `node` in Homebrew, `~/.local/bin`, fnm, nvm, mise, asdf or Volta without asking a shell (which can hang).
 
-The shell lives in [mac/](mac): Electron main, a preload that only exposes shell chrome, the context capture, and `install-app.sh`. It adds nothing to the engine except an optional `BISU_UI_TOKEN` and a `?panel=1` layout.
+Two permissions are per-app and worth knowing about:
+
+- **Accessibility** — selection capture, and the computer-use helper (which inherits bisu's grant because bisu is the responsible app). Only bisu needs it; grant it to the app, not to a helper binary.
+- **Files and Folders** — the first chat in `~/Desktop`, `~/Documents` or `~/Downloads` makes macOS ask whether bisu may read that folder. If the dialog is not answered the chat waits, so the engine now says so after 15 s with what to allow. The app is signed with a stable local certificate when one exists (`BISU_SIGN_ID`, or any "…Local Code Signing" identity), which is what keeps both grants across rebuilds — an ad-hoc signature changes on every build and macOS forgets them.
+- `build.sh` also copies `dec-secret`'s three self-contained files into the app's support folder: the originals live under `~/Desktop`, and macOS refuses to let a Finder-launched app read there, so the app would otherwise wait forever on that `open()`.
+
+The security model is unchanged and now a little tighter: the engine listens on **127.0.0.1 only** (a LAN address refuses the connection), rejects a foreign `Host`/`Origin` (DNS rebinding), and requires a per-launch token — including for the page itself, which previously handed the token to any local process that asked. Computer-use screenshots expire after 15 minutes and live in a 700 folder. Chat transcripts are Claude Code's own files under `~/.claude`, in plain text, like any other Claude Code session.
+
+The old shell is still in [mac/](mac): Electron main, a preload that only exposes shell chrome, the context capture, and `install-app.sh`. It is kept for comparison and adds nothing to the engine except an optional `BISU_UI_TOKEN` and a `?panel=1` layout.
 
 ## Honest limits
 

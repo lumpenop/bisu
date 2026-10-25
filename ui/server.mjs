@@ -118,18 +118,22 @@ function start(c){
   '-p','--input-format','stream-json','--output-format','stream-json','--verbose','--include-partial-messages','--permission-prompt-tool','stdio',
   ...(c.sessionId?['--resume',c.sessionId]:[])];
  const proc=spawn('zsh',args,{cwd:c.cwd,env:process.env,stdio:['pipe','pipe','pipe']});c.proc=proc;c.models=r;c.costSoFar=0;
+ // A chat started in a folder macOS has not granted access to does not fail — zsh blocks in getcwd
+ // until the permission dialog is answered, which looks like a spinner forever. Say what is happening.
+ c.stall=setTimeout(()=>{if(c.proc!==proc||c.sessionId)return;
+  push(c,{kind:'error',message:`bisu is still waiting to read ${c.cwd}. macOS may be asking whether bisu may access that folder — answer the dialog, or allow bisu in System Settings → Privacy & Security → Files and Folders.`})},15000);
  let buf='',err='';
  proc.stdout.on('data',d=>{buf+=d;let i;while((i=buf.indexOf('\n'))>=0){const line=buf.slice(0,i);buf=buf.slice(i+1);if(!line.trim())continue;let j;try{j=JSON.parse(line)}catch{continue}handle(c,j)}});
  proc.stderr.on('data',d=>{err=(err+d).slice(-4000)});
  proc.stdin.on('error',()=>{});
- proc.on('close',code=>{if(c.proc!==proc)return;c.proc=null;for(const id of c.pending.keys())push(c,{kind:'approval_done',request_id:id,allow:false,reason:'stopped'});c.pending.clear();
+ proc.on('close',code=>{clearTimeout(c.stall);if(c.proc!==proc)return;c.proc=null;for(const id of c.pending.keys())push(c,{kind:'approval_done',request_id:id,allow:false,reason:'stopped'});c.pending.clear();
   if(code&&code!==143){const msg=err.split('\n').filter(l=>l.trim()&&!/connectors are disabled/.test(l)).slice(-3).join('\n');push(c,{kind:'error',message:`bisu stopped (exit ${code})${msg?': '+msg:''}`})}
   setBusy(c,false)});
 }
 const send=(c,obj)=>{c.proc?.stdin.write(JSON.stringify(obj)+'\n')};
 function handle(c,j){
  const parent=j.parent_tool_use_id||null;
- if(j.type==='system'&&j.subtype==='init'){c.sessionId=j.session_id;push(c,{kind:'init',sessionId:j.session_id,model:j.model,cwd:j.cwd});return}
+ if(j.type==='system'&&j.subtype==='init'){c.sessionId=j.session_id;clearTimeout(c.stall);push(c,{kind:'init',sessionId:j.session_id,model:j.model,cwd:j.cwd});return}
  if(j.type==='stream_event'){const e=j.event;if(e?.type==='content_block_delta'&&e.delta?.type==='text_delta')push(c,{kind:'delta',text:e.delta.text,parent});return}
  if(j.type==='assistant'){for(const b of j.message?.content||[]){
    if(b.type==='text'&&b.text)push(c,{kind:'text',text:b.text,parent,model:j.message.model});
