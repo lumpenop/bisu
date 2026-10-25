@@ -98,6 +98,7 @@ extension String {
 
 final class Engine {
   private(set) var process: Process?
+  private var stdinPipe: Pipe?
   private(set) var port = 0
   private(set) var ready = false
   let token = randomToken()
@@ -180,6 +181,7 @@ final class Engine {
     for k in env.keys where k.hasPrefix("CLAUDE") || k.hasPrefix("ANTHROPIC") { env.removeValue(forKey: k) }
     env["PATH"] = "\((node as NSString).deletingLastPathComponent):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
     env["BISU_UI_NO_OPEN"] = "1"
+    env["BISU_UI_PARENT"] = "stdin"
     env["BISU_UI_PORT"] = String(port)
     env["BISU_UI_TOKEN"] = token
     env.removeValue(forKey: "OPENAI_API_KEY")
@@ -203,6 +205,10 @@ final class Engine {
     let pipe = Pipe()
     p.standardOutput = pipe
     p.standardError = pipe
+    // Held open for the shell's lifetime: when bisu quits or crashes, the engine sees EOF and stops
+    // instead of being left running on its own.
+    stdinPipe = Pipe()
+    p.standardInput = stdinPipe
     pipe.fileHandleForReading.readabilityHandler = { [weak self] h in
       let d = h.availableData
       guard !d.isEmpty else { return }

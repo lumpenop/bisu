@@ -215,3 +215,10 @@ server.on('error',e=>{console.error(e.code==='EADDRINUSE'?`bisu ui: port ${PORT}
 server.listen(PORT,'127.0.0.1',()=>{const u=`http://127.0.0.1:${PORT}`;console.error(`bisu ui → ${u}  (key: ${keyMode}; Ctrl-C to stop)`);
  if(!process.env.BISU_UI_NO_OPEN)execFile('open',[`${u}/?token=${TOKEN}`],()=>{})});
 for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
+// The desktop shell holds this pipe open for as long as it is running, so the pipe closing means the
+// shell quit or was force-killed. Without this the engine, dec and every Claude Code run outlive it.
+if(process.env.BISU_UI_PARENT==='stdin'){
+ process.stdin.on('end',()=>{for(const c of chats.values())c.proc?.kill('SIGTERM');process.exit(0)});
+ process.stdin.on('error',()=>{});
+ process.stdin.resume();
+}
