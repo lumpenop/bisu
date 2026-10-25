@@ -284,12 +284,15 @@ function hideAxBar(){if(axBar){axBar.hidden=true;axBar.innerHTML=''}}
 async function checkAccessibility(){
  if(!PANEL||!HOST?.accessibility)return;
  let a=null;try{a=await HOST.accessibility()}catch{return}
- if(!a||a.trusted||a.dismissed||!a.enabled)return hideAxBar();
+ // Shown once, on purpose. If it was ever on screen it does not come back; the menu keeps the
+ // same action for when the person changes their mind.
+ if(!a||a.trusted||a.dismissed||a.shown||!a.enabled)return hideAxBar();
  const bar=ensureAxBar();
  bar.hidden=false;
- bar.innerHTML=`<span class="grow">선택한 텍스트까지 함께 보내려면 접근성 권한이 필요해요.</span><button class="primary" data-a="grant">권한 주기</button><button class="x" data-a="no" title="다시 묻지 않기">✕</button>`;
+ bar.innerHTML=`<span class="grow">선택한 텍스트까지 함께 보내려면 접근성 권한이 필요해요.</span><button class="primary" data-a="grant">권한 주기</button><button class="x" data-a="no" title="닫기">✕</button>`;
  bar.querySelector('[data-a=grant]').onclick=()=>{HOST.grantAccessibility?.();hideAxBar()};
  bar.querySelector('[data-a=no]').onclick=()=>{HOST.dismissAccessibility?.();hideAxBar()};
+ HOST.accessibilityHintShown?.();
 }
 if(PANEL&&HOST?.onShown)HOST.onShown(()=>{
  const v=document.querySelector('.view.on');
@@ -298,7 +301,6 @@ if(PANEL&&HOST?.onShown)HOST.onShown(()=>{
  if(i&&!$('compose').hidden)i.focus();
  checkAccessibility();
 });
-checkAccessibility();
 function toolSummary(name,input={}){
  if(input.command)return input.command;if(input.file_path)return short(input.file_path);if(input.pattern)return input.pattern+(input.path?'  in '+short(input.path):'');
  if(input.url)return input.url;if(input.description)return input.description;if(input.prompt)return input.prompt;return JSON.stringify(input)}

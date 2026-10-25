@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('bisuHost', {
   accessibility: () => ipcRenderer.invoke('bisu:accessibility'),
   grantAccessibility: () => ipcRenderer.send('bisu:ax-grant'),
   dismissAccessibility: () => ipcRenderer.send('bisu:ax-dismiss'),
+  accessibilityHintShown: () => ipcRenderer.send('bisu:ax-shown'),
   onContext: fn => {onContext.add(fn); return () => onContext.delete(fn)},
   onShown: fn => {onShown.add(fn); return () => onShown.delete(fn)},
   selectionEnabled: () => ipcRenderer.invoke('bisu:selection-enabled'),

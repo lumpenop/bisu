@@ -626,8 +626,12 @@ ipcMain.handle('bisu:accessibility', () => ({
   trusted: axTrusted(),
   enabled: readState().selection !== false,
   dismissed: readState().axDismissed === true,
+  // The hint is shown once by design: a permission prompt that reappears every time the panel
+  // opens is nagging, and the menu keeps the same action available afterwards.
+  shown: readState().axHintShown === true,
 }));
-ipcMain.on('bisu:ax-dismiss', () => saveState({axDismissed: true}));
+ipcMain.on('bisu:ax-shown', () => saveState({axHintShown: true}));
+ipcMain.on('bisu:ax-dismiss', () => saveState({axDismissed: true, axHintShown: true}));
 ipcMain.on('bisu:ax-grant', () => askForAccessibility());
 ipcMain.on('bisu:session', (_e, {sessionId, cwd} = {}) => {
   if (sessionId && /^[0-9a-f-]{36}$/.test(sessionId)) saveState({sessionId, cwd: cwd || readState().cwd});
