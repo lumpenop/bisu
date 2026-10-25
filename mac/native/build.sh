@@ -27,7 +27,7 @@ cp "$build/bisu" "$app/Contents/MacOS/bisu"
 res="$app/Contents/Resources/app"
 mkdir -p "$res/mac/assets" "$res/mac/cu"
 cp -R "$repo/ui" "$res/ui"
-cp "$repo/launch.zsh" "$repo/agents.json" "$repo/prompt.md" "$res/"
+cp "$repo/launch.zsh" "$repo/agents.json" "$repo/prompt.md" "$repo/prompt-suggest.md" "$res/"
 cp "$mac/assets/trayTemplate.png" "$mac/assets/trayTemplate@2x.png" "$res/mac/assets/"
 cp "$mac/cu/bisu-cu.swift" "$res/mac/cu/" 2>/dev/null || true
 
