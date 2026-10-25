@@ -48,6 +48,21 @@ cp -R "$here/assets" "$app/mac/assets"
 cp -R "$repo/ui" "$app/ui"
 cp "$repo/launch.zsh" "$repo/agents.json" "$repo/prompt.md" "$app/"
 
+# ---- computer use: source here, binary in support ----
+# The AX/input helper is built once into the support folder rather than inside the signed bundle,
+# so it survives reinstalls and can be rebuilt without re-signing the app.
+mkdir -p "$app/mac/cu"
+cp "$here/cu/bisu-cu.swift" "$app/mac/cu/"
+cu_bin="$HOME/Library/Application Support/bisu/bin"
+mkdir -p "$cu_bin"
+if [ ! -x "$cu_bin/bisu-cu" ] || [ "$here/cu/bisu-cu.swift" -nt "$cu_bin/bisu-cu" ]; then
+  if xcrun -f swiftc >/dev/null 2>&1; then
+    xcrun swiftc -O -o "$cu_bin/bisu-cu" "$here/cu/bisu-cu.swift" && echo "bisu: computer-use helper built"
+  else
+    echo "bisu: swiftc not found; the helper will be built on first use" >&2
+  fi
+fi
+
 # main.cjs resolves the engine as ../ui from mac/, so this is the right entry point.
 cat > "$app/package.json" <<JSON
 {

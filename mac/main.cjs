@@ -7,7 +7,7 @@
 // the frontmost app and selection as context, a tray icon, notifications when an approval is
 // waiting, and staying alive with the engine between visits.
 const {app, BrowserWindow, Tray, Menu, globalShortcut, screen, nativeImage, Notification, ipcMain, dialog, shell, nativeTheme, systemPreferences} = require('electron');
-const {spawn} = require('node:child_process');
+const {spawn, execFile} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -19,9 +19,23 @@ app.setName('bisu');
 const ROOT = path.join(__dirname, '..');
 const SERVER = path.join(ROOT, 'ui', 'server.mjs');
 const ICON = path.join(__dirname, 'assets', 'trayTemplate.png');
-const PORT = Number(process.env.BISU_APP_PORT || 7879);
-const BASE = `http://127.0.0.1:${PORT}`;
+// A port nobody can guess, so another local process cannot even find the engine by scanning the
+// usual one. It is still loopback-only; this is defence in depth, not the main lock.
+let PORT = Number(process.env.BISU_APP_PORT || 0);
+let BASE = '';
 const TOKEN = crypto.randomBytes(24).toString('hex');
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const net = require('node:net');
+    const s = net.createServer();
+    s.once('error', reject);
+    s.listen(0, '127.0.0.1', () => {
+      const {port} = s.address();
+      s.close(() => resolve(port));
+    });
+  });
+}
 const SELF = 'bisu';
 const SHORTCUT = 'Alt+Space';
 // A frameless window cannot be resized by its edges — macOS only gives frameless windows a drag
@@ -169,6 +183,22 @@ function decPrefix(node) {
   return null;
 }
 
+// Whether dec holds a key by this name, without reading it. Used to decide whether the engine can
+// hand the computer-use tools an OpenAI key at all: referencing a key that is not saved makes
+// dec-secret refuse to start, which would take the whole assistant down.
+async function decHas(node, name) {
+  const cmd = decSecret();
+  const bridge = path.join(app.getPath('userData'), 'dec', 'sdk', 'dec-secret.mjs');
+  const bin = fs.existsSync(bridge) ? node : cmd;
+  const args = fs.existsSync(bridge) ? [bridge, 'list'] : ['list'];
+  if (!bin) return false;
+  return new Promise(resolve => {
+    execFile(bin, args, {timeout: 6000, encoding: 'utf8'}, (err, stdout) => {
+      resolve(!err && new RegExp(`dec://(env/)?${name}\\b`, 'i').test(stdout || ''));
+    });
+  });
+}
+
 async function startEngine() {
   if (engine) { try { engine.kill('SIGTERM') } catch {} engine = null }
   engineReady = false;
@@ -177,6 +207,10 @@ async function startEngine() {
   // A host app's Claude/Anthropic login would win over OpenRouter, and Electron's own
   // variables must not reach the plain Node engine.
   for (const k of Object.keys(env)) if (/^(CLAUDE|ANTHROPIC|ELECTRON_)/.test(k)) delete env[k];
+  // A key inherited from the shell would be a second, unmetered credential for the computer-use
+  // tools; they are meant to go through dec like everything else.
+  delete env.OPENAI_API_KEY;
+  delete env.OPENAI_BASE_URL;
   Object.assign(env, {BISU_UI_NO_OPEN: '1', BISU_UI_PORT: String(PORT), BISU_UI_TOKEN: TOKEN});
 
   let cmd = node, args = [SERVER];
@@ -185,6 +219,9 @@ async function startEngine() {
   const dec = decPrefix(node);
   if (dec) {
     if (!/^dec:\/\//.test(env.OPENROUTER_API_KEY || '')) env.OPENROUTER_API_KEY = 'dec://OPENROUTER_API_KEY';
+    // Computer use picks between on-screen controls with a decision model, which needs its own key.
+    // Only referenced when dec actually holds one, otherwise the run would fail on a missing key.
+    if (await decHas(node, 'OPENAI_API_KEY')) env.OPENAI_API_KEY = 'dec://OPENAI_API_KEY';
     cmd = dec.cmd;
     args = dec.args;
   } else if (!env.OPENROUTER_API_KEY) {
@@ -277,7 +314,7 @@ const commonPrefs = {
 };
 
 function panelURL() {
-  const q = new URLSearchParams({panel: '1'});
+  const q = new URLSearchParams({panel: '1', token: TOKEN});
   if (activeChatId) q.set('chat', activeChatId);
   return `${BASE}/?${q}`;
 }
@@ -384,8 +421,15 @@ function positionPanel() {
   const t = tray.getBounds();
   let x = Math.round(t.x + t.width / 2 - want.width / 2);
   let y = Math.round(t.y + t.height + 6);
-  if (!t.width) { x = Math.round(area.x + area.width - want.width - 12); y = Math.round(area.y + 8) }
+  // The tray is normally on this screen's menu bar, but its bounds can be stale or from another
+  // display (the item was just re-registered, a screen was unplugged), and y used to go unclamped —
+  // which put the whole panel below the bottom edge.
+  if (!t.width || t.y < area.y - 4 || t.y > area.y + area.height) {
+    x = Math.round(area.x + area.width - want.width - 12);
+    y = Math.round(area.y + 8);
+  }
   x = Math.max(area.x + 8, Math.min(x, area.x + area.width - want.width - 8));
+  y = Math.max(area.y + 8, Math.min(y, area.y + area.height - want.height - 8));
   positioning = true;
   if (want.width !== size.width || want.height !== size.height) panel.setBounds({x, y, ...want}, false);
   else panel.setPosition(x, y, false);
@@ -448,12 +492,15 @@ function hidePanel() {
   clearInterval(fadeTimer);
   panel.setOpacity(1);
   log('panel hidden');
+  // The page drops its event stream here, which is what lets the engine stop Claude Code instead of
+  // holding a few hundred megabytes for a panel nobody is looking at.
+  try { panel.webContents.send('bisu:hidden') } catch {}
   panel.hide();
 }
 
 function openFull() {
   if (full) { full.show(); full.focus(); return }
-  const q = new URLSearchParams();
+  const q = new URLSearchParams({token: TOKEN});
   if (activeChatId) q.set('chat', activeChatId);
   full = new BrowserWindow({
     width: 1080,
@@ -614,8 +661,15 @@ ipcMain.handle('bisu:selection-enabled', (_e, on) => {
 });
 // The grip in the page sends a size, not a delta: the window's own size is the source of truth,
 // and sending a size keeps the two in step even when a frame is dropped.
-ipcMain.handle('bisu:resize', (_e, {width, height} = {}) => {
-  if (!panel) return null;
+// Probe: a helper spawned by the app is a different code identity for TCC than the app itself, so
+// this says whether Accessibility actually reaches the computer-use helper.
+ipcMain.handle('bisu:cu-probe', async () => {
+  const bin = path.join(app.getPath('userData'), 'bin', 'bisu-cu');
+  if (!fs.existsSync(bin)) return {ok: false, err: 'helper not built'};
+  return run(bin, ['trust'], 8000);
+});
+
+ipcMain.handle('bisu:resize', (_e, {width, height} = {}) => {  if (!panel) return null;
   const b = panel.getBounds();
   const next = clampSize({width: Number(width) || b.width, height: Number(height) || b.height, x: b.x, y: b.y});
   if (next.width === b.width && next.height === b.height) return b;
@@ -648,6 +702,14 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(async () => {
     if (process.platform === 'darwin') app.setActivationPolicy('accessory');
     try { app.dock?.hide() } catch {}
+    try {
+      if (!PORT) PORT = await freePort();
+      BASE = `http://127.0.0.1:${PORT}`;
+    } catch (e) {
+      log('could not pick a port:', String(e?.message || e));
+      showError(`bisu could not open a local port: ${e?.message || e}`);
+      return;
+    }
     createTray();
     createPanel();
 

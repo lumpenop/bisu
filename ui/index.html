@@ -194,9 +194,15 @@ body.panel .view.pop.on{animation:popIn .13s ease-out}
 
 <script>
 const TOKEN='__BISU_TOKEN__';
+// Panel mode and the chat to open are read from the URL below, so they are captured before the
+// token is stripped from the address bar.
+const Q=new URLSearchParams(location.search);
+// The token arrived in the URL (the server will not serve this page without one). Drop it from the
+// address bar so it is not sitting in a location another document could observe or a referrer could
+// carry, and so a reload cannot be triggered without it.
+try{if(Q.has('token'))history.replaceState(null,'',location.pathname+(location.hash||''))}catch{}
 // Set by the desktop shell: it opens this page in a popover (?panel=1) and hands over what the
 // person was looking at. In a browser none of this exists and nothing changes.
-const Q=new URLSearchParams(location.search);
 const PANEL=Q.get('panel')==='1';
 const HOST=window.bisuHost||null;
 const CTX_OPEN='<bisu-context>',CTX_CLOSE='</bisu-context>';
@@ -289,7 +295,7 @@ async function checkAccessibility(){
  if(!a||a.trusted||a.dismissed||a.shown||!a.enabled)return hideAxBar();
  const bar=ensureAxBar();
  bar.hidden=false;
- bar.innerHTML=`<span class="grow">선택한 텍스트까지 함께 보내려면 접근성 권한이 필요해요.</span><button class="primary" data-a="grant">권한 주기</button><button class="x" data-a="no" title="닫기">✕</button>`;
+ bar.innerHTML=`<span class="grow">화면을 직접 조작하려면 접근성 권한이 필요해요.</span><button class="primary" data-a="grant">권한 주기</button><button class="x" data-a="no" title="닫기">✕</button>`;
  bar.querySelector('[data-a=grant]').onclick=()=>{HOST.grantAccessibility?.();hideAxBar()};
  bar.querySelector('[data-a=no]').onclick=()=>{HOST.dismissAccessibility?.();hideAxBar()};
  HOST.accessibilityHintShown?.();
@@ -300,7 +306,10 @@ if(PANEL&&HOST?.onShown)HOST.onShown(()=>{
  const i=$('input');
  if(i&&!$('compose').hidden)i.focus();
  checkAccessibility();
+ // Reattach the chat the panel is showing, which also brings Claude Code back if it was let go.
+ if(cur)listen(cur.id);
 });
+if(PANEL&&HOST?.onHidden)HOST.onHidden(()=>detach());
 function toolSummary(name,input={}){
  if(input.command)return input.command;if(input.file_path)return short(input.file_path);if(input.pattern)return input.pattern+(input.path?'  in '+short(input.path):'');
  if(input.url)return input.url;if(input.description)return input.description;if(input.prompt)return input.prompt;return JSON.stringify(input)}
@@ -339,10 +348,17 @@ function chatUI(){const c=cur;$('chatHead').hidden=$('compose').hidden=!c;if(!c)
 function renderList(){$('chatList').innerHTML=chats.map(c=>`<div class="ci${cur&&c.id===cur.id?' on':''}" data-id="${c.id}"><div class="t">${esc(c.title||'New chat')}</div><div class="s"><span class="dot${c.pending?' wait':c.busy?' busy':''}"></span>${esc(short(c.cwd))}</div></div>`).join('')||'<p class="note" style="padding:0 12px">No chats yet.</p>';
  for(const el of $('chatList').querySelectorAll('.ci'))el.onclick=()=>open(el.dataset.id)}
 async function refreshChats(){try{const r=await api('/api/chats');chats=r.chats;if(cur){const c=chats.find(x=>x.id===cur.id);if(c)cur=c}renderList()}catch{}}
-function open(id){const c=chats.find(x=>x.id===id);if(!c)return;cur=c;es?.close();wrap().innerHTML='';chatUI();
+function listen(id){
+ es?.close();
  es=new EventSource(`/api/chats/${id}/events?token=${TOKEN}`);
  es.onmessage=e=>{const ev=JSON.parse(e.data);const stick=atBottom();if(ev.kind==='hello'){cur={...cur,...ev.chat}}render(ev);if(ev.kind==='hello'||stick)$('msgs').scrollTop=$('msgs').scrollHeight;if(['status','approval','approval_done','user'].includes(ev.kind))refreshChats()};
+}
+function open(id){const c=chats.find(x=>x.id===id);if(!c)return;cur=c;wrap().innerHTML='';chatUI();listen(id);
  try{localStorage.setItem('bisu.chat',id)}catch{};$('input').focus()}
+// The stream is what keeps Claude Code running, so it is dropped when the panel goes away: a hidden
+// panel should not hold a few hundred megabytes of idle process. Reopening replays from the chat's
+// events, so nothing is lost.
+function detach(){es?.close();es=null}
 async function answer(request_id,a,el){for(const b of el.querySelectorAll('button'))b.disabled=true;
  try{await post(`/api/chats/${cur.id}/approve`,{request_id,allow:a!=='deny',always:a==='always'})}catch(e){alert(e.message);for(const b of el.querySelectorAll('button'))b.disabled=false}}
 async function sendMsg(){const raw=$('input').value.trim();if(!raw||!cur||cur.busy)return;const t=withContext(raw);$('input').value='';grow();

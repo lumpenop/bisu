@@ -90,10 +90,23 @@ function pastMessages(sessionId){const out=[];
 const chats=new Map();
 const MAX_EVENTS=3000;
 // A chat's process is started as soon as the chat is created or opened, so the first message doesn't wait for Claude Code
-// to boot. It stays up between messages and is stopped only after this long without activity; opening the chat or sending
-// the next message starts it again with --resume.
+// to boot. It stays up between messages while the page is watching it, and is stopped after IDLE_MS without activity.
 const IDLE_MS=Number(process.env.BISU_UI_IDLE_MIN||30)*60e3;
-function idleLater(c){clearTimeout(c.idle);c.idle=setTimeout(()=>{if(c.proc&&!c.busy&&!c.pending.size)c.proc.kill('SIGTERM')},IDLE_MS)}
+// Claude Code is by far the largest part of bisu's memory (a few hundred MB), so a chat nobody is looking at should not
+// keep it alive. The panel detaches its event stream when it hides, which lands here: nothing is watching, nothing is
+// running, so let go after this grace instead of waiting out the full IDLE_MS. Reopening starts it again.
+const PARK_MS=Number(process.env.BISU_UI_PARK_SEC||60)*1e3;
+function reap(c){
+ if(!c.proc||c.busy||c.pending.size)return;
+ // SIGTERM only: a half-written turn should still be able to flush.
+ try{c.proc.kill('SIGTERM')}catch{}
+}
+function idleLater(c){
+ clearTimeout(c.idle);
+ // Watched: keep it warm between messages. Unwatched: a much shorter grace, because the process is pure idle cost then.
+ c.idle=setTimeout(()=>reap(c),c.clients.size?IDLE_MS:PARK_MS);
+}
+function unwatched(c){clearTimeout(c.idle);if(c.proc&&!c.busy&&!c.pending.size)idleLater(c)}
 function publicChat(c){return {id:c.id,cwd:c.cwd,title:c.title,busy:c.busy,alive:!!c.proc,sessionId:c.sessionId,pending:c.pending.size,created:c.created}}
 function push(c,ev){ev.at=Date.now();c.events.push(ev);if(c.events.length>MAX_EVENTS)c.events.splice(0,c.events.length-MAX_EVENTS);
  const line=`data: ${JSON.stringify(ev)}\n\n`;for(const res of c.clients)res.write(line)}
@@ -157,14 +170,21 @@ function close(c){clearTimeout(c.idle);c.proc?.kill('SIGTERM');for(const res of 
 const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(body))};
 async function body(req){if(!(req.headers['content-type']||'').startsWith('application/json'))throw Object.assign(Error('json only'),{status:415});
  let s='';for await(const ch of req){s+=ch;if(s.length>200000)throw Object.assign(Error('too large'),{status:413})}return JSON.parse(s||'{}')}
+const tokenOk=(req,url)=>(req.headers['x-bisu-token']||url.searchParams.get('token'))===TOKEN;
 const server=http.createServer(async(req,res)=>{
  const host=req.headers.host||'';if(host!==`127.0.0.1:${PORT}`&&host!==`localhost:${PORT}`)return json(res,403,{error:'host'});
  if(req.headers.origin&&req.headers.origin!==`http://${host}`)return json(res,403,{error:'origin'});
  const url=new URL(req.url,'http://x'),p=url.pathname,m=req.method;
  try{
-  if(m==='GET'&&p==='/'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Frame-Options':'DENY'});return res.end(fs.readFileSync(path.join(here,'index.html'),'utf8').replace('__BISU_TOKEN__',TOKEN))}
+  // The page needs the token to talk to this server, so it is served with the token in it — which
+  // means the page itself must not be readable without one, or any local process could fetch it,
+  // take the token out and drive the assistant. The window always opens with ?token=.
+  if(m==='GET'&&p==='/'){
+   if(!tokenOk(req,url))return json(res,401,{error:'token'});
+   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'});
+   return res.end(fs.readFileSync(path.join(here,'index.html'),'utf8').replace('__BISU_TOKEN__',TOKEN))}
   if(!p.startsWith('/api/'))return json(res,404,{error:'not found'});
-  if((req.headers['x-bisu-token']||url.searchParams.get('token'))!==TOKEN)return json(res,401,{error:'token'});
+  if(!tokenOk(req,url))return json(res,401,{error:'token'});
   if(m==='GET'&&p==='/api/roles')return json(res,200,{roles:roles(),config:CONFIG});
   if(m==='GET'&&p==='/api/models')return json(res,200,{models:await models()});
   if(m==='GET'&&p==='/api/account')return json(res,200,await account());
@@ -178,7 +198,8 @@ const server=http.createServer(async(req,res)=>{
   if(cm&&!c)return json(res,404,{error:'chat not found'});
   if(c&&m==='GET'&&cm[2]==='/events'){res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-store','Connection':'keep-alive'});
    res.write(`data: ${JSON.stringify({kind:'hello',chat:publicChat(c)})}\n\n`);for(const ev of c.events)res.write(`data: ${JSON.stringify(ev)}\n\n`);
-   c.clients.add(res);warm(c);const ping=setInterval(()=>res.write(': ping\n\n'),20000);req.on('close',()=>{clearInterval(ping);c.clients.delete(res)});return}
+   c.clients.add(res);warm(c);const ping=setInterval(()=>{try{res.write(': ping\n\n')}catch{}},20000);
+   req.on('close',()=>{clearInterval(ping);c.clients.delete(res);unwatched(c)});return}
   if(c&&m==='POST'&&cm[2]==='/send'){const {text}=await body(req);if(typeof text!=='string'||!text.trim())return json(res,400,{error:'empty'});if(c.busy)return json(res,409,{error:'bisu is still working on the last message'});say(c,text.trim());return json(res,200,{ok:true})}
   if(c&&m==='POST'&&cm[2]==='/approve'){decide(c,await body(req));return json(res,200,{ok:true})}
   if(c&&m==='POST'&&cm[2]==='/stop'){stop(c);return json(res,200,{ok:true})}
@@ -188,5 +209,5 @@ const server=http.createServer(async(req,res)=>{
 });
 server.on('error',e=>{console.error(e.code==='EADDRINUSE'?`bisu ui: port ${PORT} is busy (set BISU_UI_PORT)`:`bisu ui: ${e.message}`);process.exit(1)});
 server.listen(PORT,'127.0.0.1',()=>{const u=`http://127.0.0.1:${PORT}`;console.error(`bisu ui → ${u}  (key: ${keyMode}; Ctrl-C to stop)`);
- if(!process.env.BISU_UI_NO_OPEN)execFile('open',[u],()=>{})});
+ if(!process.env.BISU_UI_NO_OPEN)execFile('open',[`${u}/?token=${TOKEN}`],()=>{})});
 for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
