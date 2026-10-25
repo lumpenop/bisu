@@ -22,15 +22,24 @@ extra=()
 # System prompt: prompt.md, then the memory the person saved (ui/memory.mjs). Built once per run,
 # because memory is what carries across sessions and Claude Code reads this file at startup only —
 # a chat that is already open keeps the memory it began with.
+# BISU_PROMPT swaps the base file: the scheduled suggestion run is given prompt-suggest.md instead,
+# with the same memory appended.
 # Node is optional here: the terminal bisu should still start on a Mac without it, just with no memory.
-sysprompt="$HOME/Library/Application Support/bisu/system-prompt.md"
+base="${BISU_PROMPT:-$root/prompt.md}"
+# One file per base prompt: a suggestion run and a chat can be starting at the same moment, and they
+# must not overwrite each other's system prompt.
+if [ -n "$BISU_PROMPT" ]; then
+  sysprompt="$HOME/Library/Application Support/bisu/system-prompt-${base:t:r}.md"
+else
+  sysprompt="$HOME/Library/Application Support/bisu/system-prompt.md"
+fi
 mkdir -p "${sysprompt:h}"
 if [ -f "$root/ui/memory.mjs" ] && command -v node >/dev/null 2>&1 &&
-   node "$root/ui/memory.mjs" prompt "$root/prompt.md" > "$sysprompt.$$.tmp" 2>/dev/null; then
+   node "$root/ui/memory.mjs" prompt "$base" > "$sysprompt.$$.tmp" 2>/dev/null; then
   mv -f "$sysprompt.$$.tmp" "$sysprompt"
 else
   rm -f "$sysprompt.$$.tmp"
-  cp "$root/prompt.md" "$sysprompt"
+  cp "$base" "$sysprompt"
 fi
 
 # Computer use: bisu's own MCP server, so a step on the Mac is one tool call with real coordinates

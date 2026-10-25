@@ -13,6 +13,7 @@
 //  * Every API call carries a per-launch token that only this page knows; other hosts and cross-site origins are refused.
 import http from 'node:http';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {execFile,spawn} from 'node:child_process';import {randomBytes,randomUUID} from 'node:crypto';import {fileURLToPath} from 'node:url';
 import * as memory from './memory.mjs';
+import * as proactive from './proactive.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.dirname(here);
 const PORT=Number(process.env.BISU_UI_PORT||7878);
@@ -274,6 +275,29 @@ const server=http.createServer(async(req,res)=>{
   if(m==='POST'&&p==='/api/memory')return json(res,200,memory.save(await body(req)));
   const mm=/^\/api\/memory\/([^/]+)$/.exec(p);
   if(mm&&m==='DELETE')return json(res,200,memory.remove(decodeURIComponent(mm[1])));
+  // Proactive suggestions: what bisu brings without being asked. The run itself is read-only and
+  // happens in its own process; accepting one only opens an ordinary chat and sends the request.
+  if(m==='GET'&&p==='/api/proactive')return json(res,200,proactive.snapshot());
+  if(m==='POST'&&p==='/api/proactive')return json(res,200,proactive.configure(await body(req)));
+  if(m==='POST'&&p==='/api/proactive/run'){
+   if(!KEY)return json(res,400,{error:'No OpenRouter key: bisu has nothing to think with until one is saved for https://openrouter.ai in Dec.'});
+   const why=proactive.due(Date.now(),true);
+   if(why)return json(res,200,{...proactive.snapshot(),skipped:why});
+   // Answered at once: the run takes a minute, and the page is already polling for the result.
+   proactive.run({reason:'page',force:true});
+   return json(res,202,proactive.snapshot())}
+  const pm=/^\/api\/proactive\/([0-9a-f-]{36})$/.exec(p);
+  if(pm&&m==='POST'){
+   const {action}=await body(req),item=proactive.get(pm[1]);
+   if(!item)return json(res,404,{error:'no such suggestion'});
+   if(action==='seen'){proactive.markSeen(item.id);return json(res,200,proactive.snapshot())}
+   if(action==='dismiss'){proactive.resolve(item.id,'dismissed');return json(res,200,proactive.snapshot())}
+   if(action!=='accept')return json(res,400,{error:'unknown action'});
+   if(!KEY)return json(res,400,{error:'No OpenRouter key: save one for https://openrouter.ai in Dec first.'});
+   proactive.resolve(item.id,'accepted');
+   const c=await newChat({cwd:item.cwd||undefined});
+   say(c,item.action);
+   return json(res,200,{...proactive.snapshot(),chat:publicChat(c)})}
   if(m==='GET'&&p==='/api/chats')return json(res,200,{chats:[...chats.values()].map(publicChat).sort((a,b)=>b.created-a.created),home:os.homedir()});
   if(m==='POST'&&p==='/api/chats'){if(!KEY)return json(res,400,{error:'No OpenRouter key: save one for https://openrouter.ai in Dec first.'});const c=await newChat(await body(req));return json(res,200,{chat:publicChat(c)})}
   const cm=/^\/api\/chats\/([0-9a-f-]{36})(\/[a-z]+)?$/.exec(p);const c=cm&&chats.get(cm[1]);
@@ -292,11 +316,22 @@ const server=http.createServer(async(req,res)=>{
 server.on('error',e=>{console.error(e.code==='EADDRINUSE'?`bisu ui: port ${PORT} is busy (set BISU_UI_PORT)`:`bisu ui: ${e.message}`);process.exit(1)});
 server.listen(PORT,'127.0.0.1',()=>{const u=`http://127.0.0.1:${PORT}`;console.error(`bisu ui → ${u}  (key: ${keyMode}; Ctrl-C to stop)`);
  if(!process.env.BISU_UI_NO_OPEN)execFile('open',[`${u}/?token=${TOKEN}`],()=>{})});
-for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
+
+// What bisu may bring on its own. The engine is the only thing that runs while nobody is watching,
+// so the schedule lives here; the page and the menu item only ask for one now.
+const proactiveContext=async()=>({
+ runs:await runs().catch(()=>[]),
+ chats:[...chats.values()].filter(c=>c.sessionId).map(c=>({cwd:c.cwd,title:c.title})).slice(0,6),
+ models:{main:roles().BISU_MODEL.value,code:roles().BISU_CODE_MODEL.value,dev:roles().BISU_DEV_MODEL.value},
+ key:!!KEY,
+});
+proactive.setContext(proactiveContext);
+proactive.start();
+for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{proactive.stop();for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
 // The desktop shell holds this pipe open for as long as it is running, so the pipe closing means the
 // shell quit or was force-killed. Without this the engine, dec and every Claude Code run outlive it.
 if(process.env.BISU_UI_PARENT==='stdin'){
- process.stdin.on('end',()=>{for(const c of chats.values())c.proc?.kill('SIGTERM');process.exit(0)});
+ process.stdin.on('end',()=>{proactive.stop();for(const c of chats.values())c.proc?.kill('SIGTERM');process.exit(0)});
  process.stdin.on('error',()=>{});
  process.stdin.resume();
 }

@@ -266,6 +266,19 @@ final class Engine {
       DispatchQueue.main.async { done(j) }
     }.resume()
   }
+
+  func post(_ path: String, body: [String: Any] = [:], done: @escaping ([String: Any]?) -> Void = { _ in }) {
+    var req = URLRequest(url: base.appendingPathComponent(path))
+    req.httpMethod = "POST"
+    req.timeoutInterval = 20
+    req.setValue(token, forHTTPHeaderField: "X-Bisu-Token")
+    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+    URLSession.shared.dataTask(with: req) { data, _, _ in
+      let j = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+      DispatchQueue.main.async { done(j) }
+    }.resume()
+  }
 }
 
 infix operator |>: AdditionPrecedence
@@ -367,6 +380,7 @@ let shimJS = """
     selectionEnabled: () => call('selectionEnabled'),
     setSelectionEnabled: on => call('selectionSet', {on: !!on}),
     onContext: fn => { subs.context.add(fn); return () => subs.context.delete(fn) },
+    suggest: n => post('suggest', {n: n || 0}),
     onShown: fn => { subs.shown.add(fn); return () => subs.shown.delete(fn) },
     onHidden: fn => { subs.hidden.add(fn); return () => subs.hidden.delete(fn) },
     __reply: (id, ok, value) => {
@@ -455,6 +469,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
   private var pendingContext: [String: Any]?
   private var activeChatId: String?
   private var spend: String?
+  private var suggestUnread = 0
   private var lastHidden = Date.distantPast
   private var showCount = 0
   private var axMenuItem: NSMenuItem?
@@ -488,25 +503,65 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
 
   // MARK: status item
 
-  private func trayImage() -> NSImage? {
-    guard let dir = Bundle.main.resourceURL?.appendingPathComponent("app/mac/assets") else { return nil }
-    for name in ["trayTemplate@2x", "trayTemplate"] {
-      if let img = NSImage(contentsOf: dir.appendingPathComponent("\(name).png")) {
-        img.size = NSSize(width: 18, height: 18)
-        img.isTemplate = true
-        return img
-      }
+  private func trayImage(badged: Bool = false) -> NSImage? {
+    let base: NSImage
+    if let dir = Bundle.main.resourceURL?.appendingPathComponent("app/mac/assets"),
+       let found = ["trayTemplate@2x", "trayTemplate"].lazy.compactMap({ NSImage(contentsOf: dir.appendingPathComponent("\($0).png")) }).first {
+      found.size = NSSize(width: 18, height: 18)
+      base = found
+    } else {
+      // A drawn fallback so the item is never invisible.
+      let img = NSImage(size: NSSize(width: 18, height: 18))
+      img.lockFocus()
+      NSColor.black.setStroke()
+      let path = NSBezierPath(ovalIn: NSRect(x: 2, y: 2, width: 14, height: 14))
+      path.lineWidth = 2
+      path.stroke()
+      img.unlockFocus()
+      base = img
     }
-    // A drawn fallback so the item is never invisible.
-    let img = NSImage(size: NSSize(width: 18, height: 18))
-    img.lockFocus()
-    NSColor.black.setStroke()
-    let path = NSBezierPath(ovalIn: NSRect(x: 2, y: 2, width: 14, height: 14))
-    path.lineWidth = 2
-    path.stroke()
-    img.unlockFocus()
-    img.isTemplate = true
-    return img
+    base.isTemplate = true
+    guard badged else { return base }
+    return dot(on: base)
+  }
+
+  /// The icon with a dot in the corner it leaves empty, for a suggestion nobody has answered yet.
+  /// Drawn at 2x so it stays crisp in the menu bar; the dot is punched out of the icon first so the
+  /// two never merge into one blob.
+  private func dot(on base: NSImage) -> NSImage {
+    let size = NSSize(width: 18, height: 18), scale: CGFloat = 2
+    guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale),
+                                     pixelsHigh: Int(size.height * scale), bitsPerSample: 8,
+                                     samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                     colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return base }
+    rep.size = size
+    let out = NSImage(size: size)
+    out.addRepresentation(rep)
+    out.lockFocus()
+    base.draw(in: NSRect(origin: .zero, size: size))
+    let center = NSPoint(x: size.width - 3.2, y: 3.2)
+    if let ctx = NSGraphicsContext.current {
+      ctx.compositingOperation = .clear
+      NSBezierPath(ovalIn: NSRect(x: center.x - 3.6, y: center.y - 3.6, width: 7.2, height: 7.2)).fill()
+      ctx.compositingOperation = .sourceOver
+    }
+    NSColor.black.setFill()
+    NSBezierPath(ovalIn: NSRect(x: center.x - 2.3, y: center.y - 2.3, width: 4.6, height: 4.6)).fill()
+    out.unlockFocus()
+    out.isTemplate = true
+    return out
+  }
+
+  private func setSuggest(_ n: Int) {
+    // The page reports this on every poll; only a change is worth redrawing the icon for.
+    let v = max(0, n)
+    guard v != suggestUnread else { return }
+    suggestUnread = v
+    guard let button = statusItem?.button else { return }
+    button.image = trayImage(badged: v > 0)
+    button.image?.isTemplate = true
+    button.toolTip = v > 0 ? "bisu · 제안 \(v)개 · \(shortcutLabel)" : "bisu · \(shortcutLabel)"
+    log("suggestions waiting:", String(v))
   }
 
   private func buildStatusItem() {
@@ -543,9 +598,12 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     let show = NSMenuItem(title: panel?.isVisible == true ? "bisu 숨기기" : "bisu 열기", action: #selector(toggleFromMenu), keyEquivalent: "")
     show.target = self
     menu.addItem(show)
-    let full = NSMenuItem(title: "전체 창 (기록 · 설정)", action: #selector(openFullFromMenu), keyEquivalent: "o")
+    let full = NSMenuItem(title: "전체 창 (기록 · 기억 · 설정)", action: #selector(openFullFromMenu), keyEquivalent: "o")
     full.target = self
     menu.addItem(full)
+    let ask = NSMenuItem(title: "지금 제안 받기", action: #selector(askForSuggestion), keyEquivalent: "")
+    ask.target = self
+    menu.addItem(ask)
     menu.addItem(.separator())
 
     if let spend {
@@ -580,6 +638,13 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
 
   @objc private func toggleFromMenu() { togglePanel() }
   @objc private func openFullFromMenu() { openFull() }
+
+  /// The one action a suggestion needs from the shell: ask for one now. The page shows it on its next
+  /// poll, so the panel is opened here — asking and seeing nothing would look broken.
+  @objc private func askForSuggestion() {
+    showPanel()
+    engine?.post("api/proactive/run") { _ in }
+  }
 
   @objc private func toggleSelection() {
     let on = !(readState()["selection"] as? Bool == false)
@@ -797,6 +862,11 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       DispatchQueue.main.async {
         log("engine ready")
         self.loadPanel()
+        // The engine may already have something waiting from a run that happened while bisu was
+        // closed, so the dot has to be right before any page has had a chance to report it.
+        self.engine.getJSON("api/proactive") { j in
+          if let waiting = j?["waiting"] as? Int { self.setSuggest(waiting) }
+        }
         if ProcessInfo.processInfo.environment["BISU_OPEN_FULL"] == "1" { self.openFull() }
       }
     }
@@ -1000,6 +1070,11 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     case "selectionSet":
       if let on = args["on"] as? Bool { saveState(["selection": on]) }
       reply(readState()["selection"] as? Bool != false)
+    case "suggest":
+      // How many suggestions are waiting unread, for the dot on the menu bar icon. The page reports
+      // it after every poll, so nothing here has to know about the engine's schedule.
+      setSuggest(args["n"] as? Int ?? 0)
+      reply(nil)
     default:
       log("unknown bridge command:", cmd)
       reply(nil)

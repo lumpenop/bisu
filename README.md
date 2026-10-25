@@ -69,6 +69,19 @@ A chat forgets. The things you would otherwise say again — 한국어로 짧게
 
 It deliberately does not touch `~/.claude/CLAUDE.md`, so your normal `claude` is unaffected, and it does not summarise past conversations — a memory exists because you said it, or because you added it.
 
+## Coming to you first
+
+An assistant that only answers is a search box. The other half is noticing: on a slow cadence bisu starts **one short run of its own**, looks at what you have been doing, and leaves at most one thing worth your attention — a README that is still empty, a migration that stopped halfway, a loose end from yesterday. It waits above the message box, and the menu bar icon gets a dot while nobody has answered it.
+
+- **It cannot act.** That run gets its own system prompt ([prompt-suggest.md](prompt-suggest.md)) and read-only tools — `Read`, `Glob`, `Grep`. No edits, no commands, no approvals to give. A bad suggestion costs a few cents and nothing else; saying yes is what starts real work, in a real chat, with the usual approval for every change.
+- **Enough, not frequent.** Once a day by default (`intervalHours` 24), nothing between 23:00 and 08:00, never while another run is going, and no run at all while two suggestions are already waiting unread. A run that fails is retried in 30 minutes, not immediately. A dismissed suggestion is never brought up again, in any wording — that is what saying no has to mean.
+- **An empty answer is a real answer.** The prompt says so, and the code allows it: no quota, no filler, nothing that begins with "고려해 보세요". What you get is concrete or nothing.
+- **Take it or leave it.** The card shows the folder it is about and the exact request it would send. **해볼게** opens a chat in that folder with that request as the first message; **나중에** puts it away for good; ✕ puts the whole queue away.
+- **When it looks:** while the app is running, and whenever it is time — so opening the panel after a day gives you one within a minute. **지금 제안 받기** (right-click the icon, or Settings → 먼저 찾아오기) asks for one now, clock and quiet hours included in what it ignores. From the terminal, `bisu suggest` does the same and prints the suggestion instead of showing it.
+- **What it sees:** the last ten runs (folder, prompt), open chats, the memory above, and whatever it reads in those folders. It does not run `git`, does not fetch the web, and does not read `~/.claude` — if the answer needs more than a look at the folder, it will miss it.
+
+Settings → 먼저 찾아오기 turns it off, changes the cadence and the quiet hours, and lists the last suggestions with what you did about each. `BISU_PROACTIVE=0` disables it for a single launch, `BISU_PROACTIVE_MODEL` picks the model it thinks with (the developer model by default, because this is a cheap mechanical job), and `BISU_SUGGEST_TIMEOUT` (150 s) caps how long a run may take. The state is one file, `~/.config/bisu/proactive.json` — delete it to forget every suggestion it has ever made.
+
 ## `bisu ui`
 
 ```sh
@@ -80,7 +93,7 @@ One local page (Node, no dependencies, 127.0.0.1 only) for everything:
 - **Chat:** pick a folder and talk to bisu. Each chat is a real headless Claude Code run with the same models and agents as `bisu`, so it reads, edits and runs things in that folder. Before it edits a file or runs a command that needs permission, the page shows exactly what it wants to do (the command, the diff, the new file) with **Allow**, **Allow for this chat** and **Deny**. Claude Code starts as soon as you open a chat and stays up between messages, so replies take about as long as the model itself (~1–1.5 s for a short answer); after 30 idle minutes it stops and picks the session back up on your next message (`BISU_UI_IDLE_MIN` to change). **Stop** interrupts the current answer. Read-only tools that Claude Code allows by itself run without asking.
 - **History:** your `bisu` sessions from the last 60 days, from the terminal too (picked out of `~/.claude/projects` by their OpenRouter model names), with tokens and an estimated cost. **Continue** reopens one as a chat.
 - **Memory:** what carries across sessions — how you like answers, names, the projects that are still going. One markdown file each in `~/.config/bisu/memory`, which the assistant adds to as you talk and every new run is given; see [Memory](#memory-what-a-session-should-not-forget).
-- **Settings:** key status (use-only through Dec, or plain env; whether answers stream), real OpenRouter spend and limit, and models per role from OpenRouter's list with prices and tool-calling support. Model choices go to `~/.config/bisu/models`; exported `BISU_*` variables still win. The key itself is added or changed in Dec, never on this page.
+- **Settings:** key status (use-only through Dec, or plain env; whether answers stream), real OpenRouter spend and limit, models per role from OpenRouter's list with prices and tool-calling support, and 먼저 찾아오기 — whether bisu suggests things on its own, how often, and when not to; see [Coming to you first](#coming-to-you-first). Model choices go to `~/.config/bisu/models`; exported `BISU_*` variables still win. The key itself is added or changed in Dec, never on this page.
 
 The page's API needs a token that only the page gets, and refuses other hosts and cross-site requests.
 
@@ -105,7 +118,7 @@ Because the bundle is a snapshot, rebuild after editing (`bisu app install`) —
 - **Resize it from the grip** in the bottom-right corner, and it keeps that size. A frameless window has no resize border — dragging its edge moves it — so the panel draws its own handle and the shell applies the bounds.
 - **Context you don't have to explain:** the panel carries over the app you were in and the text you had selected or copied, so "이거 요약해" is enough. The selection is read through the Accessibility API in bisu's own process — it never presses ⌘C and never touches the pasteboard, so nothing needs restoring. An app that doesn't expose its selection just reports nothing. The panel has a bar with "권한 주기" that opens the macOS dialog; it appears **once** — ✕ (or granting it) and it stays gone. The menu's "접근성 허용…" keeps the same action while it is still untrusted. Without it the panel still carries the frontmost app and the clipboard.
 - **Approvals** look the same as in `bisu ui`, and a failing request says why instead of leaving a spinner.
-- **The menu** (right-click the icon) has the full window for History, Memory and Settings, today's OpenRouter spend, "선택한 텍스트 읽기", "접근성 허용…" while it is untrusted, and Quit.
+- **The menu** (right-click the icon) has the full window for History, Memory and Settings, **지금 제안 받기**, today's OpenRouter spend, "선택한 텍스트 읽기", "접근성 허용…" while it is untrusted, and Quit. A dot in the corner of the icon means a suggestion is waiting that you have not read yet; it goes away when the panel has shown it.
 - **Launched from Finder** the app has almost no `PATH`, so it composes one and finds `node` in Homebrew, `~/.local/bin`, fnm, nvm, mise, asdf or Volta without asking a shell (which can hang).
 
 Two permissions are per-app and worth knowing about:
@@ -124,6 +137,7 @@ The old shell is still in [mac/](mac): Electron main, a preload that only expose
 - Claude Code is tuned for Claude. Non-Claude models are noticeably worse at its tool calls — give `bisu` mechanical work, not architecture.
 - Subscription-only features (connectors, remote control, scheduled tasks) are off in `bisu` sessions.
 - Memory is text in the system prompt: every request pays for it, and a wrong entry is followed until you delete it. The Memory tab exists to show exactly what is there — that is the point of it.
+- A suggestion is a guess from the outside. It reads the folder and your recent runs, not the conversation in your head, so it will sometimes propose the thing you already decided against (and sometimes miss the obvious). That is why it is read-only, why an empty answer is allowed, and why nothing happens until you say 해볼게.
 - In use-only mode with an older `dec-secret-helper`, responses are buffered (no streaming) and a single request is capped at ~200 s. A helper with the `stream` command removes both; Settings in `bisu ui` shows which one you have.
 
 ## Why not open-codex?

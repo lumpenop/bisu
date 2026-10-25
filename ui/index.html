@@ -97,6 +97,23 @@ th{font-size:12px;color:var(--muted);font-weight:600;border-top:0;white-space:no
 td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 td .p{color:var(--muted);font-size:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:420px}
 .chip{display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:11px;background:var(--chip);border-radius:4px;padding:1px 6px;margin:1px 2px 1px 0;white-space:nowrap}
+/* what bisu brings without being asked */
+#sug{flex:none;padding:0 12px 10px}
+.sugcard{border:1px solid var(--accent);background:var(--accent-soft);border-radius:10px;padding:10px 12px}
+.sugTop{display:flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);font-weight:600}
+.sugTop .x{margin-left:auto;border:0;background:none;padding:0 3px;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;text-transform:none;font-weight:400}
+.sugTitle{font-weight:600;margin-top:3px}
+.sugBody{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.45;max-height:5.2em;overflow:auto}
+.sugBtns{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.sugBtns button{padding:4px 11px;font-size:12px}
+body.panel .sugcard{padding:9px 10px}
+body.panel .sugBody{max-height:4.4em}
+/* proactive controls in Settings */
+.sw{display:flex;align-items:center;gap:8px;font-size:13px}
+#sugForm .kv{margin-top:10px}
+#sugForm input[type=number]{width:64px}
+#sugForm select{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+#sugPast{margin-top:6px}
 /* memory */
 .mem{border-top:1px solid var(--line);padding:12px 0}
 .mem:first-child{border-top:0;padding-top:0}
@@ -189,6 +206,7 @@ body.panel .view.pop.on{animation:popIn .13s ease-out}
    <p class="err" id="startErr" hidden></p>
   </div></div>
   <div id="msgs"><div class="wrap"><p class="empty">Pick a folder and start a chat. bisu works there with Claude Code's tools,<br>and asks you here before it edits files or runs commands.</p></div></div>
+  <div id="sug" hidden></div>
   <div class="compose" id="compose" hidden><div class="row">
    <textarea id="input" rows="1" placeholder="Message bisu  (Enter to send, Shift+Enter for a new line)"></textarea>
    <button class="primary" id="sendBtn">Send</button>
@@ -232,6 +250,23 @@ body.panel .view.pop.on{animation:popIn .13s ease-out}
 </div></div></div>
 
 <div class="view" id="settingsView"><div class="page"><div>
+ <section>
+  <h2>먼저 찾아오기 · Proactive</h2>
+  <form id="sugForm">
+   <label class="sw"><input type="checkbox" id="sugOn"> 켜기</label>
+   <div class="kv">
+    <div class="k">주기</div><div><select id="sugEvery">
+     <option value="8">하루 세 번</option><option value="12">하루 두 번</option>
+     <option value="24">하루 한 번</option><option value="72">3일마다</option>
+     <option value="168">일주일에 한 번</option></select></div>
+    <div class="k">조용한 시간</div><div><input type="number" id="sugFrom" min="0" max="23"> 시 – <input type="number" id="sugTo" min="0" max="23"> 시 <span class="note" style="display:inline">이 사이에는 찾아오지 않아요</span></div>
+    <div class="k">다음</div><div id="sugNext">…</div>
+   </div>
+  </form>
+  <div class="actions"><button id="sugRun">지금 제안 받기</button><span class="note" id="sugNote" style="margin:0"></span></div>
+  <p class="note">bisu가 가끔 스스로 최근 작업을 훑어보고, 지금 말할 만한 걸 하나 남겨요. 읽기만 하는 별도 실행이라 아무것도 바꾸지 못하고, 고르면 그때 폴더에서 진짜 대화가 시작돼요. 마음에 안 든 제안은 “나중에”로 지우면 다시 꺼내지 않아요.</p>
+  <div id="sugPast"></div>
+ </section>
  <section>
   <h2>Key</h2>
   <div class="kv" id="keyInfo"><div class="k">Status</div><div>…</div></div>
@@ -283,7 +318,7 @@ const post=(p,b)=>api(p,{method:'POST',body:JSON.stringify(b||{})});
 
 // ---- tabs ----
 function show(v){for(const b of document.querySelectorAll('nav button'))b.classList.toggle('on',b.dataset.view===v);for(const el of document.querySelectorAll('.view'))el.classList.toggle('on',el.id===v+'View');
- if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='settings'){loadAccount();loadRoles()}try{localStorage.setItem('bisu.view',v)}catch{}}
+ if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='settings'){loadAccount();loadRoles();renderSugSettings();loadSuggestions()}try{localStorage.setItem('bisu.view',v)}catch{}}
 for(const b of document.querySelectorAll('nav button'))b.onclick=()=>show(b.dataset.view);
 
 // ---- light markdown: fenced code, inline code, paragraphs ----
@@ -360,6 +395,7 @@ async function checkAccessibility(){
  HOST.accessibilityHintShown?.();
 }
 if(PANEL&&HOST?.onShown)HOST.onShown(()=>{
+ panelOpen=true;
  const v=document.querySelector('.view.on');
  if(v&&!matchMedia('(prefers-reduced-motion: reduce)').matches){v.classList.remove('pop');void v.offsetWidth;v.classList.add('pop')}
  const i=$('input');
@@ -367,8 +403,10 @@ if(PANEL&&HOST?.onShown)HOST.onShown(()=>{
  checkAccessibility();
  // Reattach the chat the panel is showing, which also brings Claude Code back if it was let go.
  if(cur)listen(cur.id);
+ // The suggestion this brings up counts as seen now, and the dot on the menu bar goes away.
+ loadSuggestions();
 });
-if(PANEL&&HOST?.onHidden)HOST.onHidden(()=>detach());
+if(PANEL&&HOST?.onHidden)HOST.onHidden(()=>{panelOpen=false;detach()});
 function toolSummary(name,input={}){
  if(input.command)return input.command;if(input.file_path)return short(input.file_path);if(input.pattern)return input.pattern+(input.path?'  in '+short(input.path):'');
  if(input.url)return input.url;if(input.description)return input.description;if(input.prompt)return input.prompt;return JSON.stringify(input)}
@@ -520,6 +558,80 @@ async function saveMemory(){
 $('memForm').onsubmit=e=>{e.preventDefault();saveMemory()};
 $('memCancel').onclick=()=>memForm(null);
 
+// ---- what bisu brings without being asked ----
+// The engine runs the suggestion on its own schedule; this only shows whatever is waiting, and asking
+// for one now. Saying yes opens an ordinary chat in the folder the suggestion is about and sends what
+// it said it would do — the approval for every edit still comes from the chat, as always.
+let sug=null,sugAsked=new Set(),panelOpen=!PANEL;
+const waiting=()=>(sug?.items||[]).filter(i=>i.status==='new');
+const SUG_WHY={off:'먼저 찾아오기가 꺼져 있어요.',running:'이미 생각하는 중이에요.',waiting:'아직 안 본 제안이 있어요. 먼저 하나 정리해 주세요.',early:'아직 때가 아니에요.',quiet:'조용한 시간이에요.',nokey:'OpenRouter 키가 없어서 대신 찾아볼 수 없어요.'};
+const ago=ts=>{const m=Math.round((Date.now()-ts)/60e3);return m<1?'방금':m<60?`${m}분 전`:m<1440?`${Math.round(m/60)}시간 전`:`${Math.round(m/1440)}일 전`};
+async function loadSuggestions(){try{sug=await api('/api/proactive');renderSug();if($('settingsView').classList.contains('on'))renderSugSettings()}catch{}}
+function renderSug(){
+ const el=$('sug');if(!el)return;
+ const list=waiting();
+ if(!list.length){
+  // Between asking for one and it arriving there is nothing to show yet, and an empty panel looks
+  // like nothing happened.
+  if(sug?.running){el.hidden=false;el.innerHTML=`<div class="sugcard"><div class="sugTop">비서 제안</div><div class="sugBody" style="margin-top:4px">뭐가 있을지 보고 있어요…</div></div>`}
+  else{el.hidden=true;el.innerHTML=''}
+  HOST?.suggest?.(0);return}
+ const it=list[0],extra=list.length>1?` <span class="note" style="margin:0;text-transform:none;letter-spacing:0">+${list.length-1}</span>`:'';
+ el.hidden=false;
+ el.innerHTML=`<div class="sugcard"><div class="sugTop">비서 제안 ${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
+  <div class="sugTitle">${esc(it.title)}</div>
+  ${it.body?`<div class="sugBody">${esc(it.body)}</div>`:''}
+  <div class="sugBtns"><button class="primary" data-a="do">해볼게</button><button data-a="later">나중에</button>${it.cwd?`<span class="note mono" style="margin:0;align-self:center">${esc(short(it.cwd))}</span>`:''}</div></div>`;
+ el.querySelector('[data-a=do]').onclick=()=>suggestAnswer(it.id,'accept');
+ el.querySelector('[data-a=later]').onclick=()=>suggestAnswer(it.id,'dismiss');
+ el.querySelector('[data-a=no]').onclick=async()=>{for(const x of list)await post(`/api/proactive/${x.id}`,{action:'dismiss'}).catch(()=>{});loadSuggestions()};
+ HOST?.suggest?.(list.filter(i=>!i.seen).length);
+ // Seen means "was on screen while the panel was open", which is also what clears the menu bar dot.
+ if(panelOpen&&!it.seen&&!sugAsked.has(it.id)){sugAsked.add(it.id);post(`/api/proactive/${it.id}`,{action:'seen'}).then(s=>{sug=s;renderSug()}).catch(()=>{})}
+}
+async function suggestAnswer(id,action){
+ const el=$('sug');
+ for(const b of el.querySelectorAll('button'))b.disabled=true;
+ try{
+  const r=await post(`/api/proactive/${id}`,{action});
+  sug=r;
+  if(r.chat){await refreshChats();show('chat');open(r.chat.id)}
+  renderSug();
+ }catch(e){
+  el.querySelector('.sugBtns').insertAdjacentHTML('beforeend',`<span class="note err" style="margin:0;align-self:center">${esc(e.message)}</span>`);
+  for(const b of el.querySelectorAll('button'))b.disabled=false;
+ }
+}
+function renderSugSettings(){
+ const s=sug;if(!s)return;
+ $('sugOn').checked=!!s.enabled;
+ // A value set from the shell (BISU_*) or an older file may not be one of the choices; showing the
+ // first option instead would quietly misreport the cadence.
+ const every=String(s.intervalHours);
+ if(![...$('sugEvery').options].some(o=>o.value===every))$('sugEvery').add(new Option(`직접 설정한 ${every}시간`,every),0);
+ $('sugEvery').value=every;
+ $('sugFrom').value=s.quietFrom;$('sugTo').value=s.quietTo;
+ $('sugNext').textContent=s.running?'생각하는 중…':s.lastError?`마지막 시도 실패: ${s.lastError}`:
+  `${new Date(s.nextAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})} 이후${s.enabled?'':' (꺼져 있음)'}`;
+ $('sugPast').innerHTML=s.items.length?s.items.slice(0,8).map(i=>`<div class="mem"><div class="h">
+   <b>${esc(i.title)}</b><span class="chip">${{new:'기다리는 중',accepted:'받아들임',dismissed:'나중에'}[i.status]||i.status}</span>
+   <span class="note" style="margin:0">${ago(i.at)}</span></div>${i.body?`<div class="b">${esc(i.body)}</div>`:''}</div>`).join(''):'<p class="note">아직 제안한 적이 없어요.</p>';
+}
+async function saveSugSettings(){
+ try{const r=await post('/api/proactive',{enabled:$('sugOn').checked,intervalHours:Number($('sugEvery').value),quietFrom:Number($('sugFrom').value),quietTo:Number($('sugTo').value)});
+  sug=r;renderSugSettings();renderSug();$('sugNote').textContent='저장했어요.'}catch(e){$('sugNote').textContent=e.message}
+}
+for(const id of ['sugOn','sugEvery','sugFrom','sugTo'])$(id).addEventListener('change',saveSugSettings);
+// A number field plus Return would otherwise submit the form and reload the page, losing the token.
+$('sugForm').onsubmit=e=>{e.preventDefault();saveSugSettings()};
+$('sugRun').onclick=async()=>{
+ $('sugNote').textContent='찾는 중이에요… (1분쯤)';
+ try{const r=await post('/api/proactive/run');sug=r;renderSugSettings();renderSug();
+  if(r.skipped)$('sugNote').textContent=SUG_WHY[r.skipped]||r.skipped;
+  else if(r.running)$('sugNote').textContent='찾는 중이에요… (1분쯤)';
+ }catch(e){$('sugNote').textContent=e.message}
+};
+
 // ---- history ----
 let runCache=[];
 async function loadRuns(){try{const {runs}=await api('/api/runs');runCache=runs;
@@ -539,7 +651,7 @@ async function loadRuns(){try{const {runs}=await api('/api/runs');runCache=runs;
 
 // ---- boot ----
 if(PANEL){ensureCtxBar();HOST?.onContext?.(c=>{if(!sent)setCtx(c)});HOST?.context?.().then(c=>{if(!sent)setCtx(c)}).catch(()=>{})}
-loadAccount();loadRuns();
+loadAccount();loadRuns();loadSuggestions();
 refreshChats().then(()=>{let id=null,v='chat';try{id=localStorage.getItem('bisu.chat');v=localStorage.getItem('bisu.view')||'chat'}catch{}
  const forced=Q.get('chat');
  if(forced&&chats.some(c=>c.id===forced))open(forced);
@@ -547,6 +659,8 @@ refreshChats().then(()=>{let id=null,v='chat';try{id=localStorage.getItem('bisu.
  else if(PANEL&&chats.length)open(chats[0].id);
  show(PANEL?'chat':v);if(!cur)chatUI()});
 setInterval(refreshChats,5000);
+// Slower than the chat list: a suggestion appears about once a day, and the answer takes a minute.
+setInterval(loadSuggestions,12000);
 </script>
 </body>
 </html>

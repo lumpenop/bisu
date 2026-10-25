@@ -35,6 +35,18 @@ bisu() {
     else node "$_bisu_dir/ui/server.mjs" "$@"; fi
     return
   fi
+  # bisu suggest: what the menu-bar app brings on its own, once, printed here. Same state file, so it
+  # also counts as the one suggestion of the day for the app.
+  if [ "$1" = suggest ]; then
+    shift
+    command -v node >/dev/null 2>&1 || { echo "bisu suggest needs node" >&2; return 1; }
+    if [ -n "$ref" ]; then
+      OPENROUTER_API_KEY="$ref" dec-secret run -- node "$_bisu_dir/ui/proactive.mjs" run
+    else
+      node "$_bisu_dir/ui/proactive.mjs" run
+    fi
+    return
+  fi
   # bisu app: the same bisu as a menu-bar app (⌥Space) with what you were looking at as context.
   #   bisu app           open the installed app (~/Applications/bisu.app), building it if missing
   #   bisu app install   rebuild the .app from this folder (after changing bisu)
