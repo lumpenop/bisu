@@ -118,6 +118,9 @@ tools: read                  # read (default) · edit: may change files in cwd �
 
 ## `bisu ui`
 
+**How it looks.** bisu is a small character, and its face is the status: it blinks while it listens, looks around while it thinks, bobs while it works, rings when it needs you to approve something, and smiles when it is done. The machinery stays one layer down — a turn's file reads, commands and searches fold into one line ("한 일 3가지") that opens on a click, and model names, steps and cost appear only with 설정 → 보기 → 작업 세부 보기. The page is Korean throughout, and the assistant answers in your own speech level.
+
+
 ```sh
 bisu ui        # opens http://127.0.0.1:7878 (BISU_UI_PORT to change)
 ```
