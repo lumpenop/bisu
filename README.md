@@ -95,6 +95,25 @@ An assistant that only answers is a search box. The other half is noticing: on a
 
 Settings → 먼저 찾아오기 turns it off, changes the cadence and the quiet hours, and lists the last suggestions with what you did about each. `BISU_PROACTIVE=0` disables it for a single launch, `BISU_PROACTIVE_MODEL` picks the model it thinks with (the developer model by default, because this is a cheap mechanical job), and `BISU_SUGGEST_TIMEOUT` (150 s) caps how long a run may take. The state is one file, `~/.config/bisu/proactive.json` — delete it to forget every suggestion it has ever made.
 
+## On a schedule
+
+"매일 아침 8시에 어제 커밋 요약해 줘" is a file, not a setting. bisu writes `~/.config/bisu/jobs/morning-summary.md` — with the same `Write` tool and the same approval as a memory, so you see it before it exists — and the engine does the rest:
+
+```
+---
+name: 아침 요약
+schedule: 0 8 * * 1-5        # cron, five fields, local time — or  at: 2026-10-28 09:00  for one time
+cwd: /Users/you/the-project
+tools: read                  # read (default) · edit: may change files in cwd · full: may also run commands
+---
+어제 커밋 로그와 열린 TODO를 보고 오늘 할 일 세 가지를 뽑아줘.
+```
+
+- **Each run is one short Claude Code run of its own** ([ui/jobs.mjs](ui/jobs.mjs)), in that folder, with its own system prompt ([prompt-job.md](prompt-job.md): nobody is watching, answer short, an empty answer is fine) and the memory and session search as usual. The answer lands as a card in the panel, with the dot on the menu bar; *이어서 대화* continues from that run's session, so "그럼 고쳐" has the whole context.
+- **Read-only unless the file says otherwise.** `tools: edit` runs with Claude Code's `acceptEdits` (file edits in that folder go through, commands are refused); `tools: full` runs with `--dangerously-skip-permissions`. A job that can act is a choice you made, visible in the file, never the default — the unattended run has nobody to ask.
+- **Enough, not frequent.** The engine looks once a minute, runs one job at a time, and a job missed while the Mac was asleep runs once when it wakes, not once per missed slot. A failed run leaves a card saying so and waits for its next slot; no retry loop.
+- **Settings tab:** every job with its next run, last result, *지금 실행*, *끄기/켜기* (flips `enabled:` in the file) and *삭제*. From the shell, `node ui/jobs.mjs` prints the same, `node ui/jobs.mjs run <slug>` runs one now, and `node ui/jobs.mjs next "0 8 * * 1-5"` says when a schedule fires.
+
 ## `bisu ui`
 
 ```sh

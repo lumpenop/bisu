@@ -117,6 +117,7 @@ td .p{color:var(--muted);font-size:12px;display:-webkit-box;-webkit-line-clamp:2
 .sugBtns button{padding:4px 11px;font-size:12px}
 body.panel .sugcard{padding:9px 10px}
 body.panel .sugBody{max-height:4.4em}
+.sugBody.job{white-space:pre-wrap;word-break:break-word;color:var(--ink);max-height:12em}.sugBody.job.err{color:var(--bad)}
 /* proactive controls in Settings */
 .sw{display:flex;align-items:center;gap:8px;font-size:13px}
 #sugForm .kv{margin-top:10px}
@@ -291,6 +292,11 @@ body.panel .view.pop.on{animation:popIn .13s ease-out}
   <div id="sugPast"></div>
  </section>
  <section>
+  <h2>예약 작업 · Scheduled</h2>
+  <div id="jobList"><p class="note">loading…</p></div>
+  <p class="note" id="jobNote">채팅에서 "매일 8시에 …해 줘"라고 하면 비서가 <code>~/.config/bisu/jobs/</code>에 파일 하나를 만들어요. 직접 써도 돼요: 맨 위 frontmatter에 <code>schedule: 0 8 * * 1-5</code>(cron, 로컬 시간) 또는 <code>at: 2026-10-28 09:00</code>, <code>cwd: /폴더</code>, <code>tools: read</code>(기본 · <code>edit</code>는 그 폴더의 파일 수정 · <code>full</code>은 명령 실행까지), 그 아래에 그때 보낼 요청. 결과는 패널 카드로 와요.</p>
+ </section>
+ <section>
   <h2>Key</h2>
   <div class="kv" id="keyInfo"><div class="k">Status</div><div>…</div></div>
   <p class="note">bisu never holds the key. To add or change it, open Dec Browser → 설정 → 자격 증명, save the OpenRouter key with the site <code>https://openrouter.ai</code> and turn on 「앱 밖에서도 쓰기」. Then restart <code>bisu ui</code>.</p>
@@ -341,7 +347,7 @@ const post=(p,b)=>api(p,{method:'POST',body:JSON.stringify(b||{})});
 
 // ---- tabs ----
 function show(v){for(const b of document.querySelectorAll('nav button'))b.classList.toggle('on',b.dataset.view===v);for(const el of document.querySelectorAll('.view'))el.classList.toggle('on',el.id===v+'View');
- if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='settings'){loadAccount();loadRoles();renderSugSettings();loadSuggestions()}try{localStorage.setItem('bisu.view',v)}catch{}}
+ if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='settings'){loadAccount();loadRoles();renderSugSettings();loadSuggestions();loadJobs()}try{localStorage.setItem('bisu.view',v)}catch{}}
 for(const b of document.querySelectorAll('nav button'))b.onclick=()=>show(b.dataset.view);
 
 // ---- light markdown: fenced code, inline code, paragraphs ----
@@ -664,11 +670,17 @@ function renderSug(){
   HOST?.suggest?.(0);return}
  const it=list[0],extra=list.length>1?` <span class="note" style="margin:0;text-transform:none;letter-spacing:0">+${list.length-1}</span>`:'';
  el.hidden=false;
- el.innerHTML=`<div class="sugcard"><div class="sugTop">비서 제안 ${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
+ // A scheduled job's answer is the same card with other words: nothing to agree to, only to read,
+ // and "이어서 대화" picks up the run that wrote it.
+ if(it.kind==='job')el.innerHTML=`<div class="sugcard"><div class="sugTop">예약 작업 ${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
+  <div class="sugTitle">${esc(it.title)}</div>
+  ${it.body?`<div class="sugBody job${it.error?' err':''}">${esc(it.body)}</div>`:''}
+  <div class="sugBtns">${it.sessionId?`<button class="primary" data-a="do">이어서 대화</button>`:''}<button data-a="later">확인</button><span class="note" style="margin:0;align-self:center">${ago(it.at)}${it.cwd?' · '+esc(short(it.cwd)):''}</span></div></div>`;
+ else el.innerHTML=`<div class="sugcard"><div class="sugTop">비서 제안 ${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
   <div class="sugTitle">${esc(it.title)}</div>
   ${it.body?`<div class="sugBody">${esc(it.body)}</div>`:''}
   <div class="sugBtns"><button class="primary" data-a="do">해볼게</button><button data-a="later">나중에</button>${it.cwd?`<span class="note mono" style="margin:0;align-self:center">${esc(short(it.cwd))}</span>`:''}</div></div>`;
- el.querySelector('[data-a=do]').onclick=()=>suggestAnswer(it.id,'accept');
+ const go=el.querySelector('[data-a=do]');if(go)go.onclick=()=>suggestAnswer(it.id,'accept');
  el.querySelector('[data-a=later]').onclick=()=>suggestAnswer(it.id,'dismiss');
  el.querySelector('[data-a=no]').onclick=async()=>{for(const x of list)await post(`/api/proactive/${x.id}`,{action:'dismiss'}).catch(()=>{});loadSuggestions()};
  HOST?.suggest?.(list.filter(i=>!i.seen).length);
@@ -710,6 +722,20 @@ async function saveSugSettings(){
 for(const id of ['sugOn','sugEvery','sugFrom','sugTo'])$(id).addEventListener('change',saveSugSettings);
 // A number field plus Return would otherwise submit the form and reload the page, losing the token.
 $('sugForm').onsubmit=e=>{e.preventDefault();saveSugSettings()};
+// ---- scheduled jobs ----
+let jobsSnap=null;
+const whenShort=ts=>ts?new Date(ts).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+async function loadJobs(){try{jobsSnap=await api('/api/jobs');renderJobs()}catch(e){$('jobList').innerHTML=`<p class="note err">${esc(e.message)}</p>`}}
+function renderJobs(){const s=jobsSnap;if(!s)return;const el=$('jobList');
+ if(!s.jobs.length){el.innerHTML='<p class="note">아직 예약한 작업이 없어요.</p>';return}
+ el.innerHTML=s.jobs.map(j=>`<div class="mem" data-slug="${esc(j.slug)}"><div class="h"><b>${esc(j.name)}</b><span class="chip">${esc(j.schedule)}${j.once?' · 한 번':''}</span><span class="chip">${j.tools}</span>${j.enabled?'':'<span class="chip">꺼짐</span>'}
+   <span class="sp"></span><button data-a="run" ${j.error||s.running?'disabled':''}>${j.running?'실행 중…':'지금 실행'}</button><button data-a="${j.enabled?'disable':'enable'}">${j.enabled?'끄기':'켜기'}</button><button class="danger" data-a="delete">삭제</button></div>
+   <div class="b note" style="margin-top:4px">${j.error?`<span class="err">${esc(j.error)}</span>`:`다음: ${j.nextAt?whenShort(j.nextAt):'없음'}`} · ${esc(short(j.cwd))}${j.lastRun?` · 마지막 ${ago(j.lastRun)}: ${j.lastError?`<span class="err">실패 — ${esc(j.lastError)}</span>`:esc(j.lastResult||'ok')}`:''}</div></div>`).join('');
+ for(const b of el.querySelectorAll('button[data-a]'))b.onclick=async()=>{const slug=b.closest('[data-slug]').dataset.slug,a=b.dataset.a;
+  if(a==='delete'&&!confirm(`"${slug}" 작업 파일을 지울까요?`))return;
+  b.disabled=true;$('jobNote').textContent='';
+  try{jobsSnap=await post(`/api/jobs/${encodeURIComponent(slug)}`,{action:a});renderJobs();if(a==='run')setTimeout(loadJobs,6000)}catch(e){$('jobNote').textContent=e.message;b.disabled=false}};
+}
 $('sugRun').onclick=async()=>{
  $('sugNote').textContent='찾는 중이에요… (1분쯤)';
  try{const r=await post('/api/proactive/run');sug=r;renderSugSettings();renderSug();
@@ -755,7 +781,7 @@ refreshChats().then(()=>{let id=null,v='chat';try{id=localStorage.getItem('bisu.
  show(PANEL?'chat':v);if(!cur)chatUI()});
 setInterval(refreshChats,5000);
 // Slower than the chat list: a suggestion appears about once a day, and the answer takes a minute.
-setInterval(loadSuggestions,12000);
+setInterval(()=>{loadSuggestions();if($('settingsView').classList.contains('on'))loadJobs()},12000);
 </script>
 </body>
 </html>

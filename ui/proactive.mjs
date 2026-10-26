@@ -17,6 +17,9 @@
 //
 //   node proactive.mjs            # the state and the last suggestions
 //   node proactive.mjs run        # one run now, printing what it decided
+//
+// The same list of items also carries what a scheduled job answered (ui/jobs.mjs, kind 'job'), so
+// the panel card and the dot on the menu bar are one mechanism; those never count as suggestions.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -88,7 +91,7 @@ function nextAt() {
 export function due(now = Date.now(), force = false) {
   if (!state.enabled) return 'off';
   if (running) return 'running';
-  if (state.items.filter(i => i.status === 'new').length >= MAX_WAITING) return 'waiting';
+  if (state.items.filter(i => i.status === 'new' && i.kind !== 'job').length >= MAX_WAITING) return 'waiting';
   if (!force && now < nextAt()) return 'early';
   if (!force && isQuiet(new Date(now))) return 'quiet';
   return null;
@@ -135,6 +138,14 @@ export function markSeen(id) {
   save();
 }
 export function get(id) { return state.items.find(i => i.id === id) || null }
+// A card from elsewhere (a scheduled job's answer): shown like a suggestion, never deduplicated
+// against one, never counted as one.
+export function push(item) {
+  state.items.unshift({ status: 'new', seen: false, ...item, at: item.at || Date.now() });
+  state.items = state.items.slice(0, KEEP);
+  save();
+  return item;
+}
 
 // ---- the run itself ----
 
@@ -157,7 +168,7 @@ function userPrompt(ctx) {
     lines.push('', '지금 열려 있는 대화:', ...chats.map(c => `- ${c.cwd}${c.title ? ' · ' + c.title : ''}`));
   }
 
-  const past = state.items.slice(0, 12);
+  const past = state.items.filter(i => i.kind !== 'job').slice(0, 12);
   if (past.length) {
     lines.push('', '이미 한 제안 (되풀이 금지 — 표현만 바꾸는 것도 안 됨):');
     for (const i of past) {
@@ -232,7 +243,7 @@ function alike(a, b) {
 // would actually run — is compared on its own, and only within the same project. Two suggestions
 // about different folders are never the same suggestion.
 function repeats(item) {
-  return state.items.slice(0, 20).some(old =>
+  return state.items.filter(i => i.kind !== 'job').slice(0, 20).some(old =>
     (!old.cwd || !item.cwd || old.cwd === item.cwd) &&
     (alike(item.action, old.action) || alike(item.title, old.title)));
 }
@@ -258,7 +269,7 @@ async function ask(ctx) {
   let added = 0;
   for (const candidate of raw.slice(0, 3)) {
     // Already counted as soon as it is unshifted, so this also stops a run that arrives with two.
-    if (state.items.filter(i => i.status === 'new').length >= MAX_WAITING) break;
+    if (state.items.filter(i => i.status === 'new' && i.kind !== 'job').length >= MAX_WAITING) break;
     const item = worthwhile(candidate);
     if (!item) { dropped.push(clean(candidate?.title || '?', 40)); continue }
     state.items.unshift(item);

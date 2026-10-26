@@ -15,6 +15,7 @@ import http from 'node:http';import fs from 'node:fs';import os from 'node:os';i
 import * as memory from './memory.mjs';
 import * as proactive from './proactive.mjs';
 import * as sessions from './sessions.mjs';
+import * as jobs from './jobs.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.dirname(here);
 const PORT=Number(process.env.BISU_UI_PORT||7878);
@@ -330,9 +331,28 @@ const server=http.createServer(async(req,res)=>{
    if(action!=='accept')return json(res,400,{error:'unknown action'});
    if(!KEY)return json(res,400,{error:'No OpenRouter key: save one for https://openrouter.ai in Dec first.'});
    proactive.resolve(item.id,'accepted');
+   // A job's card continues the run that produced it, so "그럼 고쳐" has the whole context; a
+   // suggestion starts a fresh chat and sends what it proposed.
+   if(item.kind==='job'){if(!item.sessionId)return json(res,200,proactive.snapshot());
+    const c=await newChat({cwd:item.cwd||undefined,resume:item.sessionId});return json(res,200,{...proactive.snapshot(),chat:publicChat(c)})}
    const c=await newChat({cwd:item.cwd||undefined});
    say(c,item.action);
    return json(res,200,{...proactive.snapshot(),chat:publicChat(c)})}
+  // Scheduled jobs (ui/jobs.mjs): the files are the jobs; this lists them with their state, runs one
+  // now (answered at once, the page polls), flips enabled in the file, or deletes the file.
+  if(m==='GET'&&p==='/api/jobs')return json(res,200,jobs.snapshot());
+  const jm=/^\/api\/jobs\/([A-Za-z0-9][A-Za-z0-9._-]{0,60})$/.exec(p);
+  if(jm&&m==='POST'){const {action}=await body(req);
+   try{
+    if(action==='run'){const s=jobs.snapshot(),j=s.jobs.find(x=>x.slug===jm[1]);
+     if(!j)return json(res,404,{error:'no such job'});if(j.error)return json(res,400,{error:j.error});if(s.running)return json(res,409,{error:'another job is running'});
+     if(!KEY)return json(res,400,{error:'No OpenRouter key: save one for https://openrouter.ai in Dec first.'});
+     jobs.run(jm[1],{reason:'page',force:true}).catch(e=>console.error('bisu jobs:',e.message));
+     return json(res,202,jobs.snapshot())}
+    if(action==='enable'||action==='disable')return json(res,200,jobs.setEnabled(jm[1],action==='enable'));
+    if(action==='delete')return json(res,200,jobs.remove(jm[1]));
+    return json(res,400,{error:'unknown action'})
+   }catch(e){return json(res,e.status||500,{error:e.message})}}
   if(m==='GET'&&p==='/api/chats')return json(res,200,{chats:[...chats.values()].map(publicChat).sort((a,b)=>b.created-a.created),home:os.homedir()});
   if(m==='POST'&&p==='/api/chats'){if(!KEY)return json(res,400,{error:'No OpenRouter key: save one for https://openrouter.ai in Dec first.'});const c=await newChat(await body(req));return json(res,200,{chat:publicChat(c)})}
   const cm=/^\/api\/chats\/([0-9a-f-]{36})(\/[a-z]+)?$/.exec(p);const c=cm&&chats.get(cm[1]);
@@ -362,11 +382,13 @@ const proactiveContext=async()=>({
 });
 proactive.setContext(proactiveContext);
 proactive.start();
-for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{proactive.stop();for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
+jobs.setContext(proactiveContext);
+jobs.start();
+for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{proactive.stop();jobs.stop();for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
 // The desktop shell holds this pipe open for as long as it is running, so the pipe closing means the
 // shell quit or was force-killed. Without this the engine, dec and every Claude Code run outlive it.
 if(process.env.BISU_UI_PARENT==='stdin'){
- process.stdin.on('end',()=>{proactive.stop();for(const c of chats.values())c.proc?.kill('SIGTERM');process.exit(0)});
+ process.stdin.on('end',()=>{proactive.stop();jobs.stop();for(const c of chats.values())c.proc?.kill('SIGTERM');process.exit(0)});
  process.stdin.on('error',()=>{});
  process.stdin.resume();
 }
