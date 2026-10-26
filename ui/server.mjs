@@ -14,6 +14,7 @@
 import http from 'node:http';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {execFile,spawn} from 'node:child_process';import {randomBytes,randomUUID} from 'node:crypto';import {fileURLToPath} from 'node:url';
 import * as memory from './memory.mjs';
 import * as proactive from './proactive.mjs';
+import * as sessions from './sessions.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.dirname(here);
 const PORT=Number(process.env.BISU_UI_PORT||7878);
@@ -293,6 +294,10 @@ const server=http.createServer(async(req,res)=>{
   if(m==='GET'&&p==='/api/models')return json(res,200,{models:await models()});
   if(m==='GET'&&p==='/api/account')return json(res,200,await account());
   if(m==='GET'&&p==='/api/runs')return json(res,200,{runs:await runs()});
+  // Past conversations, the same index the assistant's session_search uses (ui/sessions.mjs);
+  // refreshed in a child process first so a chat that just ended is already in it.
+  if(m==='GET'&&p==='/api/search'){const q=url.searchParams.get('q')||'';const r=await sessions.refresh();
+   return json(res,200,{...sessions.search(q,{days:Number(url.searchParams.get('days'))||0,limit:12}),refreshError:r?.error||null})}
   if(m==='POST'&&p==='/api/roles'){const input=await body(req),next=readConfig();
    for(const k of Object.keys(ROLES)){const v=input[k];if(v===null||v===ROLES[k])delete next[k];else if(typeof v==='string'){if(!SLUG.test(v))return json(res,400,{error:`not an OpenRouter slug: ${v}`});next[k]=v}}
    writeConfig(next);return json(res,200,{roles:roles()})}

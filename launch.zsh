@@ -42,19 +42,25 @@ else
   cp "$base" "$sysprompt"
 fi
 
-# Computer use: bisu's own MCP server, so a step on the Mac is one tool call with real coordinates
-# instead of a shell script that guesses. The read/look/act tools are pre-allowed because the person
-# already asked bisu to drive the Mac; cu_approve is deliberately absent, so running a destructive
-# step goes through the approval card like any other risky action.
+# bisu's own MCP server (ui/cu/server.mjs), two things in one process:
+#  - past sessions: session_search / session_show over the FTS5 index of earlier conversations
+#    (ui/sessions.mjs). Pre-allowed: they only read transcripts of bisu's own runs
+#    (BISU_SEARCH_ALL=1 widens that to every Claude Code transcript on this Mac).
+#  - computer use: a step on the Mac is one tool call with real coordinates instead of a shell
+#    script that guesses. The read/look/act tools are pre-allowed because the person already asked
+#    bisu to drive the Mac; cu_approve is deliberately absent, so running a destructive step goes
+#    through the approval card like any other risky action. BISU_CU=0 leaves computer use out.
 mcp=""
-if [ -f "$root/ui/cu/server.mjs" ] && [ "${BISU_CU:-1}" != "0" ]; then
+if [ -f "$root/ui/cu/server.mjs" ] && command -v node >/dev/null 2>&1; then
   mcp="$HOME/Library/Application Support/bisu/mcp.json"
   mkdir -p "${mcp:h}"
   cat > "$mcp" <<JSON
-{"mcpServers":{"bisu":{"command":"$(command -v node)","args":["$root/ui/cu/server.mjs"],"env":{"BISU_CU_VISION_MODEL":"${BISU_CU_VISION_MODEL:-z-ai/glm-5.3-flash}","BISU_CU_DECISION_MODEL":"${BISU_CU_DECISION_MODEL:-gpt-6-luna}"}}}}
+{"mcpServers":{"bisu":{"command":"$(command -v node)","args":["$root/ui/cu/server.mjs"],"env":{"BISU_CU":"${BISU_CU:-1}","BISU_SEARCH_ALL":"${BISU_SEARCH_ALL:-0}","BISU_CU_VISION_MODEL":"${BISU_CU_VISION_MODEL:-z-ai/glm-5.3-flash}","BISU_CU_DECISION_MODEL":"${BISU_CU_DECISION_MODEL:-gpt-6-luna}"}}}}
 JSON
   extra+=(--mcp-config "$mcp" --strict-mcp-config)
-  extra+=(--allowedTools "mcp__bisu__cu_look,mcp__bisu__cu_state,mcp__bisu__cu_decide,mcp__bisu__cu_click,mcp__bisu__cu_type,mcp__bisu__cu_key,mcp__bisu__cu_scroll,mcp__bisu__cu_wait,mcp__bisu__cu_screenshot,mcp__bisu__cu_ground")
+  allowed="mcp__bisu__session_search,mcp__bisu__session_show"
+  [ "${BISU_CU:-1}" != "0" ] && allowed+=",mcp__bisu__cu_look,mcp__bisu__cu_state,mcp__bisu__cu_decide,mcp__bisu__cu_click,mcp__bisu__cu_type,mcp__bisu__cu_key,mcp__bisu__cu_scroll,mcp__bisu__cu_wait,mcp__bisu__cu_screenshot,mcp__bisu__cu_ground"
+  extra+=(--allowedTools "$allowed")
 fi
 
 exec claude --agents "$agents" --tools "$tools" --append-system-prompt-file "$sysprompt" "${extra[@]}" "$@"

@@ -14,6 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawn, execFile} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import * as sessions from '../sessions.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SUPPORT = path.join(os.homedir(), 'Library', 'Application Support', 'bisu');
@@ -456,7 +457,44 @@ const tools = {
   },
 };
 
-const definitions = [
+// ---- past sessions (ui/sessions.mjs) ----
+// The index is brought up to date in a child process before a search, so a conversation that ended
+// a minute ago is already findable; a refresh that fails still leaves the old index searchable.
+
+tools.session_search = async ({query, days, project, limit} = {}) => {
+  const r = await sessions.refresh();
+  return sessions.searchText(query, {days: Number(days) || 0, project: project ? String(project) : '', limit: Math.max(1, Math.min(20, Number(limit) || 8))}, r?.error ? `index refresh failed: ${r.error}` : '');
+};
+tools.session_show = async ({id, offset, limit} = {}) => {
+  await sessions.refresh();
+  return sessions.show(id, {offset: Number(offset) || 0, limit: Number(limit) || 40});
+};
+
+const sessionDefinitions = [
+  {
+    name: 'session_search',
+    description: 'Full-text search over past bisu conversations (what the person and bisu said; not tool output). Use it when they refer to earlier work — "지난번에", "저번 주에 했던", "전에 얘기한" — or ask what was done or decided. Korean works with any word of two or more characters. Returns the best-matching sessions with the matching lines and an id for session_show.',
+    inputSchema: {type: 'object', properties: {
+      query: {type: 'string', description: 'a few words that would appear in the conversation, e.g. "결제 테스트"'},
+      days: {type: 'number', description: 'only sessions from the last N days'},
+      project: {type: 'string', description: 'only sessions whose folder path contains this, e.g. "PawOV"'},
+      limit: {type: 'number', description: 'how many sessions to return (default 8, max 20)'},
+    }, required: ['query']},
+  },
+  {
+    name: 'session_show',
+    description: 'Read one past session in order (person and bisu, with times), 40 messages a page. The 8-character id prefix from session_search is enough. Read before summarising what happened; do not paste the transcript back, say what it amounts to.',
+    inputSchema: {type: 'object', properties: {
+      id: {type: 'string', description: 'session id or its prefix'},
+      offset: {type: 'number', description: 'skip this many messages (for the next page)'},
+      limit: {type: 'number', description: 'messages per page (default 40, max 200)'},
+    }, required: ['id']},
+  },
+];
+
+// BISU_CU=0 keeps the session tools and drops computer use (no Accessibility prompt on a machine
+// where bisu is only ever a terminal sidekick).
+const cuDefinitions = [
   {
     name: 'cu_look',
     description: 'Read the frontmost window through the Accessibility API: every control with its real label and frame. This is the starting point for any "use this app" request — it is exact and needs no screenshot.',
@@ -530,6 +568,8 @@ const definitions = [
     inputSchema: {type: 'object', properties: {}},
   },
 ];
+const definitions = process.env.BISU_CU === '0' ? sessionDefinitions : [...sessionDefinitions, ...cuDefinitions];
+const allowed = new Set(definitions.map(d => d.name));
 
 // ---- MCP plumbing ----
 
@@ -538,7 +578,7 @@ function send(obj) {
 }
 
 async function callTool(name, args) {
-  const fn = tools[name];
+  const fn = allowed.has(name) ? tools[name] : null;
   if (!fn) throw Object.assign(Error(`unknown tool ${name}`), {code: -32602});
   const text = await fn(args || {});
   return {content: [{type: 'text', text: String(text)}], isError: /^(click failed|typing failed|key failed|scroll failed|screenshot failed|could not|no decision|that element id|no element|\[.*\] has no clickable)/.test(String(text))};
@@ -554,7 +594,7 @@ async function handle(msg) {
       return reply({
         protocolVersion: params?.protocolVersion || '2024-11-05',
         capabilities: {tools: {listChanged: false}},
-        serverInfo: {name: 'bisu-cu', version: '0.1.0'},
+        serverInfo: {name: 'bisu', version: '0.2.0'},
       });
     }
     if (method === 'ping') return reply({});

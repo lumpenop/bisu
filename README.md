@@ -53,6 +53,7 @@ These subagents exist only inside `bisu`; your normal `claude` never sees them.
 
 - **Core tools only, no MCP:** `bisu` keeps what a coding sidekick needs and drops the rest, cutting every request from ~25k to ~6.8k input tokens (about a quarter of the cost; with DeepSeek flash the API time per request went from ~3.2 s to ~1.8 s).
   - Kept: `Bash`, `Read`, `Edit`, `Write`, `Glob`, `Grep`, `NotebookEdit`, `WebFetch`, `WebSearch`, and `Task` for the developer / publisher / refactorer subagents.
+  - Plus bisu's own MCP server: `session_search` / `session_show` (below) and the `cu_*` computer-use tools (`bisu app`).
   - Dropped: scheduling and background work (`CronCreate`, `CronDelete`, `CronList`, `ScheduleWakeup`, `Monitor`, `Workflow`, `TaskCreate`, `TaskGet`, `TaskList`, `TaskOutput`, `TaskStop`, `TaskUpdate`), session and app features (`SendMessage`, `PushNotification`, `EnterWorktree`, `ExitWorktree`, `Skill`, `DesignSync`, `ReportFindings`, `ShareOnboardingGuide`), and every MCP server from your Claude config (`--strict-mcp-config`); the subscription-only ones never worked in `bisu` anyway.
   - `BISU_TOOLS=default bisu` brings back the full set, or pass your own comma-separated list.
 - **Short answers:** [prompt.md](prompt.md) is appended to Claude Code's system prompt: answer in the user's language, result first, no narration, full detail only for errors or when asked. It also holds the delegation rules. Edit it to taste.
@@ -70,6 +71,16 @@ A chat forgets. The things you would otherwise say again — 한국어로 짧게
 - **A run reads it once, at start.** A chat that is already open keeps the memory it began with, and anything you save counts from the next chat on.
 
 It deliberately does not touch `~/.claude/CLAUDE.md`, so your normal `claude` is unaffected, and it does not summarise past conversations — a memory exists because you said it, or because you added it.
+
+## What was actually said: session search
+
+Memory is what you asked bisu to keep. Everything else that was said is still in Claude Code's transcripts, and bisu can search them: "지난주에 결제 테스트 어떻게 됐지" is one tool call, not a guess.
+
+- **Two tools, pre-allowed:** `session_search` finds the past sessions that mention a few words and shows the matching lines with a date, a folder and an id; `session_show` reads one of them in order, a page at a time. [prompt.md](prompt.md) tells the assistant to use them whenever you point at earlier work ("지난번에", "저번 주에 했던") and to answer with what it amounts to, never the transcript.
+- **Korean works at two characters.** The index is SQLite FTS5 with the trigram tokenizer ([ui/sessions.mjs](ui/sessions.mjs)), so "결제" finds "실결제했는데" without a word boundary; one- and two-character terms fall back to a scan of the indexed text, which is small because only what you and bisu said is indexed, never tool calls or tool output.
+- **Only bisu's own runs.** A transcript is indexed when its model is an OpenRouter name, so what you say to your normal `claude` never reaches an OpenRouter model through a search result. `BISU_SEARCH_ALL=1` indexes every Claude Code transcript on the Mac instead (the index is rebuilt when the setting changes).
+- **Always current, costs nothing to keep.** The index lives in `~/Library/Application Support/bisu/sessions.sqlite` and is brought up to date in a short-lived process before each search: unchanged transcripts cost one `stat`, a changed one is re-read whole. A few hundred transcripts take about a second cold and a few milliseconds after that. No background process, nothing sent anywhere.
+- The History tab of `bisu ui` has the same search, with *Continue* on each hit.
 
 ## Coming to you first
 

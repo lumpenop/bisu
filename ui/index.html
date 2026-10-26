@@ -97,6 +97,9 @@ aside{width:260px;border-right:1px solid var(--line);display:flex;flex-direction
 .meta{font-size:12px;color:var(--muted);margin-top:4px;min-height:18px}
 .actions{display:flex;gap:10px;align-items:center;margin-top:14px}
 .table{overflow-x:auto}
+.hit{padding:8px 0;border-top:1px solid var(--line)}.hitHead{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.hitHead .n{color:var(--muted);font-size:12px}.hitHead button{margin-left:auto;padding:3px 9px;font-size:12px}
+.hitLine{font-size:13px;color:var(--muted);margin-top:4px;white-space:pre-wrap;word-break:break-word}.hitLine .who{color:var(--ink);font-weight:600;margin-right:4px}.hitLine mark{background:transparent;color:var(--ink);font-weight:600}
+#searchForm{display:flex;gap:8px}#searchForm input{flex:1}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{text-align:left;padding:8px 10px;border-top:1px solid var(--line);vertical-align:top}
 th{font-size:12px;color:var(--muted);font-weight:600;border-top:0;white-space:nowrap}
@@ -227,6 +230,12 @@ body.panel .view.pop.on{animation:popIn .13s ease-out}
 </div>
 
 <div class="view" id="historyView"><div class="page"><div>
+ <section>
+  <h2>Search past conversations</h2>
+  <form id="searchForm" class="row"><input type="text" id="searchQ" placeholder="a few words that were said, e.g. 결제 테스트" autocomplete="off"><button class="primary">Search</button></form>
+  <div id="searchOut"></div>
+  <p class="note" id="searchNote">What you and bisu said in earlier runs, not tool output. The assistant has the same search as <code>session_search</code>.</p>
+ </section>
  <section>
   <h2>Recent runs · last 60 days</h2>
   <div class="table"><table><thead><tr><th>When</th><th>Project · task</th><th>Models</th><th>Turns</th><th>Tokens in / out</th><th>Est. cost</th><th>Took</th><th></th></tr></thead><tbody id="runs"><tr><td colspan="8" class="note">loading…</td></tr></tbody></table></div>
@@ -711,6 +720,15 @@ $('sugRun').onclick=async()=>{
 
 // ---- history ----
 let runCache=[];
+$('searchForm').onsubmit=async e=>{e.preventDefault();const q=$('searchQ').value.trim();const out=$('searchOut');if(!q){out.innerHTML='';return}
+ out.innerHTML='<p class="note">searching…</p>';
+ try{const r=await api('/api/search?q='+encodeURIComponent(q));
+  if(!r.sessions.length){out.innerHTML=`<p class="note">Nothing in ${r.total} indexed sessions mentions ${r.words.map(w=>'<b>'+esc(w)+'</b>').join(' ')}.${r.refreshError?' (index refresh failed: '+esc(r.refreshError)+')':''}</p>`;return}
+  out.innerHTML=`<p class="note">${r.sessions.length} of ${r.total} sessions${r.mode==='or'?' (any of the words)':''}</p>`+r.sessions.map(s=>`<div class="hit"><div class="hitHead"><span class="n">${s.start?whenText(s.start):'—'}</span> <b>${esc(s.cwd?s.cwd.split('/').pop():'?')}</b> · ${esc((s.title||s.prompt||'').slice(0,90))}${s.cwd?` <button data-resume="${esc(s.id)}" data-cwd="${esc(s.cwd)}">Continue</button>`:''}</div>${s.lines.map(l=>`<div class="hitLine"><span class="who">${l.role==='user'?'you':'bisu'}</span> ${mark(l.snip)}</div>`).join('')}</div>`).join('');
+  for(const b of out.querySelectorAll('[data-resume]'))b.onclick=()=>startChat({cwd:b.dataset.cwd,resume:b.dataset.resume});
+ }catch(e){out.innerHTML=`<p class="note err">${esc(e.message)}</p>`}};
+// The matching words come back wrapped in ** from the index; everything else is escaped.
+const mark=s=>esc(s).replace(/\*\*(.+?)\*\*/g,'<mark>$1</mark>');
 async function loadRuns(){try{const {runs}=await api('/api/runs');runCache=runs;
  const dirs=[...new Set(runs.map(r=>r.cwd).filter(d=>d&&!/^\/(private\/)?(tmp|var)\//.test(d)))].slice(0,20);$('cwdList').innerHTML=dirs.map(d=>`<option value="${esc(short(d))}">`).join('');
  if(!$('cwd').value){let last='';try{last=localStorage.getItem('bisu.cwd')||''}catch{};$('cwd').value=last||short(dirs[0]||'')}
