@@ -26,6 +26,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { holdsSchedule, releaseSchedule } from './lock.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(here);
@@ -34,6 +35,7 @@ const FILE = path.join(CONFIG_DIR, 'proactive.json');
 
 const DEFAULTS = { enabled: true, intervalHours: 24, quietFrom: 23, quietTo: 8 };
 const KEEP = 40;      // how much history the page can show, and how far back dedupe looks
+const JOB_KEEP = 20;  // job answers, counted apart: an hourly job must not push suggestions out of dedupe
 const MAX_WAITING = 2; // unread suggestions before it stops looking for more
 const RETRY_MS = 30 * 60e3;
 const TIMEOUT_MS = Number(process.env.BISU_SUGGEST_TIMEOUT || 150) * 1e3;
@@ -59,11 +61,18 @@ let running = null;
 // the suggestion run still works, with only the memory and whatever it can read itself.
 let contextFn = async () => ({});
 
+// Newest first, with suggestions and job answers each under their own cap.
+function trimmed(items) {
+  const sug = [], job = [];
+  for (const i of items) (i.kind === 'job' ? job : sug).push(i);
+  return [...sug.slice(0, KEEP), ...job.slice(0, JOB_KEEP)].sort((a, b) => (b.at || 0) - (a.at || 0));
+}
 function save() {
   try {
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
     const tmp = FILE + '.' + process.pid + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify({ ...state, items: state.items.slice(0, KEEP) }, null, 1));
+    state.items = trimmed(state.items);
+    fs.writeFileSync(tmp, JSON.stringify(state, null, 1));
     fs.renameSync(tmp, FILE);
   } catch (e) { console.error('bisu proactive: cannot save:', e.message) }
 }
@@ -103,7 +112,7 @@ export function snapshot() {
     quietFrom: state.quietFrom, quietTo: state.quietTo,
     lastRun: state.lastRun || null, lastError: state.lastError,
     running: !!running, due: due(), nextAt: nextAt(),
-    items: state.items.slice(0, 20),
+    items: state.items.slice(0, 30),
     waiting: state.items.filter(i => i.status === 'new' && !i.seen).length,
   };
 }
@@ -142,7 +151,7 @@ export function get(id) { return state.items.find(i => i.id === id) || null }
 // against one, never counted as one.
 export function push(item) {
   state.items.unshift({ status: 'new', seen: false, ...item, at: item.at || Date.now() });
-  state.items = state.items.slice(0, KEEP);
+  state.items = trimmed(state.items);
   save();
   return item;
 }
@@ -275,7 +284,7 @@ async function ask(ctx) {
     state.items.unshift(item);
     added++;
   }
-  state.items = state.items.slice(0, KEEP);
+  state.items = trimmed(state.items);
   return { added, dropped };
 }
 
@@ -284,10 +293,11 @@ async function ask(ctx) {
 export async function run({ reason = 'timer', force = false } = {}) {
   const why = due(Date.now(), force);
   if (why) return { skipped: why };
+  // Taken before the first await, so a click during the context gathering sees a run already going.
+  running = { at: Date.now(), reason };
   const ctx = await contextFn().catch(() => ({}));
   // Nothing to spend: without a key the run would fail every ten minutes for no reason.
-  if (ctx.key === false) return { skipped: 'nokey' };
-  running = { at: Date.now(), reason };
+  if (ctx.key === false) { running = null; return { skipped: 'nokey' } }
   state.lastAttempt = Date.now();
   save();
   try {
@@ -309,12 +319,12 @@ let timer = null;
 // Started by the engine. The first look waits a little, so opening bisu is never slowed down by it.
 export function start() {
   if (timer || process.env.BISU_PROACTIVE === '0') return;
-  const tick = () => { run().catch(() => {}) };
+  const tick = () => { if (holdsSchedule()) run().catch(() => {}) };
   setTimeout(tick, 45e3).unref?.();
   timer = setInterval(tick, TICK_MS);
   timer.unref?.();
 }
-export function stop() { clearInterval(timer); timer = null; try { child?.kill('SIGTERM') } catch {} }
+export function stop() { clearInterval(timer); timer = null; try { child?.kill('SIGTERM') } catch {} releaseSchedule() }
 
 // ---- command line ----
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

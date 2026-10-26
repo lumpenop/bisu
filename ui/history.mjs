@@ -61,7 +61,7 @@ function runs(slugSource) {
       if (j.type === 'ai-title' && j.aiTitle) s.title = j.aiTitle;
       if (j.type === 'user' && !j.isSidechain && !s.prompt) {
         const t = textOf(j.message?.content).trim();
-        if (t && !t.startsWith('<')) s.prompt = t.slice(0, 300);
+        if (t && !t.startsWith('<')) s.prompt = t.replace(/<bisu-context>[\s\S]*?(<\/bisu-context>|$)/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300) || null;
       }
       const m = j.message;
       if (j.type === 'assistant' && m?.model && m.usage) {

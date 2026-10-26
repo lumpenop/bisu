@@ -9,7 +9,11 @@
 // Deliberate limits:
 //  * read-only tools unless the file says otherwise (`tools: edit` may change files in its folder,
 //    `tools: full` may also run commands) — a job that can act is the person's explicit choice,
-//    visible in the file, never the default;
+//    visible in the file, never the default. Such a job also waits for the person's approval in the
+//    Settings tab, given for that exact file: anything that changes the file (an agent included)
+//    takes the approval away again, so an agent can never write itself a job with more power;
+//  * a job that can act needs its own folder: not the home folder and not anything that contains
+//    bisu's own settings, so it cannot rewrite its jobs or its memory;
 //  * one job at a time, never two runs of the same job, and a job missed while the Mac was asleep
 //    runs once when it wakes, not once per missed slot;
 //  * a failed run leaves a card too, and waits for its next slot instead of retrying in a loop.
@@ -21,15 +25,20 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as proactive from './proactive.mjs';
+import { holdsSchedule, releaseSchedule } from './lock.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(here);
 export const DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu', 'jobs');
 const STATE = path.join(os.homedir(), 'Library', 'Application Support', 'bisu', 'jobs.json');
 const TICK_MS = 60e3;
+// What a job that may act can never have as its folder, or inside it: its own jobs and memory, Claude
+// Code's settings (which would grant future runs anything), and bisu's support files.
+const PROTECTED = [path.dirname(DIR), path.join(os.homedir(), '.config', 'bisu'), path.join(os.homedir(), '.claude'),
+  path.join(os.homedir(), 'Library', 'Application Support', 'bisu')];
 const TOOLS = {
   read: 'Read,Glob,Grep,WebFetch,WebSearch',
   edit: '', // Claude Code's core set (launch.zsh), edits in the folder approved, commands refused
@@ -106,7 +115,7 @@ function parseJob(file) {
   const slug = path.basename(file, '.md');
   let st = null, text = '';
   try { st = fs.statSync(file); text = fs.readFileSync(file, 'utf8') } catch (e) { return { slug, file, error: e.message } }
-  const job = { slug, file, mtime: st.mtimeMs, name: slug, schedule: null, cron: null, at: null, cwd: os.homedir(), tools: 'read', enabled: true, model: null, timeoutMin: 10, prompt: '', error: null };
+  const job = { slug, file, mtime: st.mtimeMs, hash: createHash('sha256').update(text).digest('hex'), name: slug, schedule: null, cron: null, at: null, cwd: os.homedir(), tools: 'read', enabled: true, model: null, timeoutMin: 10, prompt: '', error: null };
   try {
     const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
     if (!m) throw Error('the file needs a frontmatter block (--- … ---) and the request below it');
@@ -127,6 +136,12 @@ function parseJob(file) {
     if (!job.cron && !job.at) throw Error('needs a `schedule:` (cron, five fields) or an `at:` (one time)');
     if (!job.prompt) throw Error('the request below the frontmatter is empty');
     if (!fs.statSync(job.cwd, { throwIfNoEntry: false })?.isDirectory()) throw Error(`cwd: ${job.cwd} is not a folder`);
+    if (job.tools !== 'read') {
+      const cwd = path.resolve(job.cwd);
+      const inside = (a, b) => a === b || a.startsWith(b + path.sep);
+      if (cwd === os.homedir() || PROTECTED.some(d => inside(d, cwd) || inside(cwd, d)))
+        throw Error(`tools: ${job.tools} needs its own project folder as cwd — not ${cwd === os.homedir() ? 'the home folder' : 'a folder that holds bisu\'s or Claude Code\'s settings'}`);
+    }
   } catch (e) { job.error = String(e.message || e) }
   return job;
 }
@@ -139,8 +154,10 @@ export function list() {
 
 // ---- state: what ran, when, how it went ----
 
-let state = { runs: {} };
-try { state = JSON.parse(fs.readFileSync(STATE, 'utf8')) || state; if (!state.runs) state.runs = {} } catch {}
+let state = { runs: {}, approved: {} };
+try { state = JSON.parse(fs.readFileSync(STATE, 'utf8')) || state } catch {}
+if (!state.runs || typeof state.runs !== 'object') state.runs = {};
+if (!state.approved || typeof state.approved !== 'object') state.approved = {};
 function save() {
   try {
     fs.mkdirSync(path.dirname(STATE), { recursive: true });
@@ -151,10 +168,13 @@ function save() {
 }
 const runOf = slug => state.runs[slug] || (state.runs[slug] = { lastRun: 0, lastAttempt: 0, lastError: null, lastResult: null, lastSession: null });
 
+// A job that may change things runs only as the person approved it, byte for byte.
+export const needsApproval = job => !job.error && job.tools !== 'read' && state.approved[job.slug] !== job.hash;
+
 // When this job fires next: after its last run, or after the file was written if it never ran, so
 // a job created at nine with "every day at eight" waits for tomorrow instead of firing at once.
 export function nextAt(job, now = Date.now()) {
-  if (job.error || !job.enabled) return null;
+  if (job.error || !job.enabled || needsApproval(job)) return null;
   const r = runOf(job.slug);
   if (job.at) return r.lastRun >= job.at ? null : job.at;
   return nextRun(job.cron, Math.max(r.lastRun || 0, job.mtime || 0));
@@ -171,7 +191,7 @@ export function snapshot() {
     running: running ? { ...running } : null,
     jobs: list().map(j => {
       const r = runOf(j.slug);
-      return { slug: j.slug, name: j.name, schedule: j.schedule, once: !!j.at, cwd: j.cwd, tools: j.tools, enabled: j.enabled, model: j.model, error: j.error,
+      return { slug: j.slug, name: j.name, schedule: j.schedule, once: !!j.at, cwd: j.cwd, tools: j.tools, enabled: j.enabled, model: j.model, error: j.error, needsApproval: needsApproval(j), prompt: j.prompt.slice(0, 600),
         nextAt: nextAt(j, now), lastRun: r.lastRun || null, lastError: r.lastError, lastResult: r.lastResult, lastSession: r.lastSession, running: running?.slug === j.slug };
     }),
   };
@@ -221,11 +241,14 @@ export async function run(slug, { reason = 'timer', force = false } = {}) {
   const job = list().find(j => j.slug === slug);
   if (!job) throw Object.assign(Error(`no job "${slug}"`), { status: 404 });
   if (job.error) throw Object.assign(Error(`${job.slug}: ${job.error}`), { status: 400 });
+  if (needsApproval(job)) return { skipped: 'approval' };
   if (running) return { skipped: 'running' };
   if (!force && !job.enabled) return { skipped: 'off' };
-  const ctx = await contextFn().catch(() => ({}));
-  if (ctx.key === false) return { skipped: 'nokey' };
+  // Taken before the first await: a second click, or the clock ticking while the context is being
+  // gathered, must already see this run.
   running = { slug: job.slug, at: Date.now(), reason };
+  const ctx = await contextFn().catch(() => ({}));
+  if (ctx.key === false) { running = null; return { skipped: 'nokey' } }
   const r = runOf(job.slug);
   r.lastAttempt = Date.now();
   save();
@@ -263,12 +286,21 @@ export function setEnabled(slug, on) {
   fs.writeFileSync(job.file, text);
   return snapshot();
 }
+export function approve(slug) {
+  const job = list().find(j => j.slug === slug);
+  if (!job) throw Object.assign(Error(`no job "${slug}"`), { status: 404 });
+  if (job.error) throw Object.assign(Error(`${job.slug}: ${job.error}`), { status: 400 });
+  state.approved[job.slug] = job.hash;
+  save();
+  return snapshot();
+}
 export function remove(slug) {
   if (!slugOk(slug)) throw Object.assign(Error('bad job name'), { status: 400 });
   const file = path.join(DIR, `${slug}.md`);
   if (!fs.existsSync(file)) throw Object.assign(Error(`no job "${slug}"`), { status: 404 });
   fs.unlinkSync(file);
   delete state.runs[slug];
+  delete state.approved[slug];
   save();
   return snapshot();
 }
@@ -276,7 +308,7 @@ export function remove(slug) {
 // ---- the clock ----
 
 async function tick() {
-  if (running) return;
+  if (running || !holdsSchedule()) return;
   const now = Date.now();
   for (const job of list()) {
     const at = nextAt(job, now);
@@ -292,7 +324,7 @@ export function start() {
   timer = setInterval(() => { tick().catch(() => {}) }, TICK_MS);
   timer.unref?.();
 }
-export function stop() { clearInterval(timer); timer = null; try { child?.kill('SIGTERM') } catch {} }
+export function stop() { clearInterval(timer); timer = null; try { child?.kill('SIGTERM') } catch {} releaseSchedule() }
 
 // ---- command line ----
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -301,6 +333,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (mode === 'run' && arg) {
     const out = await run(arg, { reason: 'cli', force: true });
     if (out.error) process.stdout.write(`bisu: ${arg} failed — ${out.error}\n`);
+    else if (out.skipped === 'approval') process.stdout.write(`bisu: ${arg} may change things and waits for approval in Settings (bisu ui)\n`);
     else if (out.skipped) process.stdout.write(`bisu: not now (${out.skipped})\n`);
     else process.stdout.write(`${out.text.trim()}\n\n(session ${out.session}${out.cost ? `, $${out.cost.toFixed(4)}` : ''})\n`);
   } else if (mode === 'next' && arg) {
@@ -310,7 +343,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const s = snapshot();
     if (!s.jobs.length) process.stdout.write(`no jobs in ${s.dir}\n`);
     for (const j of s.jobs) {
-      process.stdout.write(`${j.slug}  ${j.name}  [${j.schedule}${j.once ? ', once' : ''}]  ${j.tools}  ${j.enabled ? '' : '(off) '}${j.error ? `ERROR: ${j.error}` : `next ${when(j.nextAt)}`}\n`);
+      process.stdout.write(`${j.slug}  ${j.name}  [${j.schedule}${j.once ? ', once' : ''}]  ${j.tools}  ${j.enabled ? '' : '(off) '}${j.error ? `ERROR: ${j.error}` : j.needsApproval ? 'waits for approval in Settings' : `next ${when(j.nextAt)}`}\n`);
       if (j.lastRun) process.stdout.write(`    last ${when(j.lastRun)}: ${j.lastError ? `failed — ${j.lastError}` : j.lastResult || 'ok'}\n`);
     }
   }

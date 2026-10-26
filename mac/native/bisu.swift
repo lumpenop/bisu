@@ -475,6 +475,8 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
   private var axMenuItem: NSMenuItem?
 
   private let shortcutLabel = "⌥Space"
+  private var quitting = false
+  private var engineRestarts: [Date] = []
   private let minW: CGFloat = 380
   private let minH: CGFloat = 320
 
@@ -484,10 +486,8 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     ensureDirs()
     log("bisu (native) starting")
     engine = Engine()
-    engine.onExit = { [weak self] in
-      log("engine exited")
-      self?.web?.evaluateJavaScript("window.bisuHost.__emit('engineDown')", completionHandler: nil)
-    }
+    // terminationHandler runs on a background queue; everything it leads to touches AppKit.
+    engine.onExit = { [weak self] in DispatchQueue.main.async { self?.engineExited() } }
     buildStatusItem()
     buildPanel()
     registerHotKey()
@@ -497,6 +497,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
   func applicationWillTerminate(_ notification: Notification) {
+    quitting = true
     engine?.stop()
     if let h = hotKey { UnregisterEventHotKey(h) }
   }
@@ -738,6 +739,15 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     }
   }
 
+  private func fullURL() -> URL {
+    var comps = URLComponents(url: engine.base, resolvingAgainstBaseURL: false)!
+    comps.path = "/"
+    var items = [URLQueryItem(name: "token", value: engine.token)]
+    if let id = activeChatId { items.append(URLQueryItem(name: "chat", value: id)) }
+    comps.queryItems = items
+    return comps.url!
+  }
+
   private func panelURL() -> URL {
     var comps = URLComponents(url: engine.base, resolvingAgainstBaseURL: false)!
     comps.path = "/"
@@ -842,6 +852,27 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
 
   // MARK: loading
 
+  /// The engine is every chat at once, and the page is useless without it: when it exits on its own,
+  /// start it again (a little later each time) and reload whatever is showing. Four exits within two
+  /// minutes means it is not going to stay up, and saying so beats a restart loop.
+  private func engineExited() {
+    log("engine exited")
+    web?.evaluateJavaScript("window.bisuHost.__emit('engineDown')", completionHandler: nil)
+    guard !quitting else { return }
+    engineRestarts = engineRestarts.filter { $0.timeIntervalSinceNow > -120 }
+    if engineRestarts.count >= 4 {
+      showFatal("the engine stopped \(engineRestarts.count) times in two minutes. The log is in ~/Library/Logs/bisu/bisu.log; quit bisu and open it again once it is fixed.")
+      return
+    }
+    engineRestarts.append(Date())
+    let delay = 1.5 * Double(engineRestarts.count)
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+      guard let self, !self.quitting, !(self.engine.process?.isRunning ?? false) else { return }
+      log("restarting engine (\(self.engineRestarts.count) in the last two minutes)")
+      self.startEngineThenLoad()
+    }
+  }
+
   private func startEngineThenLoad() {
     guard let resources = Bundle.main.resourceURL else { return }
     let root = resources.appendingPathComponent("app")
@@ -862,6 +893,8 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       DispatchQueue.main.async {
         log("engine ready")
         self.loadPanel()
+        // After a restart the port is new, so an open full window has to follow it.
+        if let view = self.fullWindow?.contentView as? WKWebView { view.load(URLRequest(url: self.fullURL())) }
         // The engine may already have something waiting from a run that happened while bisu was
         // closed, so the dot has to be right before any page has had a chance to report it.
         self.engine.getJSON("api/proactive") { j in
@@ -920,12 +953,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     w.delegate = self
     fullWindow = w
 
-    var comps = URLComponents(url: engine.base, resolvingAgainstBaseURL: false)!
-    comps.path = "/"
-    var items = [URLQueryItem(name: "token", value: engine.token)]
-    if let id = activeChatId { items.append(URLQueryItem(name: "chat", value: id)) }
-    comps.queryItems = items
-    view.load(URLRequest(url: comps.url!))
+    view.load(URLRequest(url: fullURL()))
     w.makeKeyAndOrderFront(nil)
     NSApp.activate(ignoringOtherApps: true)
   }

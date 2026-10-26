@@ -16,12 +16,22 @@ import * as memory from './memory.mjs';
 import * as proactive from './proactive.mjs';
 import * as sessions from './sessions.mjs';
 import * as jobs from './jobs.mjs';
+import {releaseSchedule} from './lock.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.dirname(here);
 const PORT=Number(process.env.BISU_UI_PORT||7878);
 // The desktop shell (mac/) starts this engine itself and needs to read /api/chats for the tray
 // and its approval notifications, so it may pass its own token. Without it, a fresh one each run.
 const TOKEN=/^[0-9a-f]{32,64}$/.test(process.env.BISU_UI_TOKEN||'')?process.env.BISU_UI_TOKEN:randomBytes(24).toString('hex');
+const PARENT=process.env.BISU_UI_PARENT||'';
+// Read once and gone: every chat, job and suggestion run inherits this process's environment, and a
+// command an agent runs must not find the token that approves its own requests on this page.
+for(const k of ['BISU_UI_TOKEN','BISU_UI_PORT','BISU_UI_PARENT'])delete process.env[k];
+// The engine is every chat at once: one stray exception must cost one request, not all of them.
+process.on('uncaughtException',e=>console.error('bisu engine: uncaught',e?.stack||e));
+process.on('unhandledRejection',e=>console.error('bisu engine: unhandled rejection',e?.stack||e));
+// What the menu bar app appends to a message (<bisu-context>…) is for the model, never a title.
+const cleanTitle=t=>String(t||'').replace(/<bisu-context>[\s\S]*?(<\/bisu-context>|$)/g,' ').replace(/\s+/g,' ').trim().slice(0,60)||null;
 const CONFIG=path.join(process.env.XDG_CONFIG_HOME||path.join(os.homedir(),'.config'),'bisu','models');
 // The chats themselves live in memory (each one owns a Claude Code process), but their names and
 // session ids are written down: the engine is restarted with the shell, and the panel must come back
@@ -131,7 +141,7 @@ function restoreChats(){
   if(typeof cwd!=='string'||!fs.statSync(cwd,{throwIfNoEntry:false})?.isDirectory())continue;
   if(chats.has(id))continue;
   const sessionId=typeof saved.sessionId==='string'&&/^[0-9a-f-]{36}$/.test(saved.sessionId)?saved.sessionId:null;
-  chats.set(id,{id,cwd,title:typeof saved.title==='string'?saved.title:null,busy:false,proc:null,sessionId,
+  chats.set(id,{id,cwd,title:typeof saved.title==='string'?cleanTitle(saved.title):null,busy:false,proc:null,sessionId,
    events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),tasks:new Map(),queued:[],turnsDone:0,costSoFar:0,
    created:Number(saved.created)||Date.now()});
  }
@@ -170,7 +180,7 @@ async function hydrate(c){
   if(!past.length||c.events.length)return;
   push(c,{kind:'resumed',sessionId:c.sessionId,count:past.length});
   for(const m of past)push(c,{...m,past:true});
-  if(!c.title){const first=past.find(m=>m.kind==='user');if(first)c.title=first.text.slice(0,60);saveChats()}
+  if(!c.title){const first=past.find(m=>m.kind==='user');if(first)c.title=cleanTitle(first.text);saveChats()}
  }catch(e){console.error('bisu resume:',e.message)}finally{c.hydrating=null}})();
  return c.hydrating;
 }
@@ -181,6 +191,10 @@ function warm(c){if(!c.proc&&KEY){start(c);idleLater(c)}}
 // Chats run delegated work in the background (see background-agents.mjs), which is what keeps the assistant free to talk.
 const BACKGROUND_AGENTS=JSON.stringify({hooks:{PreToolUse:[{matcher:'Agent|Task',hooks:[{type:'command',command:`'${process.execPath}' '${path.join(here,'background-agents.mjs').replace(/'/g,"'\\''")}'`}]}]}});
 function start(c){
+ // A folder deleted or renamed since the chat was made: spawn would fail asynchronously, and before
+ // this check that error took the whole engine down with every other chat.
+ if(!fs.statSync(c.cwd,{throwIfNoEntry:false})?.isDirectory()){
+  push(c,{kind:'error',message:`This chat's folder is gone: ${c.cwd}. Start a new chat in a folder that exists.`});setBusy(c,false);return}
  const r=roles();
  const args=['-f',path.join(root,'launch.zsh'),r.BISU_MODEL.value,r.BISU_CODE_MODEL.value,r.BISU_DEV_MODEL.value,path.join(root,'agents.json'),
   '-p','--input-format','stream-json','--output-format','stream-json','--verbose','--include-partial-messages','--permission-prompt-tool','stdio','--replay-user-messages',
@@ -204,6 +218,7 @@ function start(c){
  proc.stdout.on('data',d=>{buf+=d;let i;while((i=buf.indexOf('\n'))>=0){const line=buf.slice(0,i);buf=buf.slice(i+1);if(!line.trim())continue;let j;try{j=JSON.parse(line)}catch{continue}handle(c,j)}});
  proc.stderr.on('data',d=>{err=(err+d).slice(-4000)});
  proc.stdin.on('error',()=>{});
+ proc.on('error',e=>{clearTimeout(c.stall);if(c.proc!==proc)return;c.proc=null;push(c,{kind:'error',message:`bisu could not start: ${e.message}`});setBusy(c,false)});
  proc.on('close',code=>{clearTimeout(c.stall);if(c.proc!==proc)return;c.proc=null;for(const id of c.pending.keys())push(c,{kind:'approval_done',request_id:id,allow:false,reason:'stopped'});c.pending.clear();
   if(c.tasks.size){c.tasks.clear();pushTasks(c)}if(c.queued.length){c.queued=[];push(c,{kind:'queue',ids:[]})}
   if(code&&code!==143){const msg=err.split('\n').filter(l=>l.trim()&&!/connectors are disabled/.test(l)).slice(-3).join('\n');push(c,{kind:'error',message:`bisu stopped (exit ${code})${msg?': '+msg:''}`})}
@@ -255,11 +270,13 @@ async function newChat({cwd,resume}){
  if(!fs.statSync(dir,{throwIfNoEntry:false})?.isDirectory())throw Error('not a folder: '+dir);
  const c={id:randomUUID(),cwd:dir,title:null,busy:false,proc:null,sessionId:resume||null,events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),tasks:new Map(),queued:[],turnsDone:0,costSoFar:0,created:Date.now()};
  if(resume){if(!/^[0-9a-f-]{36}$/.test(resume))throw Error('bad session id');const past=await pastMessages(resume);
-  c.title=past.find(m=>m.kind==='user')?.text.slice(0,60)||'Resumed session';push(c,{kind:'resumed',sessionId:resume,count:past.length});for(const m of past)push(c,{...m,past:true})}
+  c.title=cleanTitle(past.find(m=>m.kind==='user')?.text)||'Resumed session';push(c,{kind:'resumed',sessionId:resume,count:past.length});for(const m of past)push(c,{...m,past:true})}
  chats.set(c.id,c);saveChats();warm(c);return c}
 function say(c,text){
- if(!c.title){c.title=text.slice(0,60);saveChats()}
+ if(!c.title){c.title=cleanTitle(text);saveChats()}
  clearTimeout(c.idle);if(!c.proc)start(c);
+ // start() refuses a folder that is gone and says so in the chat; there is nobody to send this to.
+ if(!c.proc)return;
  if(c.busy){const id=randomUUID();c.queued.push({id,text});push(c,{kind:'user',text,queued:id})}
  else{push(c,{kind:'user',text});setBusy(c,true)}
  send(c,{type:'user',message:{role:'user',content:text}})}
@@ -345,10 +362,11 @@ const server=http.createServer(async(req,res)=>{
   if(jm&&m==='POST'){const {action}=await body(req);
    try{
     if(action==='run'){const s=jobs.snapshot(),j=s.jobs.find(x=>x.slug===jm[1]);
-     if(!j)return json(res,404,{error:'no such job'});if(j.error)return json(res,400,{error:j.error});if(s.running)return json(res,409,{error:'another job is running'});
+     if(!j)return json(res,404,{error:'no such job'});if(j.error)return json(res,400,{error:j.error});if(j.needsApproval)return json(res,409,{error:'approve this job first'});if(s.running)return json(res,409,{error:'another job is running'});
      if(!KEY)return json(res,400,{error:'No OpenRouter key: save one for https://openrouter.ai in Dec first.'});
      jobs.run(jm[1],{reason:'page',force:true}).catch(e=>console.error('bisu jobs:',e.message));
      return json(res,202,jobs.snapshot())}
+    if(action==='approve')return json(res,200,jobs.approve(jm[1]));
     if(action==='enable'||action==='disable')return json(res,200,jobs.setEnabled(jm[1],action==='enable'));
     if(action==='delete')return json(res,200,jobs.remove(jm[1]));
     return json(res,400,{error:'unknown action'})
@@ -384,11 +402,11 @@ proactive.setContext(proactiveContext);
 proactive.start();
 jobs.setContext(proactiveContext);
 jobs.start();
-for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{proactive.stop();jobs.stop();for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
+for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{proactive.stop();jobs.stop();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
 // The desktop shell holds this pipe open for as long as it is running, so the pipe closing means the
 // shell quit or was force-killed. Without this the engine, dec and every Claude Code run outlive it.
-if(process.env.BISU_UI_PARENT==='stdin'){
- process.stdin.on('end',()=>{proactive.stop();jobs.stop();for(const c of chats.values())c.proc?.kill('SIGTERM');process.exit(0)});
+if(PARENT==='stdin'){
+ process.stdin.on('end',()=>{proactive.stop();jobs.stop();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');process.exit(0)});
  process.stdin.on('error',()=>{});
  process.stdin.resume();
 }

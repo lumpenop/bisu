@@ -55,6 +55,7 @@ aside{width:260px;border-right:1px solid var(--line);display:flex;flex-direction
 .m.user{align-self:flex-end;background:var(--me);padding:8px 12px;border-radius:12px 12px 2px 12px;max-width:80%;white-space:pre-wrap}
 .m.text{padding:2px 0}
 .m.text p{margin:0 0 8px}.m.text p:last-child{margin:0}
+.m.text .h{font-weight:650;margin:12px 0 6px;line-height:1.35}.m.text .h:first-child{margin-top:0}.m.text .h1{font-size:1.15em}.m.text .h2{font-size:1.06em}.m.text .h3{font-size:1em}
 .m.text pre{background:var(--chip);padding:10px;border-radius:6px;overflow:auto;margin:6px 0}
 .m.text code{background:var(--chip);padding:1px 4px;border-radius:3px}.m.text pre code{background:none;padding:0}
 .m.past{opacity:.75}
@@ -124,6 +125,7 @@ body.panel .sugBody{max-height:4.4em}
 #sugForm input[type=number]{width:64px}
 #sugForm select{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
 #sugPast{margin-top:6px}
+.warnbox{border:1px solid var(--warn);background:var(--warn-soft);border-radius:8px;padding:8px 10px;margin-top:6px;color:var(--ink)}.warnbox pre{white-space:pre-wrap;margin:6px 0 0;font-size:12px}
 /* memory */
 .mem{border-top:1px solid var(--line);padding:12px 0}
 .mem:first-child{border-top:0;padding-top:0}
@@ -224,7 +226,7 @@ body.panel .view.pop.on{animation:popIn .13s ease-out}
   <div id="msgs"><div class="wrap"><p class="empty">Pick a folder and start a chat. bisu works there with Claude Code's tools,<br>and asks you here before it edits files or runs commands.</p></div></div>
   <div id="sug" hidden></div>
   <div class="compose" id="compose" hidden><div class="tasks" id="tasks"></div><div class="row">
-   <textarea id="input" rows="1" placeholder="Message bisu  (Enter to send, Shift+Enter for a new line)"></textarea>
+   <textarea id="input" rows="1" placeholder="Message bisu"></textarea>
    <button class="primary" id="sendBtn">Send</button>
   </div></div>
  </div>
@@ -351,8 +353,11 @@ function show(v){for(const b of document.querySelectorAll('nav button'))b.classL
 for(const b of document.querySelectorAll('nav button'))b.onclick=()=>show(b.dataset.view);
 
 // ---- light markdown: fenced code, inline code, paragraphs ----
+const inline=t=>esc(t).replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>');
 function md(s){return String(s).split(/```/).map((part,i)=>{if(i%2){const nl=part.indexOf('\n');return `<pre><code>${esc(nl>=0?part.slice(nl+1):part)}</code></pre>`}
- return part.split(/\n{2,}/).filter(x=>x.trim()).map(p=>'<p>'+esc(p).replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>')+'</p>').join('')}).join('')}
+ // A heading line ("## 제목") is a block of its own, whatever is right above or below it.
+ return part.replace(/^(#{1,6}[ \t].*)$/gm,'\n$1\n').split(/\n{2,}/).filter(x=>x.trim()).map(p=>{const h=/^(#{1,6})[ \t]+(.+?)[ \t#]*$/.exec(p.trim());
+  return h&&!p.trim().includes('\n')?`<div class="h h${Math.min(h[1].length,3)}">${inline(h[2])}</div>`:'<p>'+inline(p).replace(/\n/g,'<br>')+'</p>'}).join('')}).join('')}
 
 // ---- chat ----
 let chats=[],cur=null,es=null,live=null,toolEls={};
@@ -436,6 +441,9 @@ if(PANEL&&HOST?.onShown)HOST.onShown(()=>{
  loadSuggestions();
 });
 if(PANEL&&HOST?.onHidden)HOST.onHidden(()=>{panelOpen=false;detach()});
+// What a tool is called on the page: bisu's own tools by what they do, Claude Code's as they are.
+const TOOL_NAMES={session_search:'지난 대화 검색',session_show:'지난 대화 읽기',cu_look:'화면 읽기',cu_decide:'누를 곳 고르기',cu_click:'클릭',cu_type:'입력',cu_key:'키 누르기',cu_scroll:'스크롤',cu_wait:'기다리기',cu_screenshot:'화면 캡처',cu_ground:'화면에서 찾기',cu_approve:'승인한 동작 실행',cu_state:'권한 확인'};
+const toolName=n=>{const m=/^mcp__([^_]+(?:_[^_]+)*)__(.+)$/.exec(String(n||''));return m?(m[1]==='bisu'&&TOOL_NAMES[m[2]])||m[2].replace(/_/g,' '):String(n||'')};
 function toolSummary(name,input={}){
  if(input.command)return input.command;if(input.file_path)return short(input.file_path);if(input.pattern)return input.pattern+(input.path?'  in '+short(input.path):'');
  if(input.url)return input.url;if(input.description)return input.description;if(input.prompt)return input.prompt;return JSON.stringify(input)}
@@ -459,10 +467,10 @@ function render(ev){
   case 'task_done':add(`${ev.status==='completed'||!ev.status?'✓':'✕'} ${esc(agentName(ev.agent))} ${ev.status==='completed'||!ev.status?'finished':esc(ev.status)}: ${esc(ev.description||'')}`,null,'sys');break;
   case 'delta':if(ev.parent)break;if(!live){live=add('',null,'text');live.dataset.raw=''}live.dataset.raw+=ev.text;live.innerHTML=md(live.dataset.raw);break;
   case 'text':if(!ev.parent&&live){live.innerHTML=md(ev.text);live=null;break}add(md(ev.text),ev.parent,'text'+(ev.past?' past':''));break;
-  case 'tool':live=null;{const el=add(`<details class="tool"><summary><span class="n">${esc(ev.name)}</span><span class="a">${esc(toolSummary(ev.name,ev.input))}</span><span class="st">…</span></summary><pre>${esc(JSON.stringify(ev.input,null,2).slice(0,4000))}</pre></details>`,ev.parent);toolEls[ev.id]=el}break;
+  case 'tool':live=null;{const el=add(`<details class="tool"><summary><span class="n">${esc(toolName(ev.name))}</span><span class="a">${esc(toolSummary(ev.name,ev.input))}</span><span class="st">…</span></summary><pre>${esc(JSON.stringify(ev.input,null,2).slice(0,4000))}</pre></details>`,ev.parent);toolEls[ev.id]=el}break;
   case 'tool_result':{const el=toolEls[ev.id];if(!el)break;const st=el.querySelector('.st');st.textContent=ev.error?'error':'done';st.classList.toggle('e',ev.error);
    el.querySelector('details').insertAdjacentHTML('beforeend',`<pre>${esc(ev.text||'(no output)')}</pre>`)}break;
-  case 'approval':live=null;{const el=add(`<div class="ask" data-id="${esc(ev.request_id)}"><div class="q">Allow ${esc(ev.tool)}?${ev.description?` <span class="note" style="font-weight:400">${esc(ev.description)}</span>`:''}</div>${askBody(ev.tool,ev.input)}
+  case 'approval':live=null;{const el=add(`<div class="ask" data-id="${esc(ev.request_id)}"><div class="q">Allow ${esc(toolName(ev.tool))}?${ev.description?` <span class="note" style="font-weight:400">${esc(ev.description)}</span>`:''}</div>${askBody(ev.tool,ev.input)}
    <div class="btns"><button class="primary" data-a="allow">Allow</button><button data-a="always">Allow ${esc(ev.tool)} for this chat</button><button class="danger" data-a="deny">Deny</button></div></div>`,ev.parent);
    for(const b of el.querySelectorAll('button'))b.onclick=()=>answer(ev.request_id,b.dataset.a,el)}break;
   case 'approval_done':{const el=wrap().querySelector(`.ask[data-id="${CSS.escape(ev.request_id)}"]`);if(el){el.className='ask done';el.innerHTML=ev.allow?`Allowed ${esc(ev.tool||'')}${ev.always?' · for the rest of this chat':''}`:ev.reason==='stopped'?'Not answered (stopped)':`Denied ${esc(ev.tool||'')}`}}break;
@@ -484,7 +492,7 @@ function chatUI(){const c=cur;$('chatHead').hidden=$('compose').hidden=!c;
  if(PANEL){$('panelStart').hidden=!!c;$('msgs').hidden=!c;if(!c)fillStartCwd()}
  if(!c)return;
  $('chatTitle').textContent=c.title||'New chat';$('chatSub').textContent=short(c.cwd);
- $('stop').hidden=!c.busy;$('input').placeholder=c.busy?'bisu is replying — you can still send; it reads this next':'Message bisu  (Enter to send, Shift+Enter for a new line)';renderList()}
+ $('stop').hidden=!c.busy;$('input').placeholder=c.busy?(PANEL?'bisu is replying — send anyway':'bisu is replying — you can still send; it reads this next'):(PANEL?'Message bisu':'Message bisu  (Enter to send, Shift+Enter for a new line)');renderList()}
 function renderList(){$('chatList').innerHTML=chats.map(c=>`<div class="ci${cur&&c.id===cur.id?' on':''}" data-id="${c.id}"><div class="t">${esc(c.title||'New chat')}</div><div class="s"><span class="dot${c.pending?' wait':c.busy||c.tasks?' busy':''}"></span>${esc(short(c.cwd))}</div></div>`).join('')||'<p class="note" style="padding:0 12px">No chats yet.</p>';
  for(const el of $('chatList').querySelectorAll('.ci'))el.onclick=()=>open(el.dataset.id)}
 async function refreshChats(){try{const r=await api('/api/chats');chats=r.chats;if(cur){const c=chats.find(x=>x.id===cur.id);if(c)cur=c}renderList()}catch{}}
@@ -711,7 +719,8 @@ function renderSugSettings(){
  $('sugFrom').value=s.quietFrom;$('sugTo').value=s.quietTo;
  $('sugNext').textContent=s.running?'생각하는 중…':s.lastError?`마지막 시도 실패: ${s.lastError}`:
   `${new Date(s.nextAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})} 이후${s.enabled?'':' (꺼져 있음)'}`;
- $('sugPast').innerHTML=s.items.length?s.items.slice(0,8).map(i=>`<div class="mem"><div class="h">
+ const past=s.items.filter(i=>i.kind!=='job');
+ $('sugPast').innerHTML=past.length?past.slice(0,8).map(i=>`<div class="mem"><div class="h">
    <b>${esc(i.title)}</b><span class="chip">${{new:'기다리는 중',accepted:'받아들임',dismissed:'나중에'}[i.status]||i.status}</span>
    <span class="note" style="margin:0">${ago(i.at)}</span></div>${i.body?`<div class="b">${esc(i.body)}</div>`:''}</div>`).join(''):'<p class="note">아직 제안한 적이 없어요.</p>';
 }
@@ -729,8 +738,9 @@ async function loadJobs(){try{jobsSnap=await api('/api/jobs');renderJobs()}catch
 function renderJobs(){const s=jobsSnap;if(!s)return;const el=$('jobList');
  if(!s.jobs.length){el.innerHTML='<p class="note">아직 예약한 작업이 없어요.</p>';return}
  el.innerHTML=s.jobs.map(j=>`<div class="mem" data-slug="${esc(j.slug)}"><div class="h"><b>${esc(j.name)}</b><span class="chip">${esc(j.schedule)}${j.once?' · 한 번':''}</span><span class="chip">${j.tools}</span>${j.enabled?'':'<span class="chip">꺼짐</span>'}
-   <span class="sp"></span><button data-a="run" ${j.error||s.running?'disabled':''}>${j.running?'실행 중…':'지금 실행'}</button><button data-a="${j.enabled?'disable':'enable'}">${j.enabled?'끄기':'켜기'}</button><button class="danger" data-a="delete">삭제</button></div>
-   <div class="b note" style="margin-top:4px">${j.error?`<span class="err">${esc(j.error)}</span>`:`다음: ${j.nextAt?whenShort(j.nextAt):'없음'}`} · ${esc(short(j.cwd))}${j.lastRun?` · 마지막 ${ago(j.lastRun)}: ${j.lastError?`<span class="err">실패 — ${esc(j.lastError)}</span>`:esc(j.lastResult||'ok')}`:''}</div></div>`).join('');
+   <span class="sp"></span>${j.needsApproval?`<button class="primary" data-a="approve">승인</button>`:`<button data-a="run" ${j.error||s.running?'disabled':''}>${j.running?'실행 중…':'지금 실행'}</button>`}<button data-a="${j.enabled?'disable':'enable'}">${j.enabled?'끄기':'켜기'}</button><button class="danger" data-a="delete">삭제</button></div>
+   ${j.needsApproval?`<div class="b note warnbox">이 작업은 ${j.tools==='full'?'명령 실행까지':'파일 수정까지'} 할 수 있어서, 이 내용 그대로일 때만 돌아요. 확인하고 승인해 주세요. 파일이 바뀌면 다시 승인해야 해요.<pre>${esc(j.prompt)}</pre></div>`:''}
+   <div class="b note" style="margin-top:4px">${j.error?`<span class="err">${esc(j.error)}</span>`:j.needsApproval?'승인 전에는 돌지 않아요':`다음: ${j.nextAt?whenShort(j.nextAt):'없음'}`} · ${esc(short(j.cwd))}${j.lastRun?` · 마지막 ${ago(j.lastRun)}: ${j.lastError?`<span class="err">실패 — ${esc(j.lastError)}</span>`:esc(j.lastResult||'ok')}`:''}</div></div>`).join('');
  for(const b of el.querySelectorAll('button[data-a]'))b.onclick=async()=>{const slug=b.closest('[data-slug]').dataset.slug,a=b.dataset.a;
   if(a==='delete'&&!confirm(`"${slug}" 작업 파일을 지울까요?`))return;
   b.disabled=true;$('jobNote').textContent='';
