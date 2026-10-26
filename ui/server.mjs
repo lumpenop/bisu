@@ -54,6 +54,14 @@ function writeConfig(models){fs.mkdirSync(path.dirname(CONFIG),{recursive:true})
 const envOf=k=>process.env[k]||Object.keys(ALIAS).filter(a=>ALIAS[a]===k).map(a=>process.env[a]).find(Boolean)||null;
 function roles(){const saved=readConfig();return Object.fromEntries(Object.entries(ROLES).map(([k,d])=>[k,{value:envOf(k)||saved[k]||d,saved:saved[k]||null,default:d,env:envOf(k)}]))}
 
+// ---- page preferences ----
+const PREFS=path.join(path.dirname(CONFIG),'ui.json');
+const PREF_KEYS={meta:'boolean',onboarded:'boolean'};
+function readPrefs(){let p={};try{p=JSON.parse(fs.readFileSync(PREFS,'utf8'))||{}}catch{}
+ return Object.fromEntries(Object.entries(PREF_KEYS).map(([k,t])=>[k,typeof p[k]===t?p[k]:false]))}
+function writePrefs(patch){const next=readPrefs();for(const [k,t] of Object.entries(PREF_KEYS))if(typeof patch?.[k]===t)next[k]=patch[k];
+ fs.mkdirSync(path.dirname(PREFS),{recursive:true});const tmp=PREFS+'.'+process.pid+'.tmp';fs.writeFileSync(tmp,JSON.stringify(next));fs.renameSync(tmp,PREFS);return next}
+
 // ---- OpenRouter ----
 let modelCache={at:0,list:null};
 async function models(){if(modelCache.list&&Date.now()-modelCache.at<10*60e3)return modelCache.list;
@@ -62,6 +70,14 @@ async function models(){if(modelCache.list&&Date.now()-modelCache.at<10*60e3)ret
   prompt:Number(m.pricing?.prompt)||0,completion:Number(m.pricing?.completion)||0,cacheRead:Number(m.pricing?.input_cache_read)||0}));
  modelCache={at:Date.now(),list};return list}
 async function priceMap(){try{return new Map((await models()).map(m=>[m.id,m]))}catch{return new Map()}}
+// The prices on hand, now: a turn's end must not wait up to 15 s for OpenRouter's model list (the
+// chat stayed "busy" meanwhile, and two turns could settle out of order). A stale or missing list is
+// refreshed in the background, and a failure is not retried for a minute.
+let priceFailedAt=0;
+function priceNow(){
+ if(modelCache.list){if(Date.now()-modelCache.at>10*60e3)models().catch(()=>{});return new Map(modelCache.list.map(m=>[m.id,m]))}
+ if(Date.now()-priceFailedAt>60e3)models().catch(()=>{priceFailedAt=Date.now()});
+ return new Map()}
 // usage: {model: {input, cacheRead, output}} -> USD at OpenRouter list prices, or null when a model has no price.
 function estimate(usage,price){let cost=0;for(const [id,u] of Object.entries(usage)){const pr=price.get(id);if(!pr)return null;cost+=u.input*pr.prompt+u.cacheRead*(pr.cacheRead||pr.prompt)+u.output*pr.completion}return cost}
 async function keyGet(p){const r=await fetch(KEY_BASE+p,{headers:{authorization:'Bearer '+KEY},signal:AbortSignal.timeout(30000)});const j=await r.json().catch(()=>null);if(!r.ok)throw Error((j?.error?.message||j?.error||'HTTP')+' '+r.status);return j?.data}
@@ -262,8 +278,8 @@ function handle(c,j){
  if(j.type==='result'){c.turnsDone++;
   const usage={};for(const [m,u] of Object.entries(j.modelUsage||{}))usage[m]={input:(u.inputTokens||0)+(u.cacheCreationInputTokens||0),cacheRead:u.cacheReadInputTokens||0,output:u.outputTokens||0};
   // modelUsage adds up over the whole process, so a turn's cost is the difference from the previous result.
-  priceMap().then(price=>{const total=estimate(usage,price),cost=total==null?null:total-c.costSoFar;if(total!=null)c.costSoFar=total;
-   push(c,{kind:'result',error:!!j.is_error,subtype:j.subtype,turns:j.num_turns,ms:j.duration_ms,cost});setBusy(c,false);idleLater(c)});return}
+  const total=estimate(usage,priceNow()),cost=total==null?null:total-c.costSoFar;if(total!=null)c.costSoFar=total;
+  push(c,{kind:'result',error:!!j.is_error,subtype:j.subtype,turns:j.num_turns,ms:j.duration_ms,cost});setBusy(c,false);idleLater(c);return}
 }
 async function newChat({cwd,resume}){
  const dir=path.resolve(String(cwd||os.homedir()).replace(/^~(?=\/|$)/,os.homedir()));
@@ -309,6 +325,10 @@ const server=http.createServer(async(req,res)=>{
   if(!p.startsWith('/api/'))return json(res,404,{error:'not found'});
   if(!tokenOk(req,url))return json(res,401,{error:'token'});
   if(m==='GET'&&p==='/api/roles')return json(res,200,{roles:roles(),config:CONFIG});
+  // Page preferences live here, not in the page's storage: the menu bar app picks a new port on
+  // every launch, and a new port is a new origin with empty storage.
+  if(m==='GET'&&p==='/api/prefs')return json(res,200,readPrefs());
+  if(m==='POST'&&p==='/api/prefs')return json(res,200,writePrefs(await body(req)));
   if(m==='GET'&&p==='/api/models')return json(res,200,{models:await models()});
   if(m==='GET'&&p==='/api/account')return json(res,200,await account());
   if(m==='GET'&&p==='/api/runs')return json(res,200,{runs:await runs()});
@@ -358,7 +378,9 @@ const server=http.createServer(async(req,res)=>{
   // Scheduled jobs (ui/jobs.mjs): the files are the jobs; this lists them with their state, runs one
   // now (answered at once, the page polls), flips enabled in the file, or deletes the file.
   if(m==='GET'&&p==='/api/jobs')return json(res,200,jobs.snapshot());
-  const jm=/^\/api\/jobs\/([A-Za-z0-9][A-Za-z0-9._-]{0,60})$/.exec(p);
+  // Any file name a job can have, Korean included; jobs.mjs refuses anything that is a path.
+  const jm=/^\/api\/jobs\/([^/]{1,400})$/.exec(p);
+  if(jm){try{jm[1]=decodeURIComponent(jm[1])}catch{return json(res,400,{error:'bad job name'})}}
   if(jm&&m==='POST'){const {action}=await body(req);
    try{
     if(action==='run'){const s=jobs.snapshot(),j=s.jobs.find(x=>x.slug===jm[1]);
@@ -377,7 +399,9 @@ const server=http.createServer(async(req,res)=>{
   if(cm&&!c)return json(res,404,{error:'chat not found'});
   if(c&&m==='GET'&&cm[2]==='/events'){await hydrate(c);res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-store','Connection':'keep-alive'});
    res.write(`data: ${JSON.stringify({kind:'hello',chat:publicChat(c)})}\n\n`);for(const ev of c.events)res.write(`data: ${JSON.stringify(ev)}\n\n`);
-   c.clients.add(res);warm(c);const ping=setInterval(()=>{try{res.write(': ping\n\n')}catch{}},20000);
+   // Watched again: the short "nobody is looking" timer from a hidden panel must not stop Claude Code
+   // in front of the person a few seconds later.
+   c.clients.add(res);warm(c);if(c.proc)idleLater(c);const ping=setInterval(()=>{try{res.write(': ping\n\n')}catch{}},20000);
    req.on('close',()=>{clearInterval(ping);c.clients.delete(res);unwatched(c)});return}
   if(c&&m==='POST'&&cm[2]==='/send'){const {text}=await body(req);if(typeof text!=='string'||!text.trim())return json(res,400,{error:'empty'});say(c,text.trim());return json(res,200,{ok:true})}
   if(c&&m==='POST'&&cm[2]==='/approve'){decide(c,await body(req));return json(res,200,{ok:true})}

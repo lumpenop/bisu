@@ -61,11 +61,14 @@ function field(spec, min, max, what) {
     let from = m[1] === '*' ? min : value(m[1]);
     let to = m[1] === '*' ? max : m[2] !== undefined ? value(m[2]) : m[3] ? max : from;
     const step = m[3] ? Number(m[3]) : 1;
-    if (what === 'weekday') { if (from === 7) from = 0; if (to === 7) to = 0 }
+    // 7 is Sunday as well as 0: "0-7" and "1-7" mean every day and Monday to Sunday.
+    let sunday = false;
+    if (what === 'weekday') { if (from === 7 && to === 7) from = to = 0; else if (to === 7) { to = 6; sunday = true } }
     if (step < 1) throw Error(`${what}: step must be at least 1`);
     if (from < min || to > max || from > to && !(what === 'weekday' && to === 0)) throw Error(`${what}: ${part} is outside ${min}-${max}`);
     if (what === 'weekday' && to === 0 && from > 0) { for (let v = from; v <= 6; v += step) out.add(v); out.add(0); continue } // e.g. fri-sun
     for (let v = from; v <= to; v += step) out.add(v);
+    if (sunday) out.add(0);
   }
   return out;
 }
@@ -107,7 +110,8 @@ function parseAt(text) {
 
 // ---- the job files ----
 
-const slugOk = s => /^[a-z0-9][a-z0-9._-]{0,60}$/i.test(s);
+// Any file name the folder can hold (Korean included), but never a path.
+const slugOk = s => typeof s === 'string' && s.length > 0 && s.length <= 120 && !/[\/\\\0]/.test(s) && !s.startsWith('.');
 const expand = p => p.replace(/^~(?=\/|$)/, os.homedir());
 
 // One file → one job, or one job with an `error` the Settings tab shows instead of a next run.
@@ -154,18 +158,32 @@ export function list() {
 
 // ---- state: what ran, when, how it went ----
 
-let state = { runs: {}, approved: {} };
-try { state = JSON.parse(fs.readFileSync(STATE, 'utf8')) || state } catch {}
-if (!state.runs || typeof state.runs !== 'object') state.runs = {};
-if (!state.approved || typeof state.approved !== 'object') state.approved = {};
+// Re-read whenever the file changed under us: `node jobs.mjs run x` in a terminal and the engine
+// both write it, and each used to overwrite the other with what it loaded at start.
+let state = { runs: {}, approved: {} }, stateMtime = -1;
+function fresh() {
+  let m = -1;
+  try { m = fs.statSync(STATE).mtimeMs } catch {}
+  if (m === stateMtime) return;
+  stateMtime = m;
+  let s = null;
+  try { s = JSON.parse(fs.readFileSync(STATE, 'utf8')) } catch {}
+  state = s && typeof s === 'object' ? s : {};
+  if (!state.runs || typeof state.runs !== 'object') state.runs = {};
+  if (!state.approved || typeof state.approved !== 'object') state.approved = {};
+}
+fresh();
 function save() {
   try {
     fs.mkdirSync(path.dirname(STATE), { recursive: true });
     const tmp = `${STATE}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(state, null, 1));
     fs.renameSync(tmp, STATE);
+    stateMtime = fs.statSync(STATE).mtimeMs;
   } catch (e) { console.error('bisu jobs: cannot save:', e.message) }
 }
+// Read the latest state, change one job's record, write it back — with no await in between.
+function record(slug, patch) { fresh(); Object.assign(runOf(slug), patch); save() }
 const runOf = slug => state.runs[slug] || (state.runs[slug] = { lastRun: 0, lastAttempt: 0, lastError: null, lastResult: null, lastSession: null });
 
 // A job that may change things runs only as the person approved it, byte for byte.
@@ -185,6 +203,7 @@ let contextFn = async () => ({});
 export function setContext(fn) { if (typeof fn === 'function') contextFn = fn }
 
 export function snapshot() {
+  fresh();
   const now = Date.now();
   return {
     dir: DIR,
@@ -238,6 +257,7 @@ function runClaude(job, models) {
 // Runs one job now. `force` is the person asking (Settings, the shell): it ignores the schedule, but
 // not a run that is already going.
 export async function run(slug, { reason = 'timer', force = false } = {}) {
+  fresh();
   const job = list().find(j => j.slug === slug);
   if (!job) throw Object.assign(Error(`no job "${slug}"`), { status: 404 });
   if (job.error) throw Object.assign(Error(`${job.slug}: ${job.error}`), { status: 400 });
@@ -249,29 +269,21 @@ export async function run(slug, { reason = 'timer', force = false } = {}) {
   running = { slug: job.slug, at: Date.now(), reason };
   const ctx = await contextFn().catch(() => ({}));
   if (ctx.key === false) { running = null; return { skipped: 'nokey' } }
-  const r = runOf(job.slug);
-  r.lastAttempt = Date.now();
-  save();
+  record(job.slug, { lastAttempt: Date.now() });
   const card = { id: randomUUID(), at: Date.now(), kind: 'job', job: job.slug, title: job.name, cwd: job.cwd, status: 'new', seen: false };
   try {
     const out = await runClaude(job, ctx.models);
-    r.lastRun = Date.now();
-    r.lastError = null;
-    r.lastSession = out.session;
-    r.lastResult = clean(out.text, 200);
+    record(job.slug, { lastRun: Date.now(), lastError: null, lastSession: out.session, lastResult: clean(out.text, 200) });
     running = null;
-    save();
     proactive.push({ ...card, body: out.text.trim().slice(0, 2000), sessionId: out.session });
     return { ok: true, text: out.text, session: out.session, cost: out.cost };
   } catch (e) {
     // A failure counts as the run: the next slot is the next try, and the card says what happened.
-    r.lastRun = Date.now();
-    r.lastError = String(e.message || e).slice(0, 300);
-    r.lastSession = e.session || null;
+    const why = String(e.message || e).slice(0, 300);
+    record(job.slug, { lastRun: Date.now(), lastError: why, lastSession: e.session || null });
     running = null;
-    save();
-    proactive.push({ ...card, title: `${job.name} — 실패`, body: r.lastError, sessionId: e.session || null, error: r.lastError });
-    return { error: r.lastError };
+    proactive.push({ ...card, title: `${job.name} — 실패`, body: why, sessionId: e.session || null, error: why });
+    return { error: why };
   }
 }
 
@@ -287,6 +299,7 @@ export function setEnabled(slug, on) {
   return snapshot();
 }
 export function approve(slug) {
+  fresh();
   const job = list().find(j => j.slug === slug);
   if (!job) throw Object.assign(Error(`no job "${slug}"`), { status: 404 });
   if (job.error) throw Object.assign(Error(`${job.slug}: ${job.error}`), { status: 400 });
@@ -299,6 +312,7 @@ export function remove(slug) {
   const file = path.join(DIR, `${slug}.md`);
   if (!fs.existsSync(file)) throw Object.assign(Error(`no job "${slug}"`), { status: 404 });
   fs.unlinkSync(file);
+  fresh();
   delete state.runs[slug];
   delete state.approved[slug];
   save();
@@ -309,6 +323,7 @@ export function remove(slug) {
 
 async function tick() {
   if (running || !holdsSchedule()) return;
+  fresh();
   const now = Date.now();
   for (const job of list()) {
     const at = nextAt(job, now);

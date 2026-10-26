@@ -40,6 +40,7 @@ function open() {
   fs.mkdirSync(path.dirname(DB), {recursive: true});
   const db = new DatabaseSync(DB);
   db.exec(`
+    PRAGMA busy_timeout=5000;
     PRAGMA journal_mode=WAL;
     PRAGMA synchronous=NORMAL;
     CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
@@ -217,6 +218,7 @@ export function search(query, {days = 0, project = '', limit = 8, perSession = 3
   const words = terms(query);
   if (!words.length) return {query, words, mode: 'and', sessions: [], total: 0};
   const db = open();
+  try {
   const total = db.prepare('SELECT count(*) AS n FROM sessions').get().n;
   const long = words.filter(t => chars(t) >= 3), brief = words.filter(t => chars(t) < 3);
   const filters = [], args = [];
@@ -246,8 +248,8 @@ export function search(query, {days = 0, project = '', limit = 8, perSession = 3
   }
   const meta = db.prepare('SELECT * FROM sessions WHERE id = ?');
   const sessions = [...groups.values()].map(g => ({...meta.get(g.id), lines: g.lines.sort((a, b) => (a.ts || 0) - (b.ts || 0))}));
-  db.close();
   return {query, words, mode, sessions, total};
+  } finally { db.close() } // a search that throws must not leave a handle open in the engine
 }
 
 export function searchText(query, opts = {}, note = '') {
@@ -272,13 +274,15 @@ export function show(id, {offset = 0, limit = 40} = {}) {
   const key = String(id || '').trim();
   if (!key) return 'session_show needs a session id (the 8-character prefix from session_search is enough).';
   const db = open();
-  const found = db.prepare(`SELECT * FROM sessions WHERE id = ? OR id LIKE ? ESCAPE '\\' ORDER BY start DESC LIMIT 3`).all(key, `${likeEscape(key)}%`);
-  if (!found.length) { db.close(); return `No indexed session starts with "${key}".` }
-  if (found.length > 1 && found[0].id !== key) { db.close(); return `"${key}" is ambiguous:\n${found.map(s => `- ${s.id} · ${day(s.start)} · ${short(s.cwd)} · ${oneLine(s.title || s.prompt || '')}`).join('\n')}` }
-  const s = found[0];
-  const n = db.prepare('SELECT count(*) AS n FROM messages WHERE session = ?').get(s.id).n;
-  const rows = db.prepare('SELECT ts, role, text FROM messages WHERE session = ? ORDER BY ts, id LIMIT ? OFFSET ?').all(s.id, Math.max(1, Math.min(200, limit | 0)), Math.max(0, offset | 0));
-  db.close();
+  let found, s, n, rows;
+  try {
+  found = db.prepare(`SELECT * FROM sessions WHERE id = ? OR id LIKE ? ESCAPE '\\' ORDER BY start DESC LIMIT 3`).all(key, `${likeEscape(key)}%`);
+  if (!found.length) return `No indexed session starts with "${key}".`;
+  if (found.length > 1 && found[0].id !== key) return `"${key}" is ambiguous:\n${found.map(s => `- ${s.id} · ${day(s.start)} · ${short(s.cwd)} · ${oneLine(s.title || s.prompt || '')}`).join('\n')}`;
+  s = found[0];
+  n = db.prepare('SELECT count(*) AS n FROM messages WHERE session = ?').get(s.id).n;
+  rows = db.prepare('SELECT ts, role, text FROM messages WHERE session = ? ORDER BY ts, id LIMIT ? OFFSET ?').all(s.id, Math.max(1, Math.min(200, limit | 0)), Math.max(0, offset | 0));
+  } finally { db.close() }
   const out = [`${day(s.start)} ${clock(s.start)}${s.end && s.end - s.start > 60e3 ? `–${clock(s.end)}` : ''} · ${short(s.cwd)} · ${oneLine(s.title || s.prompt || '(untitled)')} · id ${s.id}`, `messages ${offset + 1}–${offset + rows.length} of ${n}`, ''];
   let used = 0;
   for (const [i, m] of rows.entries()) {

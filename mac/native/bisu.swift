@@ -476,6 +476,11 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
 
   private let shortcutLabel = "⌥Space"
   private var quitting = false
+  /// What the chats are doing, for the menu bar icon: "" (nothing), "working", or "waiting" (an
+  /// approval nobody has answered). Polled from the engine, because the panel's page stops
+  /// listening when it hides — which is exactly when the icon matters.
+  private var chatState = ""
+  private var stateTimer: Timer?
   private var engineRestarts: [Date] = []
   private let minW: CGFloat = 380
   private let minH: CGFloat = 320
@@ -504,7 +509,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
 
   // MARK: status item
 
-  private func trayImage(badged: Bool = false) -> NSImage? {
+  private func trayImage(badged: Bool = false, ring: Bool = false) -> NSImage? {
     let base: NSImage
     if let dir = Bundle.main.resourceURL?.appendingPathComponent("app/mac/assets"),
        let found = ["trayTemplate@2x", "trayTemplate"].lazy.compactMap({ NSImage(contentsOf: dir.appendingPathComponent("\($0).png")) }).first {
@@ -522,14 +527,15 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       base = img
     }
     base.isTemplate = true
-    guard badged else { return base }
-    return dot(on: base)
+    if badged { return dot(on: base) }
+    if ring { return dot(on: base, hollow: true) }
+    return base
   }
 
   /// The icon with a dot in the corner it leaves empty, for a suggestion nobody has answered yet.
   /// Drawn at 2x so it stays crisp in the menu bar; the dot is punched out of the icon first so the
   /// two never merge into one blob.
-  private func dot(on base: NSImage) -> NSImage {
+  private func dot(on base: NSImage, hollow: Bool = false) -> NSImage {
     let size = NSSize(width: 18, height: 18), scale: CGFloat = 2
     guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale),
                                      pixelsHigh: Int(size.height * scale), bitsPerSample: 8,
@@ -546,8 +552,16 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       NSBezierPath(ovalIn: NSRect(x: center.x - 3.6, y: center.y - 3.6, width: 7.2, height: 7.2)).fill()
       ctx.compositingOperation = .sourceOver
     }
-    NSColor.black.setFill()
-    NSBezierPath(ovalIn: NSRect(x: center.x - 2.3, y: center.y - 2.3, width: 4.6, height: 4.6)).fill()
+    let mark = NSBezierPath(ovalIn: NSRect(x: center.x - 2.3, y: center.y - 2.3, width: 4.6, height: 4.6))
+    if hollow {
+      // Working: a ring, so "busy" never reads as "needs you".
+      NSColor.black.setStroke()
+      mark.lineWidth = 1.3
+      mark.stroke()
+    } else {
+      NSColor.black.setFill()
+      mark.fill()
+    }
     out.unlockFocus()
     out.isTemplate = true
     return out
@@ -558,11 +572,37 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     let v = max(0, n)
     guard v != suggestUnread else { return }
     suggestUnread = v
-    guard let button = statusItem?.button else { return }
-    button.image = trayImage(badged: v > 0)
-    button.image?.isTemplate = true
-    button.toolTip = v > 0 ? "bisu · 제안 \(v)개 · \(shortcutLabel)" : "bisu · \(shortcutLabel)"
+    refreshTray()
     log("suggestions waiting:", String(v))
+  }
+
+  /// One place decides the icon: a filled dot when something needs the person (an approval, or a
+  /// card nobody has read), a ring while bisu is working, nothing when it is idle.
+  private func refreshTray() {
+    guard let button = statusItem?.button else { return }
+    let needsYou = chatState == "waiting" || suggestUnread > 0
+    button.image = trayImage(badged: needsYou, ring: !needsYou && chatState == "working")
+    button.image?.isTemplate = true
+    var tip = "bisu"
+    if chatState == "waiting" { tip += " · 확인이 필요해요" }
+    else if chatState == "working" { tip += " · 일하는 중" }
+    if suggestUnread > 0 { tip += " · 새 카드 \(suggestUnread)개" }
+    button.toolTip = "\(tip) · \(shortcutLabel)"
+  }
+
+  private func pollChats() {
+    guard engine?.ready == true else { return }
+    engine.getJSON("api/chats") { [weak self] j in
+      guard let self else { return }
+      let chats = j?["chats"] as? [[String: Any]] ?? []
+      let waiting = chats.contains { ($0["pending"] as? Int ?? 0) > 0 }
+      let working = chats.contains { ($0["busy"] as? Bool ?? false) || ($0["tasks"] as? Int ?? 0) > 0 }
+      let next = waiting ? "waiting" : working ? "working" : ""
+      guard next != self.chatState else { return }
+      self.chatState = next
+      self.refreshTray()
+      log("chats:", next.isEmpty ? "idle" : next)
+    }
   }
 
   private func buildStatusItem() {
@@ -892,6 +932,9 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       }
       DispatchQueue.main.async {
         log("engine ready")
+        if self.stateTimer == nil {
+          self.stateTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.pollChats() }
+        }
         self.loadPanel()
         // After a restart the port is new, so an open full window has to follow it.
         if let view = self.fullWindow?.contentView as? WKWebView { view.load(URLRequest(url: self.fullURL())) }

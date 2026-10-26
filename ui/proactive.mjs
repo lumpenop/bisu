@@ -55,7 +55,17 @@ function load() {
   return s;
 }
 
-let state = load();
+// Re-read whenever the file changed under us (`bisu suggest` in a terminal writes it too), so
+// neither side saves over the other's cards with what it loaded at start.
+let state = null, stateMtime = -1;
+function fresh() {
+  let m = -1;
+  try { m = fs.statSync(FILE).mtimeMs } catch {}
+  if (m === stateMtime && state) return;
+  stateMtime = m;
+  state = load();
+}
+fresh();
 let running = null;
 // Filled in by the engine: recent runs, open chats and the resolved models. Without it (a CLI run)
 // the suggestion run still works, with only the memory and whatever it can read itself.
@@ -74,6 +84,7 @@ function save() {
     state.items = trimmed(state.items);
     fs.writeFileSync(tmp, JSON.stringify(state, null, 1));
     fs.renameSync(tmp, FILE);
+    stateMtime = fs.statSync(FILE).mtimeMs;
   } catch (e) { console.error('bisu proactive: cannot save:', e.message) }
 }
 export function setContext(fn) { if (typeof fn === 'function') contextFn = fn }
@@ -98,6 +109,7 @@ function nextAt() {
 // one on the page or from the menu: it ignores the clock and the quiet hours, but not a run that is
 // already going or a queue that is already full.
 export function due(now = Date.now(), force = false) {
+  fresh();
   if (!state.enabled) return 'off';
   if (running) return 'running';
   if (state.items.filter(i => i.status === 'new' && i.kind !== 'job').length >= MAX_WAITING) return 'waiting';
@@ -107,6 +119,7 @@ export function due(now = Date.now(), force = false) {
 }
 
 export function snapshot() {
+  fresh();
   return {
     enabled: state.enabled, intervalHours: state.intervalHours,
     quietFrom: state.quietFrom, quietTo: state.quietTo,
@@ -118,6 +131,7 @@ export function snapshot() {
 }
 
 export function configure(patch = {}) {
+  fresh();
   if (typeof patch.enabled === 'boolean') state.enabled = patch.enabled;
   for (const k of ['intervalHours', 'quietFrom', 'quietTo']) {
     if (patch[k] === undefined || patch[k] === null) continue;
@@ -132,6 +146,7 @@ export function configure(patch = {}) {
 }
 
 export function resolve(id, status) {
+  fresh();
   const item = state.items.find(i => i.id === id);
   if (!item) throw Object.assign(Error('no such suggestion'), { status: 404 });
   item.status = status;
@@ -141,15 +156,17 @@ export function resolve(id, status) {
   return item;
 }
 export function markSeen(id) {
+  fresh();
   const item = state.items.find(i => i.id === id);
   if (!item || item.seen) return;
   item.seen = true;
   save();
 }
-export function get(id) { return state.items.find(i => i.id === id) || null }
+export function get(id) { fresh(); return state.items.find(i => i.id === id) || null }
 // A card from elsewhere (a scheduled job's answer): shown like a suggestion, never deduplicated
 // against one, never counted as one.
 export function push(item) {
+  fresh();
   state.items.unshift({ status: 'new', seen: false, ...item, at: item.at || Date.now() });
   state.items = trimmed(state.items);
   save();
@@ -274,6 +291,7 @@ function worthwhile(raw) {
 async function ask(ctx) {
   const text = await runClaude(userPrompt(ctx), ctx.models);
   const raw = extract(text);
+  fresh(); // the run took a minute; start from what is on disk now
   const dropped = [];
   let added = 0;
   for (const candidate of raw.slice(0, 3)) {
@@ -298,6 +316,7 @@ export async function run({ reason = 'timer', force = false } = {}) {
   const ctx = await contextFn().catch(() => ({}));
   // Nothing to spend: without a key the run would fail every ten minutes for no reason.
   if (ctx.key === false) { running = null; return { skipped: 'nokey' } }
+  fresh();
   state.lastAttempt = Date.now();
   save();
   try {
@@ -308,6 +327,7 @@ export async function run({ reason = 'timer', force = false } = {}) {
     save();
     return { ...result, reason };
   } catch (e) {
+    fresh();
     state.lastError = String(e.message || e).slice(0, 300);
     running = null;
     save();

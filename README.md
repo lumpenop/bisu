@@ -120,6 +120,8 @@ tools: read                  # read (default) · edit: may change files in cwd �
 
 **How it looks.** bisu is a small character, and its face is the status: it blinks while it listens, looks around while it thinks, bobs while it works, rings when it needs you to approve something, and smiles when it is done. The machinery stays one layer down — a turn's file reads, commands and searches fold into one line ("한 일 3가지") that opens on a click, and model names, steps and cost appear only with 설정 → 보기 → 작업 세부 보기. The page is Korean throughout, and the assistant answers in your own speech level.
 
+The first time, a card asks three things — what to call you, 반말 or 존댓말 (or follow yours), and how often bisu may come to you first — and keeps them as ordinary memories and settings. The History tab lists your conversations; what bisu ran on its own (suggestions, scheduled jobs) appears only when you tick the box for it. Page preferences such as the developer-detail switch are kept by the engine (`~/.config/bisu/ui.json`), because the menu bar app gets a new port, and so a new browser origin, every launch.
+
 
 ```sh
 bisu ui        # opens http://127.0.0.1:7878 (BISU_UI_PORT to change)
@@ -150,7 +152,8 @@ Two things keep the engine small, both worth knowing before changing them. The h
 
 Because the bundle is a snapshot, rebuild after editing (`bisu app install`) — or run the working tree directly with `bisu app electron` while you work. Same engine, same models, same approvals as `bisu ui`, but a menu-bar app instead of a browser tab. It starts its own engine on a **random loopback port**, so both can run at once and nothing else on the machine can find it. Problems go to `~/Library/Logs/bisu/bisu.log`.
 
-- **⌥Space** opens a panel under the icon; clicking away or Escape puts it away.
+- **⌥Space** opens a panel under the icon; clicking away or Escape puts it away. **＋** in the panel goes back to its start card, which lists the recent conversations to return to.
+- **The icon says what bisu is doing** even while the panel is closed: a ring while it works, a filled dot when it needs you (an approval nobody has answered, or a card nobody has read).
 - **Drag it by the header** and it stays where you left it — the next ⌥Space opens there instead of under the icon. Dragging it to another screen works too; the position is clamped so a corner can never end up offscreen.
 - **Resize it from the grip** in the bottom-right corner, and it keeps that size. A frameless window has no resize border — dragging its edge moves it — so the panel draws its own handle and the shell applies the bounds.
 - **Context you don't have to explain:** the panel carries over the app you were in and the text you had selected or copied, so "이거 요약해" is enough. The selection is read through the Accessibility API in bisu's own process — it never presses ⌘C and never touches the pasteboard, so nothing needs restoring. An app that doesn't expose its selection just reports nothing. The panel has a bar with "권한 주기" that opens the macOS dialog; it appears **once** — ✕ (or granting it) and it stays gone. The menu's "접근성 허용…" keeps the same action while it is still untrusted. Without it the panel still carries the frontmost app and the clipboard.

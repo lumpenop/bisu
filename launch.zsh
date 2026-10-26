@@ -52,11 +52,14 @@ fi
 #    through the approval card like any other risky action. BISU_CU=0 leaves computer use out.
 mcp=""
 if [ -f "$root/ui/cu/server.mjs" ] && command -v node >/dev/null 2>&1; then
-  mcp="$HOME/Library/Application Support/bisu/mcp.json"
+  # One file per variant, swapped in whole: chats (computer use on) and jobs or suggestions (off) start
+  # at the same moment, and one must never read the other's half-written config.
+  mcp="$HOME/Library/Application Support/bisu/mcp-cu${BISU_CU:-1}-all${BISU_SEARCH_ALL:-0}.json"
   mkdir -p "${mcp:h}"
-  cat > "$mcp" <<JSON
+  cat > "$mcp.$$.tmp" <<JSON
 {"mcpServers":{"bisu":{"command":"$(command -v node)","args":["$root/ui/cu/server.mjs"],"env":{"BISU_CU":"${BISU_CU:-1}","BISU_SEARCH_ALL":"${BISU_SEARCH_ALL:-0}","BISU_CU_VISION_MODEL":"${BISU_CU_VISION_MODEL:-z-ai/glm-5.3-flash}","BISU_CU_DECISION_MODEL":"${BISU_CU_DECISION_MODEL:-gpt-6-luna}"}}}}
 JSON
+  mv -f "$mcp.$$.tmp" "$mcp"
   extra+=(--mcp-config "$mcp" --strict-mcp-config)
   allowed="mcp__bisu__session_search,mcp__bisu__session_show"
   [ "${BISU_CU:-1}" != "0" ] && allowed+=",mcp__bisu__cu_look,mcp__bisu__cu_state,mcp__bisu__cu_decide,mcp__bisu__cu_click,mcp__bisu__cu_type,mcp__bisu__cu_key,mcp__bisu__cu_scroll,mcp__bisu__cu_wait,mcp__bisu__cu_screenshot,mcp__bisu__cu_ground"

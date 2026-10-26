@@ -80,7 +80,9 @@ function runs(slugSource) {
   });
   return [...sessions.values()]
     .filter(s => Object.keys(s.usage).some(k => slug.test(k)))
-    .map(({ seen, ...rest }) => rest)
+    // Runs bisu started on its own: a suggestion look-around begins with "지금: ", a scheduled job
+    // with "[예약 작업 ". The page keeps them out of the conversation list unless asked.
+    .map(({ seen, ...rest }) => ({ ...rest, kind: /^지금: /.test(rest.prompt || '') ? 'suggest' : /^\[예약 작업 /.test(rest.prompt || '') ? 'job' : 'chat' }))
     .sort((a, b) => (b.start || 0) - (a.start || 0))
     .slice(0, 100);
 }
