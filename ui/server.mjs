@@ -16,6 +16,7 @@ import * as memory from './memory.mjs';
 import * as proactive from './proactive.mjs';
 import * as sessions from './sessions.mjs';
 import * as jobs from './jobs.mjs';
+import * as briefing from './briefing.mjs';
 import {releaseSchedule} from './lock.mjs';
 import {PRICES as GLM_PRICES} from '../engine/glm.mjs';
 import {eventKit} from '../engine/calendar.mjs';
@@ -404,6 +405,9 @@ const server=http.createServer(async(req,res)=>{
   if(mm&&m==='DELETE')return json(res,200,memory.remove(decodeURIComponent(mm[1])));
   // Proactive suggestions: what bisu brings without being asked. The run itself is read-only and
   // happens in its own process; accepting one only opens an ordinary chat and sends the request.
+  if(m==='GET'&&p==='/api/briefing')return json(res,200,{...briefing.snapshot(),access:await briefing.access()});
+  if(m==='POST'&&p==='/api/briefing')return json(res,200,briefing.configure(await body(req)));
+  if(m==='POST'&&p==='/api/briefing/run')return json(res,200,await briefing.run({force:true}));
   if(m==='GET'&&p==='/api/proactive')return json(res,200,proactive.snapshot());
   if(m==='POST'&&p==='/api/proactive')return json(res,200,proactive.configure(await body(req)));
   if(m==='POST'&&p==='/api/proactive/run'){
@@ -480,7 +484,8 @@ proactive.setContext(proactiveContext);
 proactive.start();
 jobs.setContext(proactiveContext);
 jobs.start();
-for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{proactive.stop();jobs.stop();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
+briefing.start();
+for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{proactive.stop();jobs.stop();briefing.stop();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
 // The desktop shell holds this pipe open for as long as it is running, so the pipe closing means the
 // shell quit or was force-killed. Without this the engine, dec and every Claude Code run outlive it.
 if(PARENT==='stdin'){

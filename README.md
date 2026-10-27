@@ -95,6 +95,10 @@ An assistant that only answers is a search box. The other half is noticing: on a
 
 Settings → 먼저 찾아오기 turns it off, changes the cadence and the quiet hours, and lists the last suggestions with what you did about each. `BISU_PROACTIVE=0` disables it for a single launch, `BISU_PROACTIVE_MODEL` picks the model it thinks with (the developer model by default, because this is a cheap mechanical job), and `BISU_SUGGEST_TIMEOUT` (150 s) caps how long a run may take. The state is one file, `~/.config/bisu/proactive.json` — delete it to forget every suggestion it has ever made.
 
+### The morning briefing
+
+Once a day — at 08:00 by default, or when the Mac wakes in the four hours after — the panel gets a card with today's events and the reminders that are due or overdue ([ui/briefing.mjs](ui/briefing.mjs)). No model writes it: the card is the calendar's own entries, read through the same helper as the calendar tools, so it costs nothing and cannot invent a meeting. It reads only once bisu already has access, so it never puts a permission prompt on the screen; an unopened card from yesterday is put away when today's comes. Settings → 아침 브리핑 turns it off, moves the hour and shows one now (**지금 받아 보기**); `node ui/briefing.mjs` prints what today's would say, and `BISU_BRIEFING=0` disables it for a launch.
+
 ## On a schedule
 
 "매일 아침 8시에 어제 커밋 요약해 줘" is a file, not a setting. bisu writes `~/.config/bisu/jobs/morning-summary.md` — with the same `Write` tool and the same approval as a memory, so you see it before it exists — and the engine does the rest:

@@ -119,7 +119,7 @@ td .p{color:var(--muted);font-size:12px;display:-webkit-box;-webkit-line-clamp:2
 .sugBtns{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
 .sugBtns button{padding:4px 11px;font-size:12px}
 body.panel .sugcard{padding:9px 10px}
-body.panel .sugBody{max-height:4.4em}
+body.panel .sugBody{max-height:4.4em}body.panel .sugBody.job{max-height:11em}
 .sugBody.job{white-space:pre-wrap;word-break:break-word;color:var(--ink);max-height:12em}.sugBody.job.err{color:var(--bad)}
 /* proactive controls in Settings */
 .sw{display:flex;align-items:center;gap:8px;font-size:13px}
@@ -388,6 +388,19 @@ body.meta .act .actM{display:inline}body.meta .res{display:block}
   <p class="note">bisu가 가끔 스스로 최근 작업을 훑어보고, 지금 말할 만한 걸 하나 남겨요. 읽기만 하는 별도 실행이라 아무것도 바꾸지 못하고, 고르면 그때 폴더에서 진짜 대화가 시작돼요. 마음에 안 든 제안은 “나중에”로 지우면 다시 꺼내지 않아요.</p>
   <div id="sugPast"></div>
  </section>
+ <section id="briefSec">
+  <h2>아침 브리핑</h2>
+  <form id="briefForm">
+   <label class="sw"><input type="checkbox" id="briefOn"> 켜기</label>
+   <div class="kv">
+    <div class="k">시각</div><div><select id="briefHour"><option value="5">오전 5시</option><option value="6">오전 6시</option><option value="7">오전 7시</option><option value="8">오전 8시</option><option value="9">오전 9시</option><option value="10">오전 10시</option><option value="11">오전 11시</option></select></div>
+    <div class="k">캘린더</div><div id="briefAccess">…</div>
+    <div class="k">다음</div><div id="briefNext">…</div>
+   </div>
+  </form>
+  <div class="actions"><button id="briefRun">지금 받아 보기</button><span class="note" id="briefNote" style="margin:0"></span></div>
+  <p class="note">매일 이 시각에 오늘 일정과 기한이 된 할 일을 패널 카드로 남겨요. 캘린더를 그대로 옮겨 적는 거라 모델을 쓰지 않고 돈도 들지 않아요. 그 뒤 네 시간 안에 맥이 깨어나지 않으면 그날은 건너뛰어요.</p>
+ </section>
  <section>
   <h2>예약 작업</h2>
   <div id="jobList"><p class="note">loading…</p></div>
@@ -492,7 +505,7 @@ document.body.classList.toggle('meta',META);
 
 // ---- tabs ----
 function show(v){for(const b of document.querySelectorAll('nav button'))b.classList.toggle('on',b.dataset.view===v);for(const el of document.querySelectorAll('.view'))el.classList.toggle('on',el.id===v+'View');
- if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='settings'){loadAccount();loadRoles();if(prefs.engine==='native')loadNative();renderSugSettings();loadSuggestions();loadJobs()}try{localStorage.setItem('bisu.view',v)}catch{}}
+ if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='settings'){loadAccount();loadRoles();if(prefs.engine==='native')loadNative();renderSugSettings();loadSuggestions();loadJobs();loadBrief()}try{localStorage.setItem('bisu.view',v)}catch{}}
 for(const b of document.querySelectorAll('nav button'))b.onclick=()=>show(b.dataset.view);
 
 // ---- light markdown: fenced code, inline code, paragraphs ----
@@ -925,7 +938,7 @@ function renderSug(){
  el.hidden=false;
  // A scheduled job's answer is the same card with other words: nothing to agree to, only to read,
  // and "이어서 대화" picks up the run that wrote it.
- if(it.kind==='job')el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="bisu" data-state="${it.error?'error':'done'}"></span>예약 작업 ${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
+ if(it.kind==='job')el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="bisu" data-state="${it.error?'error':'done'}"></span>${it.job==='briefing'?'아침 브리핑':'예약 작업'} ${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
   <div class="sugTitle">${esc(it.title)}</div>
   ${it.body?`<div class="sugBody job${it.error?' err':''}">${esc(it.body)}</div>`:''}
   <div class="sugBtns">${it.sessionId?`<button class="primary" data-a="do">이어서 대화</button>`:''}<button data-a="later">확인</button><span class="note" style="margin:0;align-self:center">${ago(it.at)}${it.cwd?' · '+esc(short(it.cwd)):''}</span></div></div>`;
@@ -977,6 +990,19 @@ async function saveSugSettings(){
 for(const id of ['sugOn','sugEvery','sugFrom','sugTo'])$(id).addEventListener('change',saveSugSettings);
 // A number field plus Return would otherwise submit the form and reload the page, losing the token.
 $('sugForm').onsubmit=e=>{e.preventDefault();saveSugSettings()};
+// ---- morning briefing ----
+const BRIEF_SKIP={access:'캘린더 접근이 아직 허용되지 않았어요.',running:'만드는 중이에요.'};
+async function loadBrief(){try{renderBrief(await api('/api/briefing'))}catch(e){$('briefNote').textContent=e.message}}
+function renderBrief(b){$('briefOn').checked=b.enabled;$('briefHour').value=String(b.hour);
+ const a=b.access||{};
+ $('briefAccess').innerHTML=a.events&&a.reminders?'일정 · 미리 알림 볼 수 있음':a.events||a.reminders?`${a.events?'일정':'미리 알림'}만 볼 수 있음`:`<span class="w">${a.error&&/not installed/.test(a.error)?'캘린더 도우미가 아직 설치되지 않았어요':'아직 허용되지 않았어요 — 자체 엔진 설정의 「접근 허용 요청」이나 시스템 설정에서 bisu를 켜 주세요'}</span>`;
+ $('briefNext').textContent=b.enabled?`${whenShort(b.nextAt)}${b.lastError?` · 마지막 시도 실패: ${b.lastError}`:''}`:'꺼져 있음'}
+async function saveBrief(){try{renderBrief({...await post('/api/briefing',{enabled:$('briefOn').checked,hour:Number($('briefHour').value)}),access:(await api('/api/briefing')).access});$('briefNote').textContent='저장했어요.'}catch(e){$('briefNote').textContent=e.message}}
+for(const id of ['briefOn','briefHour'])$(id).addEventListener('change',saveBrief);
+$('briefForm').onsubmit=e=>{e.preventDefault();saveBrief()};
+$('briefRun').onclick=async()=>{const b=$('briefRun');b.disabled=true;$('briefNote').textContent='';
+ try{const r=await post('/api/briefing/run');$('briefNote').textContent=r.error?r.error:r.skipped?BRIEF_SKIP[r.skipped]||r.skipped:'패널에 남겼어요.';loadSuggestions();loadBrief()}
+ catch(e){$('briefNote').textContent=e.message}finally{b.disabled=false}};
 // ---- scheduled jobs ----
 let jobsSnap=null;
 const whenShort=ts=>ts?new Date(ts).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
