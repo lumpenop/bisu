@@ -130,10 +130,43 @@ export const PROGRESS = {
   finished: 'Already has what it needs: the request is done or answerable, and further tool use would add nothing.',
   blocked: 'Cannot continue without the person: a missing permission, a decision only they can make, or missing information.',
 };
+// What the judge is shown of a turn: each call, and the start of what came back. The start, not just
+// the first line: a failed command's first line is "exit 1", and the error that says why comes after.
+export function stepsLog(messages, {result = 300} = {}) {
+  const flat = s => String(s).replace(/\s*\n\s*/g, ' ⏎ ').trim();
+  return messages.map(m => m.role === 'assistant'
+    ? (m.tool_calls || []).map(t => `→ ${t.function.name} ${t.function.arguments.slice(0, 160)}`).join('\n') + (m.content ? `\n(said) ${String(m.content).slice(0, 200)}` : '')
+    : m.role === 'tool' ? `   ${clip(flat(m.content), result)}` : '').filter(Boolean).join('\n');
+}
+// A long turn is cut from the front: what it did last says more about where it is going.
+const clipStart = (s, n) => { s = String(s ?? ''); return s.length > n ? '… (earlier steps left out)\n' + s.slice(-n) : s };
 export async function progress(userText, steps) {
-  const a = await ask(`The person asked: """${clip(userText, 800)}"""\nWhat the assistant has done so far, oldest first:\n${clip(steps, 3500)}`, [
+  const a = await ask(`The person asked: """${clip(userText, 800)}"""\nWhat the assistant has done so far, oldest first:\n${clipStart(steps, 3500)}`, [
     {type: 'choice', name: 'state', instructions: 'Which describes the assistant right now?', choices: Object.entries(PROGRESS).map(([value, description]) => ({value, description}))},
   ]);
   if (!a?.state) return null;
   return {state: a.state.choice, confidence: a.state.p[a.state.choice] ?? 0, p: a.state.p};
+}
+// When a judgment is acted on, and what the model is told. A turn judged to go in circles three times
+// is stopped. BISU_PROGRESS=0 turns the check off.
+export const PROGRESS_ACT = {repeating: 0.75, finished: 0.85, blocked: 0.7};
+export const PROGRESS_NUDGE = {
+  repeating: '같은 방법을 반복하고 있어. 접근을 바꾸거나, 지금까지 알아낸 것으로 답해.',
+  finished: '이제 충분해. 도구는 그만 쓰고 사람에게 답해.',
+  blocked: '사람의 확인이나 정보가 필요하면 지금 짧게 물어봐.',
+};
+// runTurn's shouldContinue: from the fifth step, every third step, ask where the turn stands.
+// messages.slice(startAt) is the turn so far.
+export function watchProgress(userText, messages, {startAt = messages.length, onJudgment = () => {}} = {}) {
+  let lastJudged = 0, circles = 0;
+  return async ({stats}) => {
+    if (process.env.BISU_PROGRESS === '0' || stats.steps < 5 || stats.steps - lastJudged < 3 || !available()) return true;
+    lastJudged = stats.steps;
+    const p = await progress(userText, stepsLog(messages.slice(startAt)));
+    if (!p) return true;
+    onJudgment({...p, step: stats.steps});
+    if (!(p.confidence >= (PROGRESS_ACT[p.state] ?? Infinity))) return true;
+    if (p.state === 'repeating' && ++circles >= 3) return false;
+    return {nudge: PROGRESS_NUDGE[p.state]};
+  };
 }

@@ -224,28 +224,13 @@ async function turn(text) {
   transcript.user(text);
   abort = new AbortController();
   const ctx = {cwd, readFiles: new Set(), signal: abort.signal, env: {}};
-  let msgId = 0, lastJudged = 0, circles = 0;
+  let msgId = 0;
   const startAt = messages.length;
   const stats = await runTurn({
     model, system: hint ? `${system}\n\n## This request\n${hint}` : system, messages, tools, extraTools: EXTRA, ctx, thinking, canUseTool,
     // Every few steps of a long turn, ask whether it is still going somewhere.
-    shouldContinue: async ({stats}) => {
-      if (stats.steps < 5 || stats.steps - lastJudged < 3 || !judge.available()) return true;
-      lastJudged = stats.steps;
-      const steps = messages.slice(startAt).map(m => m.role === 'assistant'
-        ? (m.tool_calls || []).map(t => `→ ${t.function.name} ${t.function.arguments.slice(0, 160)}`).join('\n') + (m.content ? `\n(said) ${String(m.content).slice(0, 200)}` : '')
-        : m.role === 'tool' ? `   ${String(m.content).split('\n')[0].slice(0, 160)}` : '').filter(Boolean).join('\n');
-      const p = await judge.progress(text, steps);
-      if (!p) return true;
-      out({type: 'system', subtype: 'bisu_judgment', kind: 'progress', state: p.state, confidence: p.confidence, session_id: sessionId});
-      if (p.state === 'repeating' && p.confidence >= 0.75) {
-        if (++circles >= 3) return false;
-        return {nudge: '같은 방법을 반복하고 있어. 접근을 바꾸거나, 지금까지 알아낸 것으로 답해.'};
-      }
-      if (p.state === 'finished' && p.confidence >= 0.85) return {nudge: '이제 충분해. 도구는 그만 쓰고 사람에게 답해.'};
-      if (p.state === 'blocked' && p.confidence >= 0.8) return {nudge: '사람의 확인이나 정보가 필요하면 지금 짧게 물어봐.'};
-      return true;
-    },
+    shouldContinue: judge.watchProgress(text, messages, {startAt, onJudgment: p =>
+      out({type: 'system', subtype: 'bisu_judgment', kind: 'progress', state: p.state, confidence: p.confidence, session_id: sessionId})}),
     onMessage: (m, meta) => {
       if (m.role === 'assistant') {
         const id = `msg_${sessionId.slice(0, 8)}_${Date.now()}_${msgId++}`;
