@@ -346,7 +346,7 @@ for (const m of CONFIGS) {
   const avg = k => r.reduce((a, x) => a + (x[k] || 0), 0) / n;
   console.log(`${m.padEnd(15)} ${String(r.filter(x => x.pass).length).padStart(2)}/${String(r.length).padEnd(3)} ${avg('steps').toFixed(1).padStart(5)} ${avg('toolCalls').toFixed(1).padStart(6)} ${String(r.reduce((a, x) => a + x.invalid, 0)).padStart(8)} ${String(r.reduce((a, x) => a + x.repeats, 0)).padStart(7)} ${(avg('ms') / 1000).toFixed(1).padStart(6)} ${(r.filter(x => x.firstMs).reduce((a, x) => a + x.firstMs, 0) / Math.max(1, r.filter(x => x.firstMs).length) / 1000).toFixed(1).padStart(14)} ${r.reduce((a, x) => a + (x.cost || 0), 0).toFixed(3).padStart(8)}`);
 }
-if (judge.usage.calls) console.log(`\nDecisions: ${judge.usage.calls} calls, $${(judge.usage.inputTokens / 1e6 * 0.10).toFixed(4)}, ${judge.usage.failures} failed`);
+if (judge.usage.calls) console.log(`\n${judge.provider()} (${judge.decisionModel()}): ${judge.usage.calls} calls, ${judge.cost().toFixed(4)}, ${judge.usage.failures} failed`);
 for (const m of CONFIGS.filter(m => m.startsWith('routed:'))) {
   console.log(`\n${m}, by the model that answered:`);
   for (const h of [...new Set(by(m).map(r => r.handled))]) {

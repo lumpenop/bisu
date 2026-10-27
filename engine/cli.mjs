@@ -102,7 +102,7 @@ function needsAsking(name, args) {
 }
 // Never cleared by the judge, whatever it says: these always go to the person.
 const RED_FLAGS = /(^|[\s;&|(])(rm|rmdir|mv|sudo|su|chmod|chown|chflags|kill|pkill|killall|dd|mkfs|diskutil|launchctl|defaults|osascript|shortcuts|scp|ssh|rsync|curl|wget|nc|ftp|open|brew|pip3?\s+install|npm\s+(publish|install\s+-g|i\s+-g|uninstall\s+-g)|yarn\s+global|git\s+(push|reset|clean|rebase|filter-branch|checkout\s+--|restore|stash\s+(drop|clear)|branch\s+-D|remote))\b|>\s*[~/]|\bcrontab\b|\bsecurity\b/;
-const CLEAR_BELOW = 0.15; // from engine/eval/judge-bench.mjs: 19/20 safe commands cleared, 0/20 risky ones
+const CLEAR_BELOW = judge.RISK_CLEAR;
 let currentRequest = '';
 async function canUseTool(name, args) {
   if (!needsAsking(name, args)) return {allow: true};
@@ -264,7 +264,7 @@ async function turn(text) {
   costTotal += stats.cost || 0;
   const result = {type: 'result', subtype: stats.stop === 'error' ? 'error_during_execution' : 'success', is_error: stats.stop === 'error' || stats.stop === 'filtered',
     num_turns: stats.steps, duration_ms: Date.now() - t0, result: stats.text || stats.error || '', session_id: sessionId,
-    total_cost_usd: costTotal + judge.usage.inputTokens / 1e6 * 0.10, modelUsage: {['z-ai/' + MODEL]: usageTotal}, bisu_native: true, stop: stats.stop, route: r?.route || null, model};
+    total_cost_usd: costTotal + judge.cost(), modelUsage: {['z-ai/' + MODEL]: usageTotal}, bisu_native: true, stop: stats.stop, route: r?.route || null, model};
   return result;
 }
 
