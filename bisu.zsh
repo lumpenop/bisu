@@ -24,14 +24,22 @@ _bisu_config() {
 }
 
 bisu() {
-  local ref="" saved
-  command -v dec-secret >/dev/null 2>&1 &&
-    ref="$(dec-secret list 2>/dev/null | awk '$2=="https://openrouter.ai"{print $1; exit}')"
+  local ref="" glm="" oai="" saved list=""
+  local -a keys
+  # Use-only keys from Dec, found by site: OpenRouter for the Claude Code engine, Z.ai (GLM) and
+  # OpenAI (Decisions) for bisu's own engine. Each one present is passed as a dec:// reference.
+  command -v dec-secret >/dev/null 2>&1 && list="$(dec-secret list 2>/dev/null)"
+  ref="$(print -r -- "$list" | awk '$2=="https://openrouter.ai"{print $1; exit}')"
+  glm="$(print -r -- "$list" | awk '$2=="https://api.z.ai"{print $1; exit}')"
+  oai="$(print -r -- "$list" | awk '$2=="https://api.openai.com"{print $1; exit}')"
+  [ -n "$ref" ] && keys+=("OPENROUTER_API_KEY=$ref")
+  [ -n "$glm" ] && keys+=("GLM_API_KEY=$glm")
+  [ -n "$oai" ] && keys+=("OPENAI_API_KEY=$oai")
   # bisu ui: local page for models per role, real OpenRouter spend and past runs (same key, same use-only rules).
   if [ "$1" = ui ]; then
     shift
     command -v node >/dev/null 2>&1 || { echo "bisu ui needs node" >&2; return 1; }
-    if [ -n "$ref" ]; then OPENROUTER_API_KEY="$ref" dec-secret run -- node "$_bisu_dir/ui/server.mjs" "$@"
+    if (( ${#keys} )); then env "${keys[@]}" dec-secret run -- node "$_bisu_dir/ui/server.mjs" "$@"
     else node "$_bisu_dir/ui/server.mjs" "$@"; fi
     return
   fi
@@ -40,8 +48,8 @@ bisu() {
   if [ "$1" = suggest ]; then
     shift
     command -v node >/dev/null 2>&1 || { echo "bisu suggest needs node" >&2; return 1; }
-    if [ -n "$ref" ]; then
-      OPENROUTER_API_KEY="$ref" dec-secret run -- node "$_bisu_dir/ui/proactive.mjs" run
+    if (( ${#keys} )); then
+      env "${keys[@]}" dec-secret run -- node "$_bisu_dir/ui/proactive.mjs" run
     else
       node "$_bisu_dir/ui/proactive.mjs" run
     fi
@@ -83,10 +91,10 @@ bisu() {
   local line; for line in ${(f)saved}; do cfg[${line%%=*}]="${line#*=}"; done
   local main="${BISU_MODEL:-${cfg[BISU_MODEL]:-z-ai/glm-5.3}}" code="${BISU_CODE_MODEL:-${cfg[BISU_CODE_MODEL]:-qwen/qwen3.8-max-0902}}"
   local dev="${BISU_DEV_MODEL:-${BISU_FAST_MODEL:-${cfg[BISU_DEV_MODEL]:-${cfg[BISU_FAST_MODEL]:-deepseek/deepseek-v4.1-flash}}}}" agents="$_bisu_dir/agents.json"
-  if [ -n "$ref" ]; then
-    OPENROUTER_API_KEY="$ref" dec-secret run -- \
+  if [ -n "$ref" ] || { [ "$BISU_ENGINE" = native ] && [ -n "$glm" ]; }; then
+    env "${keys[@]}" dec-secret run -- \
       zsh -f "$_bisu_dir/launch.zsh" "$main" "$code" "$dev" "$agents" "$@"
-  elif [ -n "$OPENROUTER_API_KEY" ]; then
+  elif [ -n "$OPENROUTER_API_KEY" ] || [ -n "$GLM_API_KEY" ]; then
     zsh -f "$_bisu_dir/launch.zsh" "$main" "$code" "$dev" "$agents" "$@"
   else
     echo "bisu: no OpenRouter key found." >&2

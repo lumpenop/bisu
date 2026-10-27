@@ -172,6 +172,34 @@ The security model is unchanged and now a little tighter: the engine listens on 
 
 The old shell is still in [mac/](mac): Electron main, a preload that only exposes shell chrome, the context capture, and `install-app.sh`. It is kept for comparison and adds nothing to the engine except an optional `BISU_UI_TOKEN` and a `?panel=1` layout.
 
+## bisu's own engine (beta): GLM talks and works, Decisions judges
+
+`engine/` is a second engine that does not use Claude Code at all, for the version of bisu that can be sold. Settings → 엔진 switches between it and Claude Code; `BISU_ENGINE=native bisu` does the same in a terminal. It speaks the same command-line protocol bisu already used (stream-json in and out, approvals over stdio, interrupt, queued messages, `--resume`, `-p --output-format json`), so `launch.zsh` starts it in Claude Code's place and the chat page, scheduled jobs and suggestions work unchanged.
+
+- **Models.** Z.ai GLM over its own API (`GLM_API_KEY`, a Standard key; a Coding Plan key may not be used from an app), two models with separate jobs, and the judge (below) choosing between them for each message:
+  - *GLM-5.3 is the assistant:* conversation, memory, schedules, the web, past conversations, the Mac, and anything the judge could not place. It reasons fully whenever it uses tools. At low effort it answered "서울 사는 사람 몇 명이야?" next to a `users.csv` with Seoul's population three times out of three, even when told to look at the files; with full reasoning it read the file and said 2.
+  - *GLM-5.3-Flash does the work in the folder,* small or large, and every background worker. It reasons only for a build or what the judge calls hard: without reasoning it read the file and said 2 every time, at a tenth of GLM-5.3's cost.
+
+  `BISU_NATIVE_MODEL` and `BISU_NATIVE_WORK_MODEL` change either one, and `BISU_THINKING=on|off` forces reasoning everywhere. Measured on 2026-10-27:
+
+  | Request | Answered by | Time | Cost |
+  |---|---|---|---|
+  | "고마워, 덕분에 살았다" | GLM-5.3 | 2 s | $0.001 |
+  | "내 이름은 민준이야. 앞으로 기억해둬" | GLM-5.3 | 20 s | $0.005 |
+  | "매일 아침 9시에 이 폴더 users.csv 요약해줘" | GLM-5.3 | 42 s | $0.007 |
+  | "오늘 비트코인 시세 얼마야?" | GLM-5.3 | 33 s | $0.008 |
+  | "서울 사는 사람 몇 명이야?" | Flash | 24 s | $0.001 |
+  | The 15 benchmark tasks, twice each | Flash for 28, GLM-5.3 for the 2 chats | median 19 s | $0.0006 a task |
+
+  The benchmark passed 29 of 30; the miss was Flash finding one of the two files that mention VAT. Times vary from run to run with Z.ai's load. A model that starts repeating itself is cut off within a few hundred characters and asked once for a fresh answer: before that check existed, GLM-5.3 with no tools once wrote "done done done…" for 19 minutes and 65k tokens.
+- **Judgments.** OpenAI's Decisions API (`OPENAI_API_KEY`, `gpt-6-luna`) answers probability questions instead of writing text, at $0.10 per million input tokens and about 0.4 s a call. It decides three things:
+  - *what kind of request this is* (chat, work, build, past, mac, schedule, remember, web), and whether it is hard. The judge also sees the folder's top-level names, so "서울 사는 사용자는 몇 명이야?" next to `data/` reads as a question about the data, not about Seoul. Chat gets no tools; work and build go to Flash; the rest get a one-line hint about how to go about it. 51 of 52 labeled requests routed right, and none was sent to chat by mistake.
+  - *whether an action may run without asking* (destructive, external, system). With the default "위험해 보이는 것만 묻기", changes and commands inside the folder that every probability puts under 0.15 just run — 19 of 20 harmless commands, 0 of 20 risky ones. Deletes, moves, pushes, installs, `sudo`, `curl` and similar are on a fixed list that always asks, whatever the judge says, and a new file inside the folder needs no judgment at all. "매번 묻기" asks for everything.
+  - *whether a long turn is still going somewhere* (progressing, repeating, finished, blocked), checked every few steps; a turn going in circles is told to change approach, and stopped if it does not.
+- **Tools.** Files (read before edit, exact-text edits), search, the shell (with an environment that never contains API tokens), the web (Z.ai search, fetch), memory (`remember`, `forget`, writing the same files as the Memory tab), scheduled jobs (`schedule_job`), past sessions and computer use through bisu's own MCP server, and `delegate`: a worker that does a big job in the background while bisu keeps talking, its report coming back as a message.
+- **Conversations** are JSONL files in `~/Library/Application Support/bisu/sessions`, in the same outer shape as Claude Code's transcripts, so History and the full-text search show both. A conversation past ~200k characters is summarized by Flash and continues from the summary.
+- **Measured, not assumed.** `engine/eval/bench.mjs` runs the 15 tasks in a sandbox (files only in a temp folder, no network, a short allowlist of commands) and checks each result by looking at the files. `engine/eval/judge-bench.mjs` runs the judgments on labeled examples to pick the thresholds. Both are how any model or prompt change should be checked.
+
 ## Honest limits
 
 - The cost Claude Code prints (`/cost`, `total_cost_usd`) is estimated at **Claude** prices and runs several times too high here. Check real spend on your OpenRouter dashboard. Claude Code still sends a large system prompt on every call, so a small task is a few cents; the Qwen role is the priciest.

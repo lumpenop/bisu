@@ -26,7 +26,8 @@ import {execFile} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
 
-export const PROJECTS = path.join(os.homedir(), '.claude', 'projects');
+// Claude Code's transcripts and those of bisu's own engine (engine/store.mjs), joined with ':'.
+export const PROJECTS = [path.join(os.homedir(), '.claude', 'projects'), process.env.BISU_SESSIONS_DIR || path.join(os.homedir(), 'Library', 'Application Support', 'bisu', 'sessions')].join(':');
 const DB = process.env.BISU_SESSIONS_DB || path.join(os.homedir(), 'Library', 'Application Support', 'bisu', 'sessions.sqlite');
 const ALL = process.env.BISU_SEARCH_ALL === '1';
 const OPENROUTER_MODEL = /"model":"[a-z0-9][a-z0-9._-]*\//; // provider/model: only OpenRouter names look like this
@@ -138,7 +139,7 @@ export function index(projects = PROJECTS) {
   const putMessage = db.prepare('INSERT INTO messages(session, file, ts, role, text) VALUES (?, ?, ?, ?, ?)');
   const putSession = db.prepare('INSERT OR REPLACE INTO sessions(id, file, start, end, cwd, title, prompt, turns) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
   let files = 0, sessions = 0, messages = 0;
-  for (const p of jsonlFiles(projects)) {
+  for (const p of String(projects).split(':').filter(Boolean).flatMap(d => [...jsonlFiles(d)])) {
     seen.add(p);
     let st = null;
     try { st = fs.statSync(p) } catch { continue }

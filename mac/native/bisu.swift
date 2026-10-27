@@ -193,6 +193,8 @@ final class Engine {
       p.arguments = [bridge, "run", "--", node, server.path]
       env["OPENROUTER_API_KEY"] = "dec://OPENROUTER_API_KEY"
       if decHas(node, "OPENAI_API_KEY") { env["OPENAI_API_KEY"] = "dec://OPENAI_API_KEY" }
+      // bisu's own engine thinks with Z.ai GLM; the key is passed the same use-only way.
+      if decHas(node, "GLM_API_KEY") { env["GLM_API_KEY"] = "dec://GLM_API_KEY" }
     } else if let key = env["OPENROUTER_API_KEY"], !key.isEmpty {
       p.executableURL = URL(fileURLWithPath: node)
       p.arguments = [server.path]

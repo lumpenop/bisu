@@ -37,7 +37,10 @@ const CONFIG=path.join(process.env.XDG_CONFIG_HOME||path.join(os.homedir(),'.con
 // session ids are written down: the engine is restarted with the shell, and the panel must come back
 // with the conversations it had instead of an empty page.
 const CHATS_FILE=path.join(path.dirname(CONFIG),'chats.json');
+// Transcripts: Claude Code's, and those of bisu's own engine (engine/store.mjs).
 const PROJECTS=path.join(os.homedir(),'.claude','projects');
+const NATIVE_SESSIONS=process.env.BISU_SESSIONS_DIR||path.join(os.homedir(),'Library','Application Support','bisu','sessions');
+const TRANSCRIPT_DIRS=`${PROJECTS}:${NATIVE_SESSIONS}`;
 const HELPER=path.join(os.homedir(),'Library','Application Support','Dec Browser','bin','dec-secret-helper');
 const ROLES={BISU_MODEL:'z-ai/glm-5.3',BISU_DEV_MODEL:'deepseek/deepseek-v4.1-flash',BISU_CODE_MODEL:'qwen/qwen3.8-max-0902'};
 // Old names still read from the config file and the environment.
@@ -46,6 +49,9 @@ const SLUG=/^[a-z0-9][a-z0-9._-]*\/[A-Za-z0-9._:-]+$/;
 const KEY=process.env.OPENROUTER_API_KEY||'';
 const KEY_BASE=(process.env.OPENROUTER_BASE_URL||'https://openrouter.ai').replace(/\/$/,'');
 const keyMode=!KEY?'none':KEY.startsWith('dec-use-only-')?'use-only':'plain';
+// The key the chosen engine thinks with: OpenRouter for Claude Code, Z.ai for bisu's own engine.
+const canThink=()=>process.env.BISU_ENGINE==='native'?!!process.env.GLM_API_KEY:!!KEY;
+const noKey=()=>process.env.BISU_ENGINE==='native'?'No Z.ai key: save one for https://api.z.ai in Dec first.':'No OpenRouter key: save one for https://openrouter.ai in Dec first.';
 
 // ---- models config ----
 function readConfig(){const out={};try{for(const line of fs.readFileSync(CONFIG,'utf8').split('\n')){const m=/^(BISU_[A-Z_]+)=(\S+)$/.exec(line.trim());const k=m&&(ALIAS[m[1]]||m[1]);if(k in ROLES&&SLUG.test(m[2])&&!(k in out&&ALIAS[m[1]]))out[k]=m[2]}}catch{}return out}
@@ -56,11 +62,22 @@ function roles(){const saved=readConfig();return Object.fromEntries(Object.entri
 
 // ---- page preferences ----
 const PREFS=path.join(path.dirname(CONFIG),'ui.json');
-const PREF_KEYS={meta:'boolean',onboarded:'boolean'};
+// engine: 'claude' (Claude Code over OpenRouter) or 'native' (bisu's own engine on Z.ai GLM). It is
+// put in this process's environment, so every chat, job and suggestion started after a change uses it.
+const PREF_KEYS={meta:['boolean',false],onboarded:['boolean',false],engine:[['claude','native'],'claude'],approve:[['risky','always'],'risky']};
+const prefOk=(t,v)=>Array.isArray(t)?t.includes(v):typeof v===t;
 function readPrefs(){let p={};try{p=JSON.parse(fs.readFileSync(PREFS,'utf8'))||{}}catch{}
- return Object.fromEntries(Object.entries(PREF_KEYS).map(([k,t])=>[k,typeof p[k]===t?p[k]:false]))}
-function writePrefs(patch){const next=readPrefs();for(const [k,t] of Object.entries(PREF_KEYS))if(typeof patch?.[k]===t)next[k]=patch[k];
- fs.mkdirSync(path.dirname(PREFS),{recursive:true});const tmp=PREFS+'.'+process.pid+'.tmp';fs.writeFileSync(tmp,JSON.stringify(next));fs.renameSync(tmp,PREFS);return next}
+ const out=Object.fromEntries(Object.entries(PREF_KEYS).map(([k,[t,d]])=>[k,prefOk(t,p[k])?p[k]:d]));
+ if(process.env.BISU_ENGINE_FORCED)out.engine=process.env.BISU_ENGINE_FORCED;
+ return {...out,glm:!!process.env.GLM_API_KEY,decisions:!!process.env.OPENAI_API_KEY}}
+function writePrefs(patch){const next=readPrefs();for(const [k,[t]] of Object.entries(PREF_KEYS))if(prefOk(t,patch?.[k]))next[k]=patch[k];
+ delete next.glm;delete next.decisions;
+ fs.mkdirSync(path.dirname(PREFS),{recursive:true});const tmp=PREFS+'.'+process.pid+'.tmp';fs.writeFileSync(tmp,JSON.stringify(next));fs.renameSync(tmp,PREFS);
+ applyEngine();return readPrefs()}
+// An engine set from the shell (BISU_ENGINE=native bisu ui) wins over the saved choice.
+if(process.env.BISU_ENGINE)process.env.BISU_ENGINE_FORCED=process.env.BISU_ENGINE;
+function applyEngine(){const p=readPrefs();process.env.BISU_ENGINE=p.engine;process.env.BISU_APPROVE=p.approve}
+applyEngine();
 
 // ---- OpenRouter ----
 let modelCache={at:0,list:null};
@@ -100,13 +117,13 @@ const HISTORY_DAYS=60;
 function* jsonlFiles(dir,depth=0){let ents=[];try{ents=fs.readdirSync(dir,{withFileTypes:true})}catch{return}
  for(const e of ents){const p=path.join(dir,e.name);if(e.isDirectory()&&depth<3&&e.name!=='memory')yield* jsonlFiles(p,depth+1);else if(e.isFile()&&e.name.endsWith('.jsonl'))yield p}}
 // Cheap enough (a few hundred stat calls) to answer "is the cached list still current?" on every open.
-function newestTranscript(){let newest=0;for(const p of jsonlFiles(PROJECTS)){try{const m=fs.statSync(p).mtimeMs;if(m>newest)newest=m}catch{}}
+function newestTranscript(){let newest=0;for(const p of [...jsonlFiles(PROJECTS),...jsonlFiles(NATIVE_SESSIONS)]){try{const m=fs.statSync(p).mtimeMs;if(m>newest)newest=m}catch{}}
  return newest}
 function scanHistory(mode,arg){return new Promise((resolve,reject)=>{
  // A stripped environment: the reader needs nothing from this process, and the key tokens in it
  // should not be handed to a program whose only job is reading files.
  const env={PATH:process.env.PATH||'/usr/bin:/bin',HOME:os.homedir()};
- execFile(process.execPath,[SCAN,mode,PROJECTS,String(HISTORY_DAYS),arg],{encoding:'utf8',env,timeout:120000,maxBuffer:32<<20},(err,out,errOut)=>{
+ execFile(process.execPath,[SCAN,mode,TRANSCRIPT_DIRS,String(HISTORY_DAYS),arg],{encoding:'utf8',env,timeout:120000,maxBuffer:32<<20},(err,out,errOut)=>{
   if(err)return reject(Error(`history ${mode} failed: ${(errOut||err.message).trim().split('\n').pop()}`));
   try{resolve(JSON.parse(out))}catch{reject(Error(`history ${mode} printed no json`))}})})}
 
@@ -143,7 +160,7 @@ function saveChats(){
   // A chat that never got a session has no conversation to come back to; the next panel open
   // should offer a folder instead of an empty one.
   const list=[...chats.values()].filter(c=>c.sessionId).sort((a,b)=>b.created-a.created).slice(0,30)
-   .map(c=>({id:c.id,cwd:c.cwd,title:c.title,sessionId:c.sessionId,created:c.created}));
+   .map(c=>({id:c.id,cwd:c.cwd,title:c.title,sessionId:c.sessionId,created:c.created,lastAt:c.lastAt||c.created}));
   fs.mkdirSync(path.dirname(CHATS_FILE),{recursive:true});
   const tmp=CHATS_FILE+'.tmp';fs.writeFileSync(tmp,JSON.stringify(list));fs.renameSync(tmp,CHATS_FILE);
  }catch(e){console.error('bisu chats: cannot save:',e.message)}
@@ -159,7 +176,7 @@ function restoreChats(){
   const sessionId=typeof saved.sessionId==='string'&&/^[0-9a-f-]{36}$/.test(saved.sessionId)?saved.sessionId:null;
   chats.set(id,{id,cwd,title:typeof saved.title==='string'?cleanTitle(saved.title):null,busy:false,proc:null,sessionId,
    events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),tasks:new Map(),queued:[],turnsDone:0,costSoFar:0,
-   created:Number(saved.created)||Date.now()});
+   created:Number(saved.created)||Date.now(),lastAt:Number(saved.lastAt)||Number(saved.created)||Date.now()});
  }
 }
 
@@ -186,7 +203,9 @@ function idleLater(c){
  c.idle=setTimeout(()=>reap(c),c.clients.size?IDLE_MS:PARK_MS);
 }
 function unwatched(c){clearTimeout(c.idle);if(c.proc&&!c.busy&&!c.pending.size&&!c.tasks?.size)idleLater(c)}
-function publicChat(c){return {id:c.id,cwd:c.cwd,title:c.title,busy:c.busy,alive:!!c.proc,sessionId:c.sessionId,pending:c.pending.size,tasks:c.tasks?.size||0,queued:c.queued?.length||0,created:c.created}}
+// lastAt is the last time the person or bisu actually said something, which is what decides whether
+// the panel picks a conversation up again or starts fresh.
+function publicChat(c){return {id:c.id,cwd:c.cwd,title:c.title,busy:c.busy,alive:!!c.proc,sessionId:c.sessionId,pending:c.pending.size,tasks:c.tasks?.size||0,queued:c.queued?.length||0,created:c.created,lastAt:c.lastAt||c.created}}
 // A restored chat has no events until it is opened; its transcript is replayed into the stream then.
 async function hydrate(c){
  if(c.events.length||!c.sessionId)return;
@@ -203,7 +222,7 @@ async function hydrate(c){
 function push(c,ev){ev.at=Date.now();c.events.push(ev);if(c.events.length>MAX_EVENTS)c.events.splice(0,c.events.length-MAX_EVENTS);
  const line=`data: ${JSON.stringify(ev)}\n\n`;for(const res of c.clients)res.write(line)}
 function setBusy(c,busy){if(c.busy===busy)return;c.busy=busy;push(c,{kind:'status',busy})}
-function warm(c){if(!c.proc&&KEY){start(c);idleLater(c)}}
+function warm(c){if(!c.proc&&canThink()){start(c);idleLater(c)}}
 // Chats run delegated work in the background (see background-agents.mjs), which is what keeps the assistant free to talk.
 const BACKGROUND_AGENTS=JSON.stringify({hooks:{PreToolUse:[{matcher:'Agent|Task',hooks:[{type:'command',command:`'${process.execPath}' '${path.join(here,'background-agents.mjs').replace(/'/g,"'\\''")}'`}]}]}});
 function start(c){
@@ -263,6 +282,9 @@ function handle(c,j){
  const parent=j.parent_tool_use_id||null;
  if(j.type==='system'&&j.subtype==='init'){c.sessionId=j.session_id;saveChats();clearTimeout(c.stall);push(c,{kind:'init',sessionId:j.session_id,model:j.model,cwd:j.cwd});return}
  if(j.type==='system'&&/^task_|^background_tasks_changed$/.test(j.subtype||'')){tasksEvent(c,j);return}
+ // bisu's own engine: what the judge decided, and actions it cleared without asking.
+ if(j.type==='system'&&j.subtype==='auto_allowed'){push(c,{kind:'auto_allowed',tool:j.tool_name,input:j.input,reason:j.reason||'',judged:true});return}
+ if(j.type==='system'&&j.subtype==='bisu_judgment'){const {type,subtype,session_id,kind,...rest}=j;push(c,{...rest,kind:'judgment',judge:kind});return}
  // A finished background task wakes the assistant up without a message from the person: that is a turn too.
  if(!parent&&!c.busy&&(j.type==='stream_event'||j.type==='assistant'))setBusy(c,true);
  if(j.type==='stream_event'){const e=j.event;if(e?.type==='content_block_delta'&&e.delta?.type==='text_delta')push(c,{kind:'delta',text:e.delta.text,parent});return}
@@ -278,18 +300,22 @@ function handle(c,j){
  if(j.type==='result'){c.turnsDone++;
   const usage={};for(const [m,u] of Object.entries(j.modelUsage||{}))usage[m]={input:(u.inputTokens||0)+(u.cacheCreationInputTokens||0),cacheRead:u.cacheReadInputTokens||0,output:u.outputTokens||0};
   // modelUsage adds up over the whole process, so a turn's cost is the difference from the previous result.
-  const total=estimate(usage,priceNow()),cost=total==null?null:total-c.costSoFar;if(total!=null)c.costSoFar=total;
+  // bisu's own engine reports what it spent at Z.ai's prices; Claude Code's own figure uses Claude's.
+  const total=j.bisu_native?(j.total_cost_usd??null):estimate(usage,priceNow()),cost=total==null?null:total-c.costSoFar;if(total!=null)c.costSoFar=total;
+  c.lastAt=Date.now();saveChats();
   push(c,{kind:'result',error:!!j.is_error,subtype:j.subtype,turns:j.num_turns,ms:j.duration_ms,cost});setBusy(c,false);idleLater(c);return}
 }
 async function newChat({cwd,resume}){
  const dir=path.resolve(String(cwd||os.homedir()).replace(/^~(?=\/|$)/,os.homedir()));
  if(!fs.statSync(dir,{throwIfNoEntry:false})?.isDirectory())throw Error('not a folder: '+dir);
- const c={id:randomUUID(),cwd:dir,title:null,busy:false,proc:null,sessionId:resume||null,events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),tasks:new Map(),queued:[],turnsDone:0,costSoFar:0,created:Date.now()};
+ const c={id:randomUUID(),cwd:dir,title:null,busy:false,proc:null,sessionId:resume||null,events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),tasks:new Map(),queued:[],turnsDone:0,costSoFar:0,created:Date.now(),lastAt:Date.now()};
  if(resume){if(!/^[0-9a-f-]{36}$/.test(resume))throw Error('bad session id');const past=await pastMessages(resume);
   c.title=cleanTitle(past.find(m=>m.kind==='user')?.text)||'Resumed session';push(c,{kind:'resumed',sessionId:resume,count:past.length});for(const m of past)push(c,{...m,past:true})}
  chats.set(c.id,c);saveChats();warm(c);return c}
 function say(c,text){
- if(!c.title){c.title=cleanTitle(text);saveChats()}
+ c.lastAt=Date.now();
+ if(!c.title)c.title=cleanTitle(text);
+ saveChats();
  clearTimeout(c.idle);if(!c.proc)start(c);
  // start() refuses a folder that is gone and says so in the chat; there is nobody to send this to.
  if(!c.proc)return;
@@ -353,7 +379,7 @@ const server=http.createServer(async(req,res)=>{
   if(m==='GET'&&p==='/api/proactive')return json(res,200,proactive.snapshot());
   if(m==='POST'&&p==='/api/proactive')return json(res,200,proactive.configure(await body(req)));
   if(m==='POST'&&p==='/api/proactive/run'){
-   if(!KEY)return json(res,400,{error:'No OpenRouter key: bisu has nothing to think with until one is saved for https://openrouter.ai in Dec.'});
+   if(!canThink())return json(res,400,{error:noKey()||'x'});
    const why=proactive.due(Date.now(),true);
    if(why)return json(res,200,{...proactive.snapshot(),skipped:why});
    // Answered at once: the run takes a minute, and the page is already polling for the result.
@@ -366,7 +392,7 @@ const server=http.createServer(async(req,res)=>{
    if(action==='seen'){proactive.markSeen(item.id);return json(res,200,proactive.snapshot())}
    if(action==='dismiss'){proactive.resolve(item.id,'dismissed');return json(res,200,proactive.snapshot())}
    if(action!=='accept')return json(res,400,{error:'unknown action'});
-   if(!KEY)return json(res,400,{error:'No OpenRouter key: save one for https://openrouter.ai in Dec first.'});
+   if(!canThink())return json(res,400,{error:noKey()||''});
    proactive.resolve(item.id,'accepted');
    // A job's card continues the run that produced it, so "그럼 고쳐" has the whole context; a
    // suggestion starts a fresh chat and sends what it proposed.
@@ -385,7 +411,7 @@ const server=http.createServer(async(req,res)=>{
    try{
     if(action==='run'){const s=jobs.snapshot(),j=s.jobs.find(x=>x.slug===jm[1]);
      if(!j)return json(res,404,{error:'no such job'});if(j.error)return json(res,400,{error:j.error});if(j.needsApproval)return json(res,409,{error:'approve this job first'});if(s.running)return json(res,409,{error:'another job is running'});
-     if(!KEY)return json(res,400,{error:'No OpenRouter key: save one for https://openrouter.ai in Dec first.'});
+     if(!canThink())return json(res,400,{error:noKey()||''});
      jobs.run(jm[1],{reason:'page',force:true}).catch(e=>console.error('bisu jobs:',e.message));
      return json(res,202,jobs.snapshot())}
     if(action==='approve')return json(res,200,jobs.approve(jm[1]));
@@ -393,8 +419,8 @@ const server=http.createServer(async(req,res)=>{
     if(action==='delete')return json(res,200,jobs.remove(jm[1]));
     return json(res,400,{error:'unknown action'})
    }catch(e){return json(res,e.status||500,{error:e.message})}}
-  if(m==='GET'&&p==='/api/chats')return json(res,200,{chats:[...chats.values()].map(publicChat).sort((a,b)=>b.created-a.created),home:os.homedir()});
-  if(m==='POST'&&p==='/api/chats'){if(!KEY)return json(res,400,{error:'No OpenRouter key: save one for https://openrouter.ai in Dec first.'});const c=await newChat(await body(req));return json(res,200,{chat:publicChat(c)})}
+  if(m==='GET'&&p==='/api/chats')return json(res,200,{chats:[...chats.values()].map(publicChat).sort((a,b)=>b.lastAt-a.lastAt),home:os.homedir()});
+  if(m==='POST'&&p==='/api/chats'){if(!canThink())return json(res,400,{error:noKey()||''});const c=await newChat(await body(req));return json(res,200,{chat:publicChat(c)})}
   const cm=/^\/api\/chats\/([0-9a-f-]{36})(\/[a-z]+)?$/.exec(p);const c=cm&&chats.get(cm[1]);
   if(cm&&!c)return json(res,404,{error:'chat not found'});
   if(c&&m==='GET'&&cm[2]==='/events'){await hydrate(c);res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-store','Connection':'keep-alive'});
@@ -420,7 +446,7 @@ const proactiveContext=async()=>({
  runs:await runs().catch(()=>[]),
  chats:[...chats.values()].filter(c=>c.sessionId).map(c=>({cwd:c.cwd,title:c.title})).slice(0,6),
  models:{main:roles().BISU_MODEL.value,code:roles().BISU_CODE_MODEL.value,dev:roles().BISU_DEV_MODEL.value},
- key:!!KEY,
+ key:canThink(),
 });
 proactive.setContext(proactiveContext);
 proactive.start();

@@ -13,6 +13,8 @@ import path from 'node:path';
 const [mode, projectsDir, daysArg, extra] = process.argv.slice(2);
 const SINCE = Date.now() - (Number(daysArg) || 60) * 864e5;
 
+// Several folders may be given, joined with ':' — Claude Code's transcripts and bisu's own.
+function* allFiles(dirs) { for (const d of String(dirs).split(':').filter(Boolean)) yield* jsonlFiles(d) }
 function* jsonlFiles(dir, depth = 0) {
   let entries = [];
   try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
@@ -29,7 +31,7 @@ const textOf = c => typeof c === 'string' ? c
 
 // Calls visit(text) for every transcript modified inside the window.
 function eachRecent(visit) {
-  for (const p of jsonlFiles(projectsDir)) {
+  for (const p of allFiles(projectsDir)) {
     let st = null;
     try { st = fs.statSync(p) } catch { continue }
     if (st.mtimeMs < SINCE) continue;

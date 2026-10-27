@@ -234,6 +234,7 @@ body.meta .act .actM{display:inline}body.meta .res{display:block}
 #key{display:none}body.meta #key{display:inline-block}
 .sub{margin-left:0}
 .sugTop .bisu{width:18px;height:18px}
+.m.autoallow{font-size:12px;color:var(--muted);padding:2px 10px}
 .tool .raw{display:none}body.meta .tool .raw{display:inline}body.meta .tool .ko{display:none}
 #recent{display:flex;flex-direction:column;gap:2px;margin-top:6px}
 #recent .rh{font-size:12px;color:var(--muted);margin:6px 0 2px}
@@ -248,6 +249,9 @@ body.meta .act .actM{display:inline}body.meta .res{display:block}
 .onboard select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
 .onboard .ob{display:flex;gap:8px;align-items:center}.onboard .ob .note{margin:0}
 .hello .onboard{margin-top:12px}
+/* While the first-run card is up, the panel shows only bisu and the card. */
+#panelStart.onboarding .startTitle,#panelStart.onboarding .note,#panelStart.onboarding .row,#panelStart.onboarding #startNew,#panelStart.onboarding #recent{display:none}
+#panelStart.onboarding .startWrap{margin-top:5vh}
 .kindchip{font-size:11px;padding:1px 7px;border-radius:999px;background:var(--chip);color:var(--muted);margin-left:6px;white-space:nowrap}
 .sugcard{border-radius:14px}
 @media (max-width:760px){
@@ -346,6 +350,17 @@ body.meta .act .actM{display:inline}body.meta .res{display:block}
 </div></div></div>
 
 <div class="view" id="settingsView"><div class="page"><div>
+ <section>
+  <h2>엔진</h2>
+  <div class="seg" id="engineSeg" style="display:flex;gap:6px;flex-wrap:wrap">
+   <label class="sw" style="border:1px solid var(--line);border-radius:999px;padding:5px 12px"><input type="radio" name="engine" value="native"> bisu 자체 엔진 · GLM <span class="chip">베타</span></label>
+   <label class="sw" style="border:1px solid var(--line);border-radius:999px;padding:5px 12px"><input type="radio" name="engine" value="claude"> Claude Code · OpenRouter</label>
+  </div>
+  <p class="note" id="engineNote">새 대화부터 적용돼요. 이미 열린 대화는 시작할 때 엔진 그대로예요.</p>
+  <div id="approveRow" style="margin-top:12px"><div class="note" style="margin:0 0 6px">확인 방식 (자체 엔진)</div>
+   <label class="sw"><input type="radio" name="approve" value="risky"> 위험해 보이는 것만 묻기 — 폴더 안의 수정과 명령은 판단 모델이 안전하다고 본 것만 바로 해요. 삭제·전송·설치는 항상 물어요</label>
+   <label class="sw" style="margin-top:4px"><input type="radio" name="approve" value="always"> 매번 묻기</label></div>
+ </section>
  <section>
   <h2>보기</h2>
   <label class="sw"><input type="checkbox" id="metaOn"> 작업 세부 보기 — 도구 호출, 단계, 비용, 모델 이름을 대화와 기록에 그대로 보여줘요 (개발자용)</label>
@@ -534,6 +549,8 @@ if(PANEL&&HOST?.onShown)HOST.onShown(()=>{
  const i=$('input');
  if(i&&!$('compose').hidden)i.focus();
  checkAccessibility();
+ // A conversation left for hours is not picked up again by itself; the start card lists it.
+ if(cur&&!cur.busy&&!cur.pending&&!cur.tasks&&!fresh(cur)){cur=null;wrap().innerHTML='';setMood('idle','듣고 있어요');chatUI()}
  // Reattach the chat the panel is showing, which also brings Claude Code back if it was let go.
  if(cur)listen(cur.id);
  // The suggestion this brings up counts as seen now, and the dot on the menu bar goes away.
@@ -542,17 +559,23 @@ if(PANEL&&HOST?.onShown)HOST.onShown(()=>{
 if(PANEL&&HOST?.onHidden)HOST.onHidden(()=>{panelOpen=false;detach()});
 // What a tool is called on the page: bisu's own tools by what they do, Claude Code's as they are.
 const TOOL_NAMES={session_search:'지난 대화 검색',session_show:'지난 대화 읽기',cu_look:'화면 읽기',cu_decide:'누를 곳 고르기',cu_click:'클릭',cu_type:'입력',cu_key:'키 누르기',cu_scroll:'스크롤',cu_wait:'기다리기',cu_screenshot:'화면 캡처',cu_ground:'화면에서 찾기',cu_approve:'승인한 동작 실행',cu_state:'권한 확인'};
-const STEP={Read:'파일 읽는 중',Write:'파일 만드는 중',Edit:'파일 고치는 중',MultiEdit:'파일 고치는 중',NotebookEdit:'노트 고치는 중',Bash:'명령 실행하는 중',Glob:'파일 찾는 중',Grep:'내용 찾는 중',WebFetch:'웹 페이지 읽는 중',WebSearch:'웹에서 찾는 중',Task:'담당에게 맡기는 중',Agent:'담당에게 맡기는 중',TodoWrite:'할 일 정리하는 중',session_search:'지난 대화 찾는 중',session_show:'지난 대화 읽는 중'};
+const STEP={read_file:'파일 읽는 중',write_file:'파일 만드는 중',edit_file:'파일 고치는 중',run_command:'명령 실행하는 중',list_files:'파일 찾는 중',search_files:'내용 찾는 중',web_fetch:'웹 페이지 읽는 중',web_search:'웹에서 찾는 중',delegate:'담당에게 맡기는 중',remember:'기억하는 중',schedule_job:'예약하는 중',Read:'파일 읽는 중',Write:'파일 만드는 중',Edit:'파일 고치는 중',MultiEdit:'파일 고치는 중',NotebookEdit:'노트 고치는 중',Bash:'명령 실행하는 중',Glob:'파일 찾는 중',Grep:'내용 찾는 중',WebFetch:'웹 페이지 읽는 중',WebSearch:'웹에서 찾는 중',Task:'담당에게 맡기는 중',Agent:'담당에게 맡기는 중',TodoWrite:'할 일 정리하는 중',session_search:'지난 대화 찾는 중',session_show:'지난 대화 읽는 중'};
 const stepLabel=n=>{const b=String(n||'').replace(/^mcp__.+?__/,'');return STEP[b]||(b.startsWith('cu_')?'화면 다루는 중':toolName(n)+' 하는 중')};
-const ASK={Write:'이 파일을 만들어도 될까요?',Edit:'이 파일을 고쳐도 될까요?',MultiEdit:'이 파일을 고쳐도 될까요?',NotebookEdit:'이 노트를 고쳐도 될까요?',Bash:'이 명령을 실행해도 될까요?',WebFetch:'이 페이지를 열어봐도 될까요?',WebSearch:'웹에서 찾아봐도 될까요?'};
+const ASK={write_file:'이 파일을 만들어도 될까요?',edit_file:'이 파일을 고쳐도 될까요?',run_command:'이 명령을 실행해도 될까요?',web_fetch:'이 페이지를 열어봐도 될까요?',read_file:'이 파일을 읽어도 될까요?',list_files:'이 폴더를 봐도 될까요?',search_files:'이 폴더를 찾아봐도 될까요?',Write:'이 파일을 만들어도 될까요?',Edit:'이 파일을 고쳐도 될까요?',MultiEdit:'이 파일을 고쳐도 될까요?',NotebookEdit:'이 노트를 고쳐도 될까요?',Bash:'이 명령을 실행해도 될까요?',WebFetch:'이 페이지를 열어봐도 될까요?',WebSearch:'웹에서 찾아봐도 될까요?'};
 const askQ=t=>ASK[t]||`${toolName(t)} — 해도 될까요?`;
-const CORE={Read:'읽기',Write:'만들기',Edit:'고치기',MultiEdit:'고치기',NotebookEdit:'노트 고치기',Bash:'명령 실행',Glob:'파일 찾기',Grep:'내용 찾기',WebFetch:'웹 읽기',WebSearch:'웹 검색',Task:'맡기기',Agent:'맡기기',TodoWrite:'할 일 정리'};
+const CORE={read_file:'읽기',write_file:'만들기',edit_file:'고치기',run_command:'명령 실행',list_files:'파일 찾기',search_files:'내용 찾기',web_fetch:'웹 읽기',web_search:'웹 검색',delegate:'맡기기',Read:'읽기',Write:'만들기',Edit:'고치기',MultiEdit:'고치기',NotebookEdit:'노트 고치기',Bash:'명령 실행',Glob:'파일 찾기',Grep:'내용 찾기',WebFetch:'웹 읽기',WebSearch:'웹 검색',Task:'맡기기',Agent:'맡기기',TodoWrite:'할 일 정리'};
 const stepName=n=>CORE[n]||toolName(n);
+const ROUTE_KO={chat:'대화',work:'폴더 작업',build:'큰 작업',past:'지난 대화',mac:'맥 조작',schedule:'예약',remember:'기억',web:'웹'};
 const toolName=n=>{const m=/^mcp__([^_]+(?:_[^_]+)*)__(.+)$/.exec(String(n||''));return m?(m[1]==='bisu'&&TOOL_NAMES[m[2]])||m[2].replace(/_/g,' '):String(n||'')};
 function toolSummary(name,input={}){
+ if(input.path&&!input.command&&!input.pattern)return short(input.path);
  if(input.command)return input.command;if(input.file_path)return short(input.file_path);if(input.pattern)return input.pattern+(input.path?'  in '+short(input.path):'');
  if(input.url)return input.url;if(input.description)return input.description;if(input.prompt)return input.prompt;return JSON.stringify(input)}
 function askBody(tool,input={}){
+ // bisu's own engine names its tools differently and says path instead of file_path.
+ if(tool==='run_command')tool='Bash';
+ if(tool==='edit_file'){tool='Edit';input={...input,file_path:input.path}}
+ if(tool==='write_file'){tool='Write';input={...input,file_path:input.path}}
  if(tool==='Bash')return `<pre>${esc(input.command)}</pre>`;
  if(tool==='Edit'||tool==='MultiEdit'){const edits=input.edits||[input];return `<div class="note" style="margin:0 0 6px">${esc(short(input.file_path))}</div>`+edits.map(e=>`<pre><span class="del">${esc(e.old_string||'').split('\n').map(l=>'- '+l).join('\n')}</span>\n<span class="ins">${esc(e.new_string||'').split('\n').map(l=>'+ '+l).join('\n')}</span></pre>`).join('')}
  if(tool==='Write')return `<div class="note" style="margin:0 0 6px">${esc(short(input.file_path))}</div><pre>${esc(String(input.content||'').slice(0,3000))}</pre>`;
@@ -591,7 +614,9 @@ function render(ev){
    for(const b of el.querySelectorAll('button'))b.onclick=()=>answer(ev.request_id,b.dataset.a,el);setMood('waiting','확인이 필요해요')}break;
   case 'approval_done':{const el=wrap().querySelector(`.ask[data-id="${CSS.escape(ev.request_id)}"]`);if(el){el.className='ask done';el.innerHTML=ev.allow?`허용했어요${ev.always?' · 이 대화에선 계속':''}`:ev.reason==='stopped'?'답하지 않았어요 (멈춤)':'거절했어요'}
    if(mood.state==='waiting'&&!wrap().querySelector('.ask:not(.done)'))setMood('thinking','이어서 하는 중…')}break;
-  case 'auto_allowed':break;
+  case 'auto_allowed':if(ev.judged){const row=document.createElement('div');row.className='m autoallow';row.textContent=`자동 허용 · ${stepName(ev.tool)} · ${ev.reason}`;actBlock().querySelector('.actL').appendChild(row)}break;
+  case 'judgment':if(ev.judge==='route')add(`판단 · ${esc(ROUTE_KO[ev.route]||ev.route)} ${Math.round((ev.confidence||0)*100)}%${ev.hard!=null?` · 어려움 ${Math.round(ev.hard*100)}%`:''}`,null,'res');
+   else if(ev.judge==='progress')add(`판단 · 진행 ${esc(ev.state)} ${Math.round((ev.confidence||0)*100)}%`,null,'res');break;
   case 'result':live=null;{const secs=Math.round((ev.ms||0)/1000),meta=`${ev.turns||0}단계 · ${secs}초 · ≈${usd(ev.cost)}`;
    actDone(meta);add(`${ev.error?'<span class="err">멈췄어요</span>':'완료'} · ${meta}`,null,'res');
    if(!ev.past){if(ev.error)setMood('error','멈췄어요');else setMood('done','다 했어요')}}break;
@@ -646,15 +671,19 @@ async function startChat(body,errEl){if(errEl){errEl.hidden=true;errEl.textConte
 $('newChat').onclick=()=>{const cwd=$('cwd').value.trim();try{localStorage.setItem('bisu.cwd',cwd)}catch{};startChat({cwd})};
 $('cwd').onkeydown=e=>{if(e.key==='Enter')$('newChat').click()};
 
+// A conversation counts as current for a few hours after its last message.
+const FRESH_MS=6*3600e3;
+const fresh=c=>Date.now()-(c.lastAt||c.created||0)<FRESH_MS;
 // The panel's way back to an earlier conversation: its start card lists the recent ones.
 function renderRecent(){const el=$('recent');if(!el)return;if(!PANEL||cur){el.innerHTML='';return}
  const list=chats.slice(0,6);
- el.innerHTML=list.length?`<div class="rh">지난 대화</div>`+list.map(c=>`<div class="ri" data-id="${esc(c.id)}"><span class="dot${c.pending?' wait':c.busy||c.tasks?' busy':''}"></span><span class="t">${esc(c.title||'새 대화')}</span><span class="w">${c.created?ago(c.created):''}</span></div>`).join(''):'';
+ el.innerHTML=list.length?`<div class="rh">지난 대화</div>`+list.map(c=>`<div class="ri" data-id="${esc(c.id)}"><span class="dot${c.pending?' wait':c.busy||c.tasks?' busy':''}"></span><span class="t">${esc(c.title||'새 대화')}</span><span class="w">${c.lastAt||c.created?ago(c.lastAt||c.created):''}</span></div>`).join(''):'';
  for(const r of el.querySelectorAll('.ri'))r.onclick=()=>open(r.dataset.id)}
 
 // First run: three choices, kept as ordinary memories (and the suggestion cadence), shown once.
 function renderOnboard(){
  const old=document.querySelector('.onboard');
+ $('panelStart').classList.toggle('onboarding',!prefs.onboarded&&!cur&&PANEL);
  if(prefs.onboarded||cur){old?.remove();return}
  if(old)return;
  const host=PANEL?document.querySelector('#panelStart .startWrap'):wrap().querySelector('.hello');if(!host)return;
@@ -665,8 +694,8 @@ function renderOnboard(){
    <label><input type="radio" name="obTone" value="follow" checked>내 말투 따라</label><label><input type="radio" name="obTone" value="casual">반말</label><label><input type="radio" name="obTone" value="polite">존댓말</label></div></div>
   <label class="f">먼저 찾아오기<select id="obEvery"><option value="24" selected>하루 한 번</option><option value="8">하루 세 번</option><option value="off">찾아오지 않기</option></select></label>
   <div class="ob"><button class="primary" id="obGo">좋아요</button><button id="obSkip">나중에</button><span class="note err" id="obErr"></span></div>`;
- if(PANEL)host.insertBefore(card,host.firstChild);else host.appendChild(card);
- const done=async()=>{prefs=await post('/api/prefs',{onboarded:true}).catch(()=>({...prefs,onboarded:true}));card.remove()};
+ if(PANEL)host.querySelector('.bisu').after(card);else host.appendChild(card);
+ const done=async()=>{prefs=await post('/api/prefs',{onboarded:true}).catch(()=>({...prefs,onboarded:true}));card.remove();$('panelStart').classList.remove('onboarding');fillStartCwd();renderRecent()};
  card.querySelector('#obSkip').onclick=done;
  card.querySelector('#obGo').onclick=async()=>{const b=card.querySelector('#obGo');b.disabled=true;
   try{const name=card.querySelector('#obName').value.trim(),tone=card.querySelector('input[name=obTone]:checked').value,every=card.querySelector('#obEvery').value;
@@ -954,14 +983,26 @@ mountBisu();setMood('idle','듣고 있어요');
 $('metaOn').checked=META;
 $('metaOn').onchange=()=>{META=$('metaOn').checked;document.body.classList.toggle('meta',META);post('/api/prefs',{meta:META}).then(p=>{prefs=p}).catch(()=>{});
  for(const d of document.querySelectorAll('details.act'))d.open=META};
-api('/api/prefs').then(p=>{prefs=p;META=!!p.meta;document.body.classList.toggle('meta',META);$('metaOn').checked=META;if(!cur)chatUI()}).catch(()=>{});
+function renderEngine(){for(const r of document.querySelectorAll('input[name=engine]'))r.checked=r.value===prefs.engine;
+ for(const r of document.querySelectorAll('input[name=approve]'))r.checked=r.value===(prefs.approve||'risky');
+ $('approveRow').hidden=prefs.engine!=='native';
+ $('engineNote').textContent=prefs.engine==='native'&&!prefs.glm?'Z.ai 키가 없어요. Dec Browser → 설정 → 자격 증명에 사이트 https://api.z.ai로 저장하고 bisu를 다시 여세요.':'새 대화부터 적용돼요. 이미 열린 대화는 시작할 때 엔진 그대로예요.'}
+for(const r of document.querySelectorAll('input[name=approve]'))r.onchange=()=>post('/api/prefs',{approve:r.value}).then(p=>{prefs=p;renderEngine()}).catch(()=>{});
+for(const r of document.querySelectorAll('input[name=engine]'))r.onchange=()=>post('/api/prefs',{engine:r.value}).then(p=>{prefs=p;renderEngine()}).catch(e=>{$('engineNote').textContent=e.message});
+const prefsReady=api('/api/prefs').then(p=>{prefs=p;META=!!p.meta;document.body.classList.toggle('meta',META);$('metaOn').checked=META;renderEngine();if(!cur)chatUI()}).catch(()=>{});
 if(PANEL){ensureCtxBar();HOST?.onContext?.(c=>{if(!sent)setCtx(c)});HOST?.context?.().then(c=>{if(!sent)setCtx(c)}).catch(()=>{})}
 loadAccount();loadRuns();loadSuggestions();
-refreshChats().then(()=>{let id=null,v='chat';try{id=localStorage.getItem('bisu.chat');v=localStorage.getItem('bisu.view')||'chat'}catch{}
+// Which conversation to show on opening. A chat the shell asked for opens as asked. Otherwise the
+// last one is picked up only if it is recent: a panel that opens on a conversation from days ago
+// (whatever bisu believed back then included) is not "what can I do for you". The first run always
+// starts on the start card, because that is where the three first-run questions are.
+Promise.all([refreshChats(),prefsReady]).then(()=>{let id=null,v='chat';try{id=localStorage.getItem('bisu.chat');v=localStorage.getItem('bisu.view')||'chat'}catch{}
  const forced=Q.get('chat');
+ const recentOne=c=>c&&(c.busy||c.pending||c.tasks||fresh(c));
  if(forced&&chats.some(c=>c.id===forced))open(forced);
- else if(id&&chats.some(c=>c.id===id))open(id);
- else if(PANEL&&chats.length)open(chats[0].id);
+ else if(!prefs.onboarded){}
+ else if(id&&recentOne(chats.find(c=>c.id===id)))open(id);
+ else if(PANEL&&recentOne(chats[0]))open(chats[0].id);
  show(PANEL?'chat':v);if(!cur)chatUI()});
 setInterval(refreshChats,5000);
 // Slower than the chat list: a suggestion appears about once a day, and the answer takes a minute.

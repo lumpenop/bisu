@@ -25,11 +25,13 @@ extra=()
 # BISU_PROMPT swaps the base file: the scheduled suggestion run is given prompt-suggest.md instead,
 # with the same memory appended.
 # Node is optional here: the terminal bisu should still start on a Mac without it, just with no memory.
-base="${BISU_PROMPT:-$root/prompt.md}"
+# bisu's own engine (BISU_ENGINE=native) has its own base prompt; jobs and suggestions keep theirs.
+if [ "${BISU_ENGINE:-}" = native ] && [ -z "$BISU_PROMPT" ]; then base="$root/engine/prompt.md"
+else base="${BISU_PROMPT:-$root/prompt.md}"; fi
 # One file per base prompt: a suggestion run and a chat can be starting at the same moment, and they
 # must not overwrite each other's system prompt.
-if [ -n "$BISU_PROMPT" ]; then
-  sysprompt="$HOME/Library/Application Support/bisu/system-prompt-${base:t:r}.md"
+if [ -n "$BISU_PROMPT" ] || [ "${BISU_ENGINE:-}" = native ]; then
+  sysprompt="$HOME/Library/Application Support/bisu/system-prompt-${BISU_ENGINE:-claude}-${base:t:r}.md"
 else
   sysprompt="$HOME/Library/Application Support/bisu/system-prompt.md"
 fi
@@ -66,4 +68,9 @@ JSON
   extra+=(--allowedTools "$allowed")
 fi
 
+# bisu's own engine speaks the same flags and protocol for everything bisu uses, so it starts here
+# with exactly the same arguments; Claude Code's MCP config, agents and settings are ignored by it.
+if [ "${BISU_ENGINE:-}" = native ]; then
+  exec node "$root/engine/cli.mjs" --tools "$tools" --append-system-prompt-file "$sysprompt" "${extra[@]}" "$@"
+fi
 exec claude --agents "$agents" --tools "$tools" --append-system-prompt-file "$sysprompt" "${extra[@]}" "$@"
