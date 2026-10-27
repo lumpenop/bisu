@@ -17,6 +17,8 @@ import * as proactive from './proactive.mjs';
 import * as sessions from './sessions.mjs';
 import * as jobs from './jobs.mjs';
 import {releaseSchedule} from './lock.mjs';
+import {PRICES as GLM_PRICES} from '../engine/glm.mjs';
+import {eventKit} from '../engine/calendar.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.dirname(here);
 const PORT=Number(process.env.BISU_UI_PORT||7878);
@@ -66,12 +68,14 @@ const PREFS=path.join(path.dirname(CONFIG),'ui.json');
 // put in this process's environment, so every chat, job and suggestion started after a change uses it.
 const PREF_KEYS={meta:['boolean',false],onboarded:['boolean',false],engine:[['claude','native'],'claude'],approve:[['risky','always'],'risky']};
 const prefOk=(t,v)=>Array.isArray(t)?t.includes(v):typeof v===t;
-function readPrefs(){let p={};try{p=JSON.parse(fs.readFileSync(PREFS,'utf8'))||{}}catch{}
- const out=Object.fromEntries(Object.entries(PREF_KEYS).map(([k,[t,d]])=>[k,prefOk(t,p[k])?p[k]:d]));
- if(process.env.BISU_ENGINE_FORCED)out.engine=process.env.BISU_ENGINE_FORCED;
- return {...out,glm:!!process.env.GLM_API_KEY,decisions:!!process.env.OPENAI_API_KEY}}
-function writePrefs(patch){const next=readPrefs();for(const [k,[t]] of Object.entries(PREF_KEYS))if(prefOk(t,patch?.[k]))next[k]=patch[k];
- delete next.glm;delete next.decisions;
+function savedPrefs(){let p={};try{p=JSON.parse(fs.readFileSync(PREFS,'utf8'))||{}}catch{}
+ return Object.fromEntries(Object.entries(PREF_KEYS).map(([k,[t,d]])=>[k,prefOk(t,p[k])?p[k]:d]))}
+function readPrefs(){const out=savedPrefs(),forced=process.env.BISU_ENGINE_FORCED||null;
+ if(forced)out.engine=forced;
+ return {...out,engineForced:!!forced,glm:!!process.env.GLM_API_KEY,decisions:!!process.env.OPENAI_API_KEY}}
+// Saved on top of what was saved, not of what is shown: an engine forced from the shell for one run
+// must not become the saved choice the moment any other setting changes.
+function writePrefs(patch){const next=savedPrefs();for(const [k,[t]] of Object.entries(PREF_KEYS))if(prefOk(t,patch?.[k]))next[k]=patch[k];
  fs.mkdirSync(path.dirname(PREFS),{recursive:true});const tmp=PREFS+'.'+process.pid+'.tmp';fs.writeFileSync(tmp,JSON.stringify(next));fs.renameSync(tmp,PREFS);
  applyEngine();return readPrefs()}
 // An engine set from the shell (BISU_ENGINE=native bisu ui) wins over the saved choice.
@@ -101,6 +105,27 @@ async function keyGet(p){const r=await fetch(KEY_BASE+p,{headers:{authorization:
 // Whether the installed dec-secret-helper streams answers (`stream`) or buffers them (older helper, ~200 s per request).
 function helperStreams(){return new Promise(resolve=>{if(keyMode!=='use-only')return resolve(null);
  const c=execFile(HELPER,['stream'],{encoding:'utf8',timeout:5000},(e,out)=>{let j=null;try{j=JSON.parse(out)}catch{}resolve(j?.code==='INPUT_INVALID'?true:/^USAGE/.test(j?.code||'')?false:null)});c.on('error',()=>resolve(null));c.stdin.end('')})}
+// ---- bisu's own engine: its keys, what it spent, its models, the calendar ----
+const keyState=v=>!v?'none':v.startsWith('dec-use-only-')?'use-only':'plain';
+// What it spent, from its own transcripts at Z.ai's prices (Z.ai has no account page to ask). Only
+// the files touched this month are read.
+function nativeSpend(){
+ const now=new Date(),day0=new Date(now.getFullYear(),now.getMonth(),now.getDate()),week0=new Date(+day0-((day0.getDay()+6)%7)*864e5),month0=new Date(now.getFullYear(),now.getMonth(),1);
+ const out={today:0,week:0,month:0,turns:0};
+ let dirs=[];try{dirs=fs.readdirSync(NATIVE_SESSIONS,{withFileTypes:true}).filter(d=>d.isDirectory())}catch{return out}
+ for(const d of dirs)for(const f of fs.readdirSync(path.join(NATIVE_SESSIONS,d.name)).filter(f=>f.endsWith('.jsonl'))){
+  const file=path.join(NATIVE_SESSIONS,d.name,f);if(fs.statSync(file).mtime<month0)continue;
+  for(const line of fs.readFileSync(file,'utf8').split('\n')){if(!line.includes('"usage"'))continue;let j;try{j=JSON.parse(line)}catch{continue}
+   const u=j.message?.usage,price=GLM_PRICES[String(j.message?.model||'').replace(/^z-ai\//,'')],at=new Date(j.timestamp);
+   if(j.type!=='assistant'||!u||!price||!(at>=month0))continue;
+   const cost=((u.input_tokens||0)*price.input+(u.cache_read_input_tokens||0)*price.cached+(u.output_tokens||0)*price.output)/1e6;
+   out.month+=cost;if(at>=week0)out.week+=cost;if(at>=day0)out.today+=cost;out.turns++}}
+ return out}
+// The helper answers for whoever started it, which here is bisu itself.
+async function calendarAccess(op='status'){const ek=eventKit();
+ try{return await (op==='request'?ek.request():ek.status())}catch(e){return /not installed/.test(e.message)?{missing:true}:{error:e.message}}}
+async function nativeInfo(){return {glm:keyState(process.env.GLM_API_KEY||''),decisions:keyState(process.env.OPENAI_API_KEY||''),
+ models:{assistant:process.env.BISU_NATIVE_MODEL||'glm-5.3',worker:process.env.BISU_NATIVE_WORK_MODEL||'glm-5.3-flash'},spend:nativeSpend(),calendar:await calendarAccess()}}
 async function account(){
  const streams=await helperStreams();if(!KEY)return {mode:keyMode,streams};
  const [key,credits]=await Promise.allSettled([keyGet('/api/v1/key'),keyGet('/api/v1/credits')]);
@@ -357,6 +382,9 @@ const server=http.createServer(async(req,res)=>{
   if(m==='POST'&&p==='/api/prefs')return json(res,200,writePrefs(await body(req)));
   if(m==='GET'&&p==='/api/models')return json(res,200,{models:await models()});
   if(m==='GET'&&p==='/api/account')return json(res,200,await account());
+  if(m==='GET'&&p==='/api/native')return json(res,200,await nativeInfo());
+  // Asking macOS for calendar access from Settings, rather than in the middle of a request.
+  if(m==='POST'&&p==='/api/calendar/access')return json(res,200,await calendarAccess('request'));
   if(m==='GET'&&p==='/api/runs')return json(res,200,{runs:await runs()});
   // Past conversations, the same index the assistant's session_search uses (ui/sessions.mjs);
   // refreshed in a child process first so a chat that just ended is already in it.

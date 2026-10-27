@@ -3,6 +3,7 @@
 //
 // One JSON request on stdin, one JSON answer on stdout ({"ok": true, …} or {"ok": false, "error": …}):
 //   {"op":"status"}                                    access for events and reminders, without asking
+//   {"op":"request"}                                   ask macOS for both (once), then the same answer
 //   {"op":"calendars"}                                 event calendars and reminder lists
 //   {"op":"events","from":"2026-10-27","to":"2026-11-02"}            both days included
 //   {"op":"add_event","title":…,"start":"2026-10-28 15:00","end":"2026-10-28 16:00","all_day":false,
@@ -206,6 +207,12 @@ guard let req = (try? JSONSerialization.jsonObject(with: input)) as? [String: An
 
 switch op {
 case "status":
+  emit(["events": statusName(.event), "reminders": statusName(.reminder)])
+
+case "request":
+  // Settings asks for both at once, so the first request in a chat does not stop to ask.
+  _ = access(.event)
+  _ = access(.reminder)
   emit(["events": statusName(.event), "reminders": statusName(.reminder)])
 
 case "calendars":

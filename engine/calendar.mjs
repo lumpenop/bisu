@@ -72,7 +72,8 @@ const lookup = (backend, id) => book(backend).byId.get(String(id ?? '').trim().r
 
 const REPEAT_KO = {daily: '매일 반복', weekly: '매주 반복', monthly: '매달 반복', yearly: '매년 반복'};
 const eventText = x => `${when(x.start, x.end, x.all_day)} ${x.title}${x.location ? ` · ${x.location}` : ''}${x.calendar ? ` · ${x.calendar}` : ''}${x.recurring ? ` · ${REPEAT_KO[x.recurring] || '반복'}` : ''}`;
-const eventLine = (backend, x, reuse) => `[${idFor(backend, 'e', x, reuse)}] ${eventText(x)}`;
+// In a listing, what has already ended (or is on now) says so: "오늘 남은 일정" must not count it.
+const eventLine = (backend, x, reuse, now) => { const t = now && span(x); return `[${idFor(backend, 'e', x, reuse)}] ${eventText(x)}${!t ? '' : t.e <= now ? ' (끝남)' : t.s <= now ? ' (진행 중)' : ''}` };
 function reminderText(r, now) {
   const d = parseWhen(r.due);
   const late = d && !r.completed && (d.timed ? d.date < now : ymd(d.date) < ymd(now));
@@ -117,7 +118,7 @@ export const CALENDAR_TOOLS = {
         const q = String(query || '').trim().toLowerCase();
         const events = (await b.events({from: ymd(f.date), to: ymd(t.date)})).filter(x => !q || [x.title, x.location, x.notes].some(v => String(v || '').toLowerCase().includes(q)));
         const range = `${day(f.date)} – ${day(t.date)}${q ? `, matching "${query}"` : ''}`;
-        return ok(events.length ? `Events ${range}:\n${events.map(x => eventLine(b, x)).join('\n')}` : `No events ${range}.`);
+        return ok(events.length ? `Events ${range} (now ${day(now)} ${hm(now)}):\n${events.map(x => eventLine(b, x, undefined, now)).join('\n')}` : `No events ${range}.`);
       } catch (e) { return failure(e) }
     },
   },
@@ -282,6 +283,7 @@ export function eventKit(bin = HELPER()) {
   });
   return {
     status: () => call('status'),
+    request: () => call('request'),
     calendars: () => call('calendars'),
     events: a => call('events', a).then(j => j.events),
     addEvent: a => call('add_event', a).then(j => j.event),
