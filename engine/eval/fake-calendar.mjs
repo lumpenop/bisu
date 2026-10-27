@@ -12,7 +12,8 @@ const at = s => parseWhen(s)?.date;
 // An all-day event's end is its last day; as a span it runs to the start of the day after.
 const endOf = x => x.all_day ? addDays(at(x.end), 1) : at(x.end);
 
-export function fakeCalendar({calendars = ['개인', '회사'], lists = ['미리 알림', '장보기'], events = [], reminders = []} = {}) {
+// fail: {method: {times, message}} makes a call fail the way the helper can (a timeout, no access).
+export function fakeCalendar({calendars = ['개인', '회사'], lists = ['미리 알림', '장보기'], events = [], reminders = [], fail = {}} = {}) {
   let n = 0;
   const ev = events.map(e => ({id: `EV-${++n}`, location: '', notes: '', calendar: calendars[0], all_day: !parseWhen(e.start).timed, end: e.start, repeat: '', until: '', skip: [], ...e}));
   const rem = reminders.map(r => ({id: `RE-${++n}`, due: '', list: lists[0], completed: false, notes: '', priority: '', ...r}));
@@ -104,5 +105,10 @@ export function fakeCalendar({calendars = ['개인', '회사'], lists = ['미리
       return remShown(r);
     },
   };
+  for (const [m, f] of Object.entries(fail)) {
+    const real = api[m];
+    let left = f.times ?? Infinity;
+    api[m] = async (...a) => { if (left-- > 0) throw new Error(f.message || 'timed out'); return real(...a) };
+  }
   return api;
 }

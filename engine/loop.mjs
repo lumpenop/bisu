@@ -13,11 +13,12 @@ export async function runTurn({
   model, system, messages, tools = Object.keys(TOOLS), extraTools = {}, ctx,
   thinking = true, maxSteps = 40, onEvent = () => {}, canUseTool = async () => ({allow: true}),
   shouldContinue = null, // stage 2: a judge that may stop a loop that is going nowhere
+  checkAnswer = null,    // a judge that reads the answer against what the tools actually did
   onMessage = () => {},    // every message added to the conversation, for the transcript
 }) {
   const all = {...TOOLS, ...extraTools};
   const specs = toolSpecs(tools, extraTools);
-  const stats = {steps: 0, toolCalls: 0, invalid: 0, repeats: 0, denied: 0, empty: 0, nudges: 0, loops: 0, prompt: 0, completion: 0, cached: 0, reasoning: 0, cost: 0, firstMs: null, stop: 'done', text: ''};
+  const stats = {steps: 0, toolCalls: 0, invalid: 0, repeats: 0, denied: 0, empty: 0, nudges: 0, loops: 0, claimNudges: 0, actions: [], prompt: 0, completion: 0, cached: 0, reasoning: 0, cost: 0, firstMs: null, stop: 'done', text: ''};
   const seen = new Map();
   const t0 = Date.now();
   for (;;) {
@@ -70,7 +71,14 @@ export async function runTurn({
     onMessage(reply, {model, usage: res.usage, toolCalls: calls, text: res.text});
     if (res.text) { onEvent({kind: 'text', text: res.text}); stats.text = res.text }
     if (res.finish === 'sensitive') { stats.stop = 'filtered'; onEvent({kind: 'error', message: '모델의 안전 필터가 답을 멈췄어요.'}); break }
-    if (!calls.length) break;
+    if (!calls.length) {
+      // An answer that says it did something no tool did this turn gets one chance to do it or say so.
+      if (checkAnswer && !stats.claimNudges && res.text && !ctx.signal?.aborted) {
+        const r = await checkAnswer({text: res.text, stats});
+        if (r?.nudge) { stats.claimNudges++; messages.push({role: 'user', content: `(bisu: ${r.nudge})`}); continue }
+      }
+      break;
+    }
 
     for (const c of calls) {
       stats.toolCalls++;
@@ -100,6 +108,7 @@ export async function runTurn({
         }
       }
       onEvent({kind: 'tool_result', id: c.id, text: clipFor(text), error});
+      stats.actions.push({name: c.name, args: String(c.arguments || '').slice(0, 200), ok: !error, result: String(text).replace(/\s*\n\s*/g, ' ⏎ ').slice(0, 240)});
       const result = {role: 'tool', tool_call_id: c.id, content: text};
       messages.push(result);
       onMessage(result, {error});

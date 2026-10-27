@@ -236,6 +236,9 @@ async function turn(text) {
     // Every few steps of a long turn, ask whether it is still going somewhere.
     shouldContinue: judge.watchProgress(text, messages, {startAt, onJudgment: p =>
       out({type: 'system', subtype: 'bisu_judgment', kind: 'progress', state: p.state, confidence: p.confidence, session_id: sessionId})}),
+    // An answer that claims a change no tool made this turn is sent back once to do it or say so.
+    checkAnswer: judge.watchClaims(text, {onJudgment: c =>
+      out({type: 'system', subtype: 'bisu_judgment', kind: 'claim', confidence: c.p, acted: c.acted, session_id: sessionId})}),
     onMessage: (m, meta) => {
       if (m.role === 'assistant') {
         const id = `msg_${sessionId.slice(0, 8)}_${Date.now()}_${msgId++}`;

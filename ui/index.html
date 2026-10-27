@@ -55,6 +55,7 @@ aside{width:260px;border-right:1px solid var(--line);display:flex;flex-direction
 .m.user{align-self:flex-end;background:var(--me);padding:8px 12px;border-radius:12px 12px 2px 12px;max-width:80%;white-space:pre-wrap}
 .m.text{padding:2px 0}
 .m.text p{margin:0 0 8px}.m.text p:last-child{margin:0}
+.m.text.retracted{opacity:.45}
 .m.text ul,.m.text ol{margin:0 0 8px;padding-left:20px}.m.text ul:last-child,.m.text ol:last-child{margin-bottom:0}.m.text li{margin:2px 0}
 .m.text .h{font-weight:650;margin:12px 0 6px;line-height:1.35}.m.text .h:first-child{margin-top:0}.m.text .h1{font-size:1.15em}.m.text .h2{font-size:1.06em}.m.text .h3{font-size:1em}
 .m.text pre{background:var(--chip);padding:10px;border-radius:6px;overflow:auto;margin:6px 0}
@@ -653,7 +654,9 @@ function render(ev){
    if(mood.state==='waiting'&&!wrap().querySelector('.ask:not(.done)'))setMood('thinking','이어서 하는 중…')}break;
   case 'auto_allowed':if(ev.judged){const row=document.createElement('div');row.className='m autoallow';row.textContent=`자동 허용 · ${stepName(ev.tool)} · ${ev.reason}`;actBlock().querySelector('.actL').appendChild(row)}break;
   case 'judgment':if(ev.judge==='route')add(`판단 · ${esc(ROUTE_KO[ev.route]||ev.route)} ${Math.round((ev.confidence||0)*100)}%${ev.hard!=null?` · 어려움 ${Math.round(ev.hard*100)}%`:''}`,null,'res');
-   else if(ev.judge==='progress')add(`판단 · 진행 ${esc(ev.state)} ${Math.round((ev.confidence||0)*100)}%`,null,'res');break;
+   else if(ev.judge==='progress')add(`판단 · 진행 ${esc(ev.state)} ${Math.round((ev.confidence||0)*100)}%`,null,'res');
+   // Said everywhere, not only in the developer view: the answer above it is being corrected.
+   else if(ev.judge==='claim'&&ev.acted){[...wrap().querySelectorAll('.m.text:not(.past)')].pop()?.classList.add('retracted');add('방금 답에 실제로 하지 않은 일이 있어서 다시 확인하고 있어요',null,'sys')}break;
   case 'result':live=null;{const secs=Math.round((ev.ms||0)/1000),meta=`${ev.turns||0}단계 · ${secs}초 · ≈${usd(ev.cost)}`;
    actDone(meta);add(`${ev.error?'<span class="err">멈췄어요</span>':'완료'} · ${meta}`,null,'res');
    if(!ev.past){if(ev.error)setMood('error','멈췄어요');else setMood('done','다 했어요')}}break;

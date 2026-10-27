@@ -172,3 +172,35 @@ export function watchProgress(userText, messages, {startAt = messages.length, on
     return {nudge: PROGRESS_NUDGE[p.state]};
   };
 }
+
+// ---- did it do what it says it did ----
+// A model can answer "두부 추가했어" after only looking at the list. When an answer talks about a
+// change, the judge reads it against every call of the turn and whether it succeeded; a change no
+// successful call made gets one note: do it now, or say it was not done. Only an answer that could
+// be saying something was done is judged: Korean past tense leaves a ㅆ under a syllable (했, 렸, 놨,
+// 뒀, 쳤 …), a promise ends in ~ㄹ게, and English has its past of a change verb. Questions and plain
+// facts ("오늘은 회의 하나야") pass without a call.
+export function claimsSomething(text) {
+  const s = String(text || '');
+  for (const ch of s.match(/[가-힣]/g) || []) if ((ch.charCodeAt(0) - 0xAC00) % 28 === 20) return true;
+  return /(할|둘|줄|놓을|드릴|넣을|해둘)게/.test(s) || /\b(added|deleted|removed|moved|saved|created|updated|fixed|scheduled|sent|booked)\b/i.test(s);
+}
+export const actionsText = actions => actions.map(a => `${a.ok ? '✓' : '✗'} ${a.name} ${clip(a.args, 200)}\n   → ${clip(a.result, 240)}`).join('\n');
+export async function unbacked(userText, actions, answer) {
+  const a = await ask(
+    `The person asked their assistant: """${clip(userText, 600)}"""\n\nEverything the assistant did with tools in this turn, in order (✓ succeeded, ✗ failed, refused or had no effect):\n${clip(actionsText(actions), 3500) || '(nothing: it called no tool)'}\n\nIts answer to the person:\n"""${clip(answer, 1500)}"""`,
+    [{type: 'predicate', name: 'unbacked', instructions: 'Does the answer say the assistant has just made a change — added, created, saved, deleted, moved, edited, fixed, scheduled, set a reminder, sent, checked something off — or promise one as taken care of ("넣어둘게", "기억해 둘게") that no ✓ call above made? A change made by a ✓ call is backed, even if the tool did more or said it slightly differently. Questions and offers that wait for the person ("추가할까?"), reports of what already exists or what was found, and changes said to have happened in an earlier turn are not claims.'}]);
+  return a && typeof a.unbacked === 'number' ? a.unbacked : null;
+}
+export const CLAIM_ACT = 0.5;
+export const CLAIM_NUDGE = '방금 답에 이번에 실제로 하지 않은 일이 있어 (그 일을 한 도구 호출이 없거나 실패했어). 지금 도구로 하거나, 못 했으면 못 했다고 고쳐서 답해.';
+export function watchClaims(userText, {onJudgment = () => {}} = {}) {
+  return async ({text, stats}) => {
+    if (process.env.BISU_CLAIMS === '0' || !available() || !claimsSomething(text)) return null;
+    const p = await unbacked(userText, stats.actions, text);
+    if (p == null) return null;
+    const acted = p >= CLAIM_ACT;
+    onJudgment({p, acted});
+    return acted ? {nudge: CLAIM_NUDGE} : null;
+  };
+}
