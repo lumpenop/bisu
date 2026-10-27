@@ -45,7 +45,8 @@ export const ROUTES = {
   build: 'A sizeable piece of building: a new feature, many files, a whole page, a refactor across the project.',
   past: 'Refers to earlier conversations or earlier work with bisu ("지난번에", "전에 얘기한", "그때").',
   mac: "Operate the Mac outside the working folder: other apps, the screen, clipboard, windows, files elsewhere.",
-  schedule: 'Asks for something to happen later or repeatedly ("매일 아침", "내일 9시에", "매주").',
+  schedule: 'Asks the assistant itself to do a task later or repeatedly — check, summarize, report or run something then ("매일 아침 8시에 뉴스 요약해줘", "내일 9시에 빌드 돌려줘"). Not an event in their calendar, and not just reminding them of something.',
+  calendar: 'Their calendar or reminders: what is on (today, this week), adding, moving or cancelling an event or appointment, finding a free time, their to-do lists, or being reminded of something at a time ("3시에 알려줘", "잊지 않게").',
   remember: 'Asks bisu to remember a fact or preference for future conversations, or to forget one.',
   web: 'Needs current information from the internet (news, prices, docs, anything recent).',
 };
@@ -78,7 +79,8 @@ export const HINTS = {
   web: 'This needs current information: use web_fetch on a reliable source rather than answering from memory, and say where it came from.',
   past: 'This refers to earlier conversations: look them up (session_search, then session_show) before answering; if those tools are not available, say you cannot see past conversations yet.',
   build: 'This is a sizeable job: look at the project first, make a short plan, then work through it and verify (run the tests or the app) before answering.',
-  schedule: 'This asks for something later or recurring: create a scheduled job (schedule_job) if that tool is available; otherwise say it cannot be scheduled yet.',
+  schedule: 'This asks you to do something later or recurring: create a scheduled job (schedule_job) if that tool is available; otherwise say it cannot be scheduled yet. Only reminding them of something is a reminder (reminder_add), not a job.',
+  calendar: 'This is about their calendar or reminders: use the calendar and reminder tools. Look before changing (calendar_list, reminders_list) and use the ids they show. Take dates from the Now section and confirm with the weekday. "~에 알려줘" is a reminder with that time (reminder_add), not a scheduled job.',
   remember: 'This asks you to remember or forget something: update memory (remember) if that tool is available.',
   mac: 'This is about the Mac outside the folder (apps, screen, clipboard): use the Mac tools if available; otherwise say what you would need.',
 };

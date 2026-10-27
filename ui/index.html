@@ -558,15 +558,15 @@ if(PANEL&&HOST?.onShown)HOST.onShown(()=>{
 });
 if(PANEL&&HOST?.onHidden)HOST.onHidden(()=>{panelOpen=false;detach()});
 // What a tool is called on the page: bisu's own tools by what they do, Claude Code's as they are.
-const TOOL_NAMES={session_search:'지난 대화 검색',session_show:'지난 대화 읽기',cu_look:'화면 읽기',cu_decide:'누를 곳 고르기',cu_click:'클릭',cu_type:'입력',cu_key:'키 누르기',cu_scroll:'스크롤',cu_wait:'기다리기',cu_screenshot:'화면 캡처',cu_ground:'화면에서 찾기',cu_approve:'승인한 동작 실행',cu_state:'권한 확인'};
-const STEP={read_file:'파일 읽는 중',write_file:'파일 만드는 중',edit_file:'파일 고치는 중',run_command:'명령 실행하는 중',list_files:'파일 찾는 중',search_files:'내용 찾는 중',web_fetch:'웹 페이지 읽는 중',web_search:'웹에서 찾는 중',delegate:'담당에게 맡기는 중',remember:'기억하는 중',schedule_job:'예약하는 중',Read:'파일 읽는 중',Write:'파일 만드는 중',Edit:'파일 고치는 중',MultiEdit:'파일 고치는 중',NotebookEdit:'노트 고치는 중',Bash:'명령 실행하는 중',Glob:'파일 찾는 중',Grep:'내용 찾는 중',WebFetch:'웹 페이지 읽는 중',WebSearch:'웹에서 찾는 중',Task:'담당에게 맡기는 중',Agent:'담당에게 맡기는 중',TodoWrite:'할 일 정리하는 중',session_search:'지난 대화 찾는 중',session_show:'지난 대화 읽는 중'};
+const TOOL_NAMES={session_search:'지난 대화 검색',session_show:'지난 대화 읽기',cu_look:'화면 읽기',cu_decide:'누를 곳 고르기',cu_click:'클릭',cu_type:'입력',cu_key:'키 누르기',cu_scroll:'스크롤',cu_wait:'기다리기',cu_screenshot:'화면 캡처',cu_ground:'화면에서 찾기',cu_approve:'승인한 동작 실행',cu_state:'권한 확인',calendar_list:'캘린더 보기',calendar_add:'일정 넣기',calendar_change:'일정 고치기',calendar_delete:'일정·할 일 지우기',reminders_list:'미리 알림 보기',reminder_add:'미리 알림 넣기',reminder_change:'미리 알림 고치기'};
+const STEP={read_file:'파일 읽는 중',write_file:'파일 만드는 중',edit_file:'파일 고치는 중',run_command:'명령 실행하는 중',list_files:'파일 찾는 중',search_files:'내용 찾는 중',web_fetch:'웹 페이지 읽는 중',web_search:'웹에서 찾는 중',delegate:'담당에게 맡기는 중',remember:'기억하는 중',schedule_job:'예약하는 중',Read:'파일 읽는 중',Write:'파일 만드는 중',Edit:'파일 고치는 중',MultiEdit:'파일 고치는 중',NotebookEdit:'노트 고치는 중',Bash:'명령 실행하는 중',Glob:'파일 찾는 중',Grep:'내용 찾는 중',WebFetch:'웹 페이지 읽는 중',WebSearch:'웹에서 찾는 중',Task:'담당에게 맡기는 중',Agent:'담당에게 맡기는 중',TodoWrite:'할 일 정리하는 중',session_search:'지난 대화 찾는 중',session_show:'지난 대화 읽는 중',calendar_list:'캘린더 보는 중',calendar_add:'일정 넣는 중',calendar_change:'일정 고치는 중',calendar_delete:'지우는 중',reminders_list:'미리 알림 보는 중',reminder_add:'미리 알림 넣는 중',reminder_change:'미리 알림 고치는 중'};
 const stepLabel=n=>{const b=String(n||'').replace(/^mcp__.+?__/,'');return STEP[b]||(b.startsWith('cu_')?'화면 다루는 중':toolName(n)+' 하는 중')};
-const ASK={write_file:'이 파일을 만들어도 될까요?',edit_file:'이 파일을 고쳐도 될까요?',run_command:'이 명령을 실행해도 될까요?',web_fetch:'이 페이지를 열어봐도 될까요?',read_file:'이 파일을 읽어도 될까요?',list_files:'이 폴더를 봐도 될까요?',search_files:'이 폴더를 찾아봐도 될까요?',Write:'이 파일을 만들어도 될까요?',Edit:'이 파일을 고쳐도 될까요?',MultiEdit:'이 파일을 고쳐도 될까요?',NotebookEdit:'이 노트를 고쳐도 될까요?',Bash:'이 명령을 실행해도 될까요?',WebFetch:'이 페이지를 열어봐도 될까요?',WebSearch:'웹에서 찾아봐도 될까요?'};
+const ASK={write_file:'이 파일을 만들어도 될까요?',edit_file:'이 파일을 고쳐도 될까요?',run_command:'이 명령을 실행해도 될까요?',web_fetch:'이 페이지를 열어봐도 될까요?',read_file:'이 파일을 읽어도 될까요?',list_files:'이 폴더를 봐도 될까요?',search_files:'이 폴더를 찾아봐도 될까요?',Write:'이 파일을 만들어도 될까요?',Edit:'이 파일을 고쳐도 될까요?',MultiEdit:'이 파일을 고쳐도 될까요?',NotebookEdit:'이 노트를 고쳐도 될까요?',Bash:'이 명령을 실행해도 될까요?',WebFetch:'이 페이지를 열어봐도 될까요?',WebSearch:'웹에서 찾아봐도 될까요?',calendar_delete:'이걸 지워도 될까요?'};
 const askQ=t=>ASK[t]||`${toolName(t)} — 해도 될까요?`;
 const CORE={read_file:'읽기',write_file:'만들기',edit_file:'고치기',run_command:'명령 실행',list_files:'파일 찾기',search_files:'내용 찾기',web_fetch:'웹 읽기',web_search:'웹 검색',delegate:'맡기기',Read:'읽기',Write:'만들기',Edit:'고치기',MultiEdit:'고치기',NotebookEdit:'노트 고치기',Bash:'명령 실행',Glob:'파일 찾기',Grep:'내용 찾기',WebFetch:'웹 읽기',WebSearch:'웹 검색',Task:'맡기기',Agent:'맡기기',TodoWrite:'할 일 정리'};
 const stepName=n=>CORE[n]||toolName(n);
 const ROUTE_KO={chat:'대화',work:'폴더 작업',build:'큰 작업',past:'지난 대화',mac:'맥 조작',schedule:'예약',remember:'기억',web:'웹'};
-const toolName=n=>{const m=/^mcp__([^_]+(?:_[^_]+)*)__(.+)$/.exec(String(n||''));return m?(m[1]==='bisu'&&TOOL_NAMES[m[2]])||m[2].replace(/_/g,' '):String(n||'')};
+const toolName=n=>{const m=/^mcp__([^_]+(?:_[^_]+)*)__(.+)$/.exec(String(n||''));return m?(m[1]==='bisu'&&TOOL_NAMES[m[2]])||m[2].replace(/_/g,' '):TOOL_NAMES[n]||String(n||'')};
 function toolSummary(name,input={}){
  if(input.path&&!input.command&&!input.pattern)return short(input.path);
  if(input.command)return input.command;if(input.file_path)return short(input.file_path);if(input.pattern)return input.pattern+(input.path?'  in '+short(input.path):'');
@@ -577,6 +577,8 @@ function askBody(tool,input={}){
  if(tool==='edit_file'){tool='Edit';input={...input,file_path:input.path}}
  if(tool==='write_file'){tool='Write';input={...input,file_path:input.path}}
  if(tool==='Bash')return `<pre>${esc(input.command)}</pre>`;
+ // What would go is in the description; the id means nothing to the person.
+ if(tool==='calendar_delete')return '';
  if(tool==='Edit'||tool==='MultiEdit'){const edits=input.edits||[input];return `<div class="note" style="margin:0 0 6px">${esc(short(input.file_path))}</div>`+edits.map(e=>`<pre><span class="del">${esc(e.old_string||'').split('\n').map(l=>'- '+l).join('\n')}</span>\n<span class="ins">${esc(e.new_string||'').split('\n').map(l=>'+ '+l).join('\n')}</span></pre>`).join('')}
  if(tool==='Write')return `<div class="note" style="margin:0 0 6px">${esc(short(input.file_path))}</div><pre>${esc(String(input.content||'').slice(0,3000))}</pre>`;
  return `<pre>${esc(JSON.stringify(input,null,2).slice(0,3000))}</pre>`}

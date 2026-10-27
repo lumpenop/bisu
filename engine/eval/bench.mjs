@@ -11,6 +11,11 @@
 // fifth step, every third, Decisions says whether the turn is still going somewhere), interleaved so
 // both see the same load. Tasks 16-19 are the ones that tend to go long.
 //
+// Tasks 20-35 are the person's calendar and reminders (--only 20-35): a pretend Calendar and Reminders
+// (fake-calendar.mjs) on a fixed Tuesday morning, with the tools a chat with the engine has — the
+// calendar, schedule_job and remember next to the file tools — and the same Now lines in the prompt.
+// They are checked by what the calendar holds afterwards and what was said.
+//
 // Each run gets a fresh copy of the fixture in a temp folder. Nobody is there to approve, so the
 // benchmark is a sandbox instead: files only inside that folder, no network, and shell commands only
 // from a short allowlist of local, non-destructive programs. Anything else is refused the way a
@@ -22,13 +27,19 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {runTurn} from '../loop.mjs';
 import * as judge from '../judge.mjs';
+import {TOOLS} from '../tools.mjs';
+import {CALENDAR_TOOLS, nowLines} from '../calendar.mjs';
+import {BISU_TOOLS} from '../bisu-tools.mjs';
+import {parseCron} from '../../ui/jobs.mjs';
+import {fakeCalendar} from './fake-calendar.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SYSTEM = fs.readFileSync(path.join(here, '..', 'prompt.md'), 'utf8');
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d };
 const MODELS = arg('models', 'glm-5.3,glm-5.3-flash').split(',');
 const REPEAT = Number(arg('repeat', 2));
-const ONLY = arg('only', '') ? new Set(arg('only').split(',').map(Number)) : null;
+// --only 4,5 or --only 20-35
+const ONLY = arg('only', '') ? new Set(arg('only').split(',').flatMap(x => { const [a, b] = x.split('-').map(Number); return b ? Array.from({length: b - a + 1}, (_, i) => a + i) : [a] })) : null;
 const OUT = arg('out', path.join(os.tmpdir(), `bisu-bench-${Date.now()}.jsonl`));
 const CONCURRENCY = Number(arg('concurrency', 4));
 const THINKING = arg('thinking', 'on') !== 'off';
@@ -159,7 +170,79 @@ const TASKS = [
       if (m.cancel(paid).status !== 'cancelled') return false;
       return fs.existsSync(path.join(d, 'test-order.mjs')) && sh(d, 'node test-order.mjs').ok;
     } catch { return false } }},
+  // ---- the calendar (20-35): a pretend Calendar and Reminders, on a fixed Tuesday morning ----
+  {id: 20, name: '오늘 일정', calendar: true, prompt: '오늘 일정 뭐 있어?', check: (d, r) => /디자인 리뷰/.test(r.text) && /민지|저녁/.test(r.text) && !r.cal.log.length},
+  {id: 21, name: '일정 추가', calendar: true, prompt: '금요일 저녁 7시에 엄마랑 저녁 식사 일정 넣어줘',
+    check: (d, r) => { const a = added(r.cal); return a.length === 1 && a[0].start === '2026-10-30 19:00' && !a[0].all_day && /엄마|식사/.test(a[0].title) }},
+  {id: 22, name: '다음 주', calendar: true, prompt: "다음 주 화요일 오전 10시에 1시간 동안 '채용 면접' 잡아줘",
+    check: (d, r) => { const a = added(r.cal); return a.length === 1 && a[0].start === '2026-11-03 10:00' && a[0].end === '2026-11-03 11:00' && /면접/.test(a[0].title) }},
+  {id: 23, name: '빈 시간', calendar: true, prompt: "목요일 오후에 2시간 비는 시간 찾아서 '기획서 작성' 일정으로 잡아줘",
+    check: (d, r) => { const a = added(r.cal); if (a.length !== 1 || !/기획서/.test(a[0].title)) return false;
+      const s = at(a[0].start), e = at(a[0].end); return ymd(s) === '2026-10-29' && e - s === 2 * 3600e3 && s.getHours() >= 12 && (e.getHours() < 18 || (e.getHours() === 18 && !e.getMinutes())) && !(s < at('2026-10-29 14:00') && e > at('2026-10-29 13:00')) }},
+  {id: 24, name: '옮기기', calendar: true, prompt: '치과 예약을 목요일 같은 시간으로 옮겨줘',
+    check: (d, r) => { const x = r.cal.data.events.filter(e => /치과/.test(e.title)); return x.length === 1 && x[0].start === '2026-10-29 15:00' && x[0].end === '2026-10-29 16:00' }},
+  {id: 25, name: '반복 일정', calendar: true, prompt: "매주 월요일 아침 9시에 30분짜리 '주간 계획' 반복 일정 만들어줘",
+    check: (d, r) => { const a = added(r.cal); if (a.length !== 1) return false; const s = at(a[0].start);
+      return a[0].repeat === 'weekly' && s.getDay() === 1 && ymd(s) >= '2026-10-27' && ymd(s) <= '2026-11-02' && /09:00$/.test(a[0].start) && /09:30$/.test(a[0].end) }},
+  // Reminding them is a reminder, not a job bisu runs …
+  {id: 26, name: '알려줘', calendar: true, prompt: '내일 아침 9시에 약 먹으라고 알려줘',
+    check: (d, r) => { const x = r.cal.data.reminders.filter(m => /약/.test(m.title)); return x.length === 1 && x[0].due === '2026-10-28 09:00' && !r.jobs.length && !added(r.cal).length }},
+  // … and work bisu must do later is a job, not a reminder.
+  {id: 27, name: '예약 작업', calendar: true, prompt: '매일 아침 8시에 오늘 일정 요약해서 보여줘',
+    check: (d, r) => r.jobs.length === 1 && /^0?0 8 \* \* (\*|0-6|1-7)$/.test(String(r.jobs[0].cron || '').trim()) && !r.cal.log.length},
+  {id: 28, name: '목록 보기', calendar: true, prompt: '장보기 목록에 뭐 있어?', check: (d, r) => /우유/.test(r.text) && /계란/.test(r.text) && !r.cal.log.length},
+  {id: 29, name: '체크', calendar: true, prompt: '택배 반품 했어. 체크해줘',
+    check: (d, r) => r.cal.data.reminders.find(m => m.title === '택배 반품')?.completed === true && r.cal.data.reminders.filter(m => m.completed).length === 2 && r.cal.data.reminders.length === 6},
+  // Deleting is approved here, as the person asked for it.
+  {id: 30, name: '삭제', calendar: true, prompt: '토요일 요가 취소됐어. 지워줘',
+    check: (d, r) => !r.cal.data.events.some(e => /요가/.test(e.title)) && r.cal.data.events.length === 8},
+  // Which meeting, and when to? Ask, change nothing.
+  {id: 31, name: '모호함', calendar: true, prompt: '회의 시간 바꿔줘', check: (d, r) => !r.cal.log.length && /\?|어느|언제|몇 시|어떤/.test(r.text)},
+  // Overlaps the weekly meeting: either add it and say so, or ask.
+  {id: 32, name: '겹침', calendar: true, prompt: '내일 오전 10시 반에 거래처 통화 30분 잡아줘',
+    check: (d, r) => { const a = added(r.cal); return a.length ? a.length === 1 && a[0].start === '2026-10-28 10:30' && /겹|주간 회의/.test(r.text) : /주간 회의|겹/.test(r.text) }},
+  {id: 33, name: '바쁜 날', calendar: true, prompt: '이번 주에 일정이 제일 많은 날이 언제야?', check: (d, r) => /28일|수요일|10-28|10\/28/.test(r.text) && !r.cal.log.length},
+  {id: 34, name: '목록에 추가', calendar: true, prompt: '장보기에 두부 추가해줘',
+    check: (d, r) => { const x = r.cal.data.reminders.filter(m => /두부/.test(m.title)); return x.length === 1 && x[0].list === '장보기' && r.cal.data.reminders.length === 7 }},
+  {id: 35, name: '밀린 일', calendar: true, prompt: '밀린 할 일 있어?', check: (d, r) => /택배/.test(r.text) && !r.cal.log.length},
 ];
+
+// ---- the calendar's fixture ----
+// Tuesday 2026-10-27, 10:00. Wednesday has the most: the weekly meeting, the dentist and a 1:1.
+const NOW = new Date(2026, 9, 27, 10, 0);
+const at = s => { const m = /^(\d{4})-(\d\d)-(\d\d)(?: (\d\d):(\d\d))?$/.exec(s); return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0)) };
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const added = cal => cal.data.events.filter(e => cal.log.some(l => l.op === 'add_event' && l.title === e.title && l.start === e.start));
+const calendarFixture = () => fakeCalendar({
+  calendars: ['개인', '회사'], lists: ['미리 알림', '장보기'],
+  events: [
+    {title: '디자인 리뷰', start: '2026-10-27 14:00', end: '2026-10-27 15:00', calendar: '회사'},
+    {title: '저녁 약속 - 민지', start: '2026-10-27 19:00', end: '2026-10-27 21:00', location: '을지로'},
+    {title: '주간 회의', start: '2026-10-21 10:00', end: '2026-10-21 11:00', calendar: '회사', repeat: 'weekly'},
+    {title: '치과', start: '2026-10-28 15:00', end: '2026-10-28 16:00', location: '강남역 연세치과'},
+    {title: '1:1 - 지훈', start: '2026-10-28 17:00', end: '2026-10-28 17:30', calendar: '회사'},
+    {title: '점심 - 투자사 미팅', start: '2026-10-29 13:00', end: '2026-10-29 14:00', calendar: '회사'},
+    {title: '휴가', start: '2026-10-30', end: '2026-10-30', all_day: true},
+    {title: '요가', start: '2026-10-31 11:00', end: '2026-10-31 12:00'},
+    {title: '분기 보고', start: '2026-11-03 16:00', end: '2026-11-03 17:00', calendar: '회사'},
+  ],
+  reminders: [
+    {title: '우유 사기', list: '장보기'}, {title: '계란', list: '장보기'},
+    {title: '보고서 초안 보내기', due: '2026-10-28 18:00'}, {title: '택배 반품', due: '2026-10-26'},
+    {title: '세금 신고', due: '2026-11-30'}, {title: '은행 서류 제출', completed: true},
+  ],
+});
+// What the engine offers next to the calendar: scheduling and memory, recorded instead of saved.
+const ASSISTANT_TOOLS = {
+  ...CALENDAR_TOOLS,
+  schedule_job: {...BISU_TOOLS.schedule_job, run(ctx, a) {
+    if (!a.cron && !a.at) return {text: 'Give cron (repeating) or at (once).', error: true};
+    if (a.cron) { try { parseCron(a.cron) } catch (e) { return {text: `cron: ${e.message}`, error: true} } }
+    ctx.jobs.push(a);
+    return {text: `Created the job "${a.name}" (${a.slug}).`};
+  }},
+  remember: {...BISU_TOOLS.remember, run: (ctx, a) => ({text: `Saved "${a.title}". It applies from the next conversation.`})},
+};
 
 // ---- the sandbox ----
 const ALLOWED = new Set(['node', 'npm', 'git', 'ls', 'cat', 'wc', 'head', 'tail', 'grep', 'egrep', 'awk', 'sort', 'uniq', 'cut', 'echo', 'pwd', 'find', 'tr', 'sed', 'diff', 'printf', 'true', 'test', 'cd']);
@@ -170,6 +253,7 @@ const DEPLOY = /^(\w+=\S*\s+)*((sh|zsh|bash)\s+)?(\.\/)?deploy\.sh\s*$/;
 function sandbox(cwd, name, args) {
   const inside = p => { const abs = path.resolve(cwd, String(p || '.')); return abs === cwd || abs.startsWith(cwd + path.sep) };
   if (name === 'web_fetch') return {allow: false, message: '테스트 중이라 인터넷은 안 돼'};
+  if (ASSISTANT_TOOLS[name]) return {allow: true};
   if (['read_file', 'write_file', 'edit_file', 'list_files', 'search_files'].includes(name)) return inside(args.path) ? {allow: true} : {allow: false, message: '이 폴더 밖은 안 돼'};
   if (name !== 'run_command') return {allow: false, message: '허용되지 않은 도구'};
   const cmd = String(args.command || '');
@@ -197,21 +281,31 @@ async function runOne(task, model, rep, progress) {
     return sandbox(ctx.cwd, name, args);
   };
   const messages = [{role: 'user', content: task.prompt}];
+  // The calendar tasks get what a chat with the engine gets: the calendar, scheduling and memory next
+  // to the file tools, and the Now lines of its system prompt (at a fixed time).
+  let toolNames, system = SYSTEM;
+  if (task.calendar) {
+    Object.assign(ctx, {calendar: calendarFixture(), now: NOW, jobs: []});
+    toolNames = [...Object.keys(TOOLS), ...Object.keys(ASSISTANT_TOOLS)];
+    system = `${SYSTEM}\n## Now\n- Folder: ${ctx.cwd}\n${nowLines(NOW)}\n- macOS, zsh`;
+  }
   // routed:<assistant>/<worker>: the engine's own choice of model, tools and reasoning for this request.
-  let use = {model, tools: undefined, thinking: THINKING, hint: ''}, route = null;
+  let use = {model, tools: toolNames, thinking: THINKING, hint: ''}, route = null;
   if (model.startsWith('routed:')) {
     const [assistant, worker] = model.slice(7).split('/');
     const r = await judge.route(task.prompt, {folder: judge.folderSummary(ctx.cwd)});
     route = r?.route || null;
-    use = judge.planTurn(r, {model: assistant, workModel: worker || assistant, tools: undefined});
+    use = judge.planTurn(r, {model: assistant, workModel: worker || assistant, tools: toolNames});
   }
   const judgments = [];
   const shouldContinue = progress ? judge.watchProgress(task.prompt, messages, {startAt: 1, onJudgment: p => judgments.push({step: p.step, state: p.state, p: +p.confidence.toFixed(2)})}) : null;
   let stats, crashed = null;
-  try { stats = await runTurn({model: use.model, system: use.hint ? `${SYSTEM}\n\n## This request\n${use.hint}` : SYSTEM, messages, ctx, maxSteps: 25, thinking: use.thinking, tools: use.tools, canUseTool, shouldContinue, onEvent: e => { if (e.kind !== 'delta') events.push(e) }}) }
+  try { stats = await runTurn({model: use.model, system: use.hint ? `${system}\n\n## This request\n${use.hint}` : system, messages, ctx, maxSteps: 25, thinking: use.thinking, tools: use.tools, extraTools: task.calendar ? ASSISTANT_TOOLS : {}, canUseTool, shouldContinue, onEvent: e => { if (e.kind !== 'delta') events.push(e) }}) }
   catch (e) { crashed = e.message; stats = {steps: 0, toolCalls: 0, invalid: 0, repeats: 0, ms: 0, cost: 0, text: ''} }
   let pass = false;
-  try { pass = !crashed && !!(await task.check(ctx.cwd, {text: stats.text || '', events}, stats)) } catch { pass = false }
+  try { pass = !crashed && !!(await task.check(ctx.cwd, {text: stats.text || '', events, cal: ctx.calendar, jobs: ctx.jobs}, stats)) } catch { pass = false }
+  // A failed calendar run leaves what the calendar ended up as next to its folder.
+  if (task.calendar && !pass) fs.writeFileSync(dir + '.calendar.json', JSON.stringify({log: ctx.calendar.log, jobs: ctx.jobs, ...ctx.calendar.data}, null, 1));
   const row = {task: task.id, name: task.name, model: label(model, progress), progress, handled: use.model, route, rep, pass, nudges: stats.nudges || 0, judgments, steps: stats.steps, toolCalls: stats.toolCalls, invalid: stats.invalid, repeats: stats.repeats, denied: stats.denied,
     ms: stats.ms, firstMs: stats.firstMs, cost: stats.cost, prompt: stats.prompt, completion: stats.completion, reasoning: stats.reasoning, stop: stats.stop, error: crashed || stats.error || null,
     answer: (stats.text || '').slice(0, 300), tools: events.filter(e => e.kind === 'tool').map(e => e.name), dir};
@@ -249,6 +343,11 @@ if (PROGRESS.length > 1) {
     return `${String(r.filter(x => x.pass).length).padStart(2)}/${String(r.length).padEnd(3)} · ${avg('steps').toFixed(1).padStart(4)} steps · ${(avg('ms') / 1000).toFixed(1).padStart(5)}s · $${r.reduce((a, x) => a + (x.cost || 0), 0).toFixed(3)} · ${r.reduce((a, x) => a + x.judgments.length, 0)} checks · ${r.reduce((a, x) => a + x.nudges, 0)} nudges` };
   for (const [name, f] of [['tasks 1-15', x => x.task <= 15], ['tasks 16-19', x => x.task >= 16], ...TASKS.filter(t => t.long && (!ONLY || ONLY.has(t.id))).map(t => [`  #${t.id} ${t.name}`, x => x.task === t.id])])
     for (const m of CONFIGS) { const r = rows.filter(x => x.model === m && f(x)); if (r.length) console.log(`${name.padEnd(16)} ${m.padEnd(40)} ${line(r)}`) }
+}
+if (rows.some(x => x.task >= 20)) {
+  console.log('\ncalendar and reminders (tasks 20-35):');
+  for (const m of CONFIGS) { const r = rows.filter(x => x.model === m && x.task >= 20), n = r.length || 1; if (!r.length) continue;
+    console.log(`  ${m.padEnd(40)} ${r.filter(x => x.pass).length}/${r.length} · ${(r.reduce((a, x) => a + x.steps, 0) / n).toFixed(1)} steps · ${(r.reduce((a, x) => a + x.ms, 0) / n / 1000).toFixed(1)}s avg · median ${(r.map(x => x.ms).sort((a, b) => a - b)[Math.floor(r.length / 2)] / 1000).toFixed(1)}s · $${r.reduce((a, x) => a + (x.cost || 0), 0).toFixed(3)} · routes ${Object.entries(r.reduce((o, x) => (o[x.route || '-'] = (o[x.route || '-'] || 0) + 1, o), {})).map(([k, v]) => `${k} ${v}`).join(', ')}`) }
 }
 console.log('\nfailures:');
 for (const r of rows.filter(x => !x.pass).sort((a, b) => a.task - b.task)) console.log(`  ${r.model} #${r.task} ${r.name} r${r.rep}: ${r.stop}${r.error ? ' ' + r.error.slice(0, 100) : ''} · ${r.tools.join(',') || 'no tools'} · "${r.answer.slice(0, 120).replace(/\n/g, ' ')}" · ${r.dir}`);

@@ -17,6 +17,7 @@ import {TOOLS, insideCwd, resolvePath} from './tools.mjs';
 import {Transcript, loadMessages} from './store.mjs';
 import * as judge from './judge.mjs';
 import {BISU_TOOLS} from './bisu-tools.mjs';
+import {CALENDAR_TOOLS, nowLines} from './calendar.mjs';
 import {connect as connectMcp} from './mcp.mjs';
 import {complete} from './glm.mjs';
 
@@ -43,12 +44,14 @@ const cwd = fs.realpathSync(process.cwd());
 // Claude Code's tool names, as launch.zsh and the jobs still spell them, to this engine's tools.
 const NAME = {Read: 'read_file', Write: 'write_file', Edit: 'edit_file', MultiEdit: 'edit_file', Glob: 'list_files', Grep: 'search_files', Bash: 'run_command', WebFetch: 'web_fetch', WebSearch: 'web_search', Task: 'delegate', Agent: 'delegate'};
 const plain = n => String(n).trim().replace(/^mcp__[^_]+(?:_[^_]+)*__/, '');
-const EXTRA = {...BISU_TOOLS};
+const EXTRA = {...BISU_TOOLS, ...CALENDAR_TOOLS};
 let wanted = flags.tools && flags.tools !== 'default'
   ? [...new Set(flags.tools.split(',').map(t => NAME[t.trim()] || t.trim()).filter(t => TOOLS[t] || EXTRA[t] || t === 'delegate'))]
   : [...Object.keys(TOOLS), 'web_search', 'delegate'];
-// A run that may change files (a chat, an edit job) also gets memory and scheduling.
-if (wanted.includes('write_file')) wanted.push('remember', 'forget', 'schedule_job');
+// A run that may change files (a chat, an edit job) also gets memory, scheduling and the calendar;
+// one that only reads (a read job, like a morning summary) may still read the calendar.
+if (wanted.includes('write_file')) wanted.push('remember', 'forget', 'schedule_job', ...Object.keys(CALENDAR_TOOLS));
+else if (wanted.includes('read_file')) wanted.push('calendar_list', 'reminders_list');
 const preAllowed = new Set(String(flags.allowedTools || flags['allowed-tools'] || '').split(',').map(t => NAME[t.trim()] || plain(t)).filter(Boolean));
 
 // Two GLM models with separate jobs, and Decisions choosing between them for each message
@@ -66,7 +69,7 @@ const APPROVE = process.env.BISU_APPROVE === 'always' ? 'always' : 'risky';
 const promptFile = flags['system-prompt-file'] || flags['append-system-prompt-file'];
 const system = [
   promptFile && fs.existsSync(promptFile) ? fs.readFileSync(promptFile, 'utf8') : fs.readFileSync(new URL('./prompt.md', import.meta.url), 'utf8'),
-  `\n## Now\n- Folder: ${cwd}\n- Time: ${new Date().toLocaleString('ko-KR', {dateStyle: 'full', timeStyle: 'short'})}\n- macOS, zsh`,
+  `\n## Now\n- Folder: ${cwd}\n${nowLines()}\n- macOS, zsh`,
 ].join('\n');
 
 // ---- session ----
@@ -90,9 +93,10 @@ function needsAsking(name, args) {
   const kind = (TOOLS[name] || EXTRA[name])?.kind;
   const inside = args.path === undefined || insideCwd({cwd}, resolvePath({cwd}, args.path));
   if (kind === 'read') return !inside;
-  // The web, memory and scheduling show on the page as steps; asking first would only add friction
-  // (an edit/full job still waits for its own approval in Settings).
-  if (kind === 'net' || kind === 'memory' || kind === 'delegate') return false;
+  // The web, memory, scheduling and the calendar show on the page as steps; asking first would only
+  // add friction (an edit/full job still waits for its own approval in Settings). Deleting from the
+  // calendar or reminders always asks.
+  if (kind === 'net' || kind === 'memory' || kind === 'delegate' || kind === 'calendar') return false;
   if (kind === 'write') return !(MODE === 'acceptEdits' && inside);
   return true;
 }
@@ -127,7 +131,8 @@ async function canUseTool(name, args) {
   if (!PROMPT_TOOL) return terminalAsk(name, args);
   const request_id = randomUUID();
   const answer = new Promise(resolve => pending.set(request_id, resolve));
-  emit({type: 'control_request', request_id, request: {subtype: 'can_use_tool', tool_name: name, input: args}});
+  const description = (TOOLS[name] || EXTRA[name])?.describe?.({}, args) || undefined;
+  emit({type: 'control_request', request_id, request: {subtype: 'can_use_tool', tool_name: name, input: args, ...(description ? {description} : {})}});
   const r = await answer;
   if (r.behavior === 'allow') return {allow: true, args: r.updatedInput || args};
   return {allow: false, message: r.message};

@@ -69,6 +69,14 @@ cat > "$plist" <<XML
   <string>bisu runs Claude Code in the folder you pick, which is often in your Downloads.</string>
   <key>NSRemovableVolumesUsageDescription</key>
   <string>bisu runs Claude Code in the folder you pick, which can be on an external drive.</string>
+  <key>NSCalendarsFullAccessUsageDescription</key>
+  <string>bisu reads your calendar and adds or moves events when you ask it to.</string>
+  <key>NSCalendarsUsageDescription</key>
+  <string>bisu reads your calendar and adds or moves events when you ask it to.</string>
+  <key>NSRemindersFullAccessUsageDescription</key>
+  <string>bisu reads your reminders and adds or checks them off when you ask it to.</string>
+  <key>NSRemindersUsageDescription</key>
+  <string>bisu reads your reminders and adds or checks them off when you ask it to.</string>
 </dict>
 </plist>
 XML
@@ -99,6 +107,14 @@ mkdir -p "$cu_bin"
 if [ -f "$mac/cu/bisu-cu.swift" ]; then
   if [ ! -x "$cu_bin/bisu-cu" ] || [ "$mac/cu/bisu-cu.swift" -nt "$cu_bin/bisu-cu" ]; then
     xcrun swiftc -O -o "$cu_bin/bisu-cu" "$mac/cu/bisu-cu.swift" && echo "bisu: computer-use helper built"
+  fi
+fi
+# Calendar and Reminders (engine/calendar.mjs). macOS asks for access on behalf of bisu, whose
+# Info.plist above carries the reasons; the helper carries the same ones for a run from a terminal.
+if [ -f "$mac/cal/bisu-cal.swift" ]; then
+  if [ ! -x "$cu_bin/bisu-cal" ] || [ "$mac/cal/bisu-cal.swift" -nt "$cu_bin/bisu-cal" ] || [ "$mac/cal/Info.plist" -nt "$cu_bin/bisu-cal" ]; then
+    xcrun swiftc -O -o "$cu_bin/bisu-cal" "$mac/cal/bisu-cal.swift" -framework EventKit \
+      -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker "$mac/cal/Info.plist" && echo "bisu: calendar helper built"
   fi
 fi
 
