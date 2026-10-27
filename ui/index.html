@@ -21,7 +21,7 @@ nav button.on{background:var(--chip);color:var(--ink);font-weight:600}
 .badge.ok{color:var(--accent)}.badge.bad{color:var(--bad)}
 .view{flex:1;min-height:0;display:none}.view.on{display:flex}
 .page{flex:1;overflow:auto}.page>div{max-width:1080px;margin:0 auto;padding:20px 16px 48px}
-h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px;font-weight:600}
+h2{font-size:12px;letter-spacing:.02em;color:var(--muted);margin:0 0 12px;font-weight:600}
 section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
 button{font:inherit;padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
 button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
@@ -112,7 +112,7 @@ td .p{color:var(--muted);font-size:12px;display:-webkit-box;-webkit-line-clamp:2
 /* what bisu brings without being asked */
 #sug{flex:none;padding:0 12px 10px}
 .sugcard{border:1px solid var(--accent);background:var(--accent-soft);border-radius:10px;padding:10px 12px}
-.sugTop{display:flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);font-weight:600}
+.sugTop{display:flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.02em;color:var(--accent);font-weight:600}
 .sugTop .x{margin-left:auto;border:0;background:none;padding:0 3px;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;text-transform:none;font-weight:400}
 .sugTitle{font-weight:600;margin-top:3px}
 .sugBody{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.45;max-height:5.2em;overflow:auto}
@@ -168,6 +168,8 @@ body.panel #panelStart:not([hidden]){display:flex;flex:1;justify-content:center;
 #panelStart .startTitle{margin:0;text-align:center;font-weight:600}
 #panelStart .note{margin:0;text-align:center;font-size:12px;line-height:1.45}
 #panelStart .row{display:flex;gap:6px}
+#panelStart .row .lbl{align-self:center;font-size:12px;color:var(--muted)}
+details.note summary{cursor:pointer;width:max-content}details.note p{margin:6px 0 0}
 #panelStart input{flex:1;min-width:0}
 #panelStart .err{margin:0;font-size:12px;min-height:0}
 .ctxbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 12px;border-top:1px solid var(--line);background:var(--accent-soft);font-size:12px;color:var(--muted)}
@@ -234,6 +236,7 @@ button{white-space:nowrap}.compose .row button{flex:none}
 body.meta .act .actM{display:inline}body.meta .res{display:block}
 .metaCol{display:none}body.meta .metaCol{display:table-cell}
 #key{display:none}body.meta #key{display:inline-block}
+#memKey,.mem .chip.key{display:none}body.meta #memKey{display:block}body.meta .mem .chip.key{display:inline-block}
 .sub{margin-left:0}
 .sugTop .bisu{width:18px;height:18px}
 .m.autoallow{font-size:12px;color:var(--muted);padding:2px 10px}
@@ -289,12 +292,12 @@ body.meta .act .actM{display:inline}body.meta .res{display:block}
   <div id="panelStart" hidden><div class="startWrap">
    <span class="bisu live"></span>
    <p class="startTitle">뭐 도와줄까요?</p>
-   <p class="note">일할 폴더를 고르면 시작해요. <span class="promise">파일을 고치거나 명령을 실행하기 전엔 꼭 물어볼게요.</span></p>
-   <div class="row">
+   <p class="note">아래에 바로 말하면 돼요. 파일 일은 이 폴더에서 해요. <span class="promise">파일을 고치거나 명령을 실행하기 전엔 꼭 물어볼게요.</span></p>
+   <div class="row"><span class="lbl">폴더</span>
     <input type="text" id="startCwd" class="mono" list="cwdList" spellcheck="false" autocomplete="off" placeholder="~/Desktop/project">
     <button id="startPick" hidden>고르기…</button>
    </div>
-   <button class="primary" id="startNew">시작하기</button>
+   <button id="startNew" hidden>시작하기</button>
    <p class="err" id="startErr" hidden></p>
    <div id="recent"></div>
   </div></div>
@@ -388,7 +391,9 @@ body.meta .act .actM{display:inline}body.meta .res{display:block}
  <section>
   <h2>예약 작업</h2>
   <div id="jobList"><p class="note">loading…</p></div>
-  <p class="note" id="jobNote">채팅에서 "매일 8시에 …해 줘"라고 하면 비서가 <code>~/.config/bisu/jobs/</code>에 파일 하나를 만들어요. 직접 써도 돼요: 맨 위 frontmatter에 <code>schedule: 0 8 * * 1-5</code>(cron, 로컬 시간) 또는 <code>at: 2026-10-28 09:00</code>, <code>cwd: /폴더</code>, <code>tools: read</code>(기본 · <code>edit</code>는 그 폴더의 파일 수정 · <code>full</code>은 명령 실행까지), 그 아래에 그때 보낼 요청. 결과는 패널 카드로 와요.</p>
+  <p class="note err" id="jobNote"></p>
+  <p class="note">대화에서 "매일 아침 8시에 어제 커밋 요약해 줘"처럼 말하면 bisu가 예약해 두고, 그 시간에 혼자 해서 결과를 패널 카드로 남겨요. 그때 떠올리기만 하면 되는 일("3시에 알려줘")은 예약 작업이 아니라 미리 알림으로 넣어요.</p>
+  <details class="note"><summary>직접 만들기</summary><p>예약 작업은 <code>~/.config/bisu/jobs/</code>의 파일 하나예요. 맨 위에 <code>schedule: 0 8 * * 1-5</code>(cron, 이 맥의 시간) 또는 <code>at: 2026-10-28 09:00</code>, <code>cwd: /폴더</code>, <code>tools: read</code>(기본 · <code>edit</code>는 그 폴더의 파일 수정 · <code>full</code>은 명령 실행까지)를 쓰고, 그 아래에 그때 보낼 요청을 써요.</p></details>
  </section>
  <section id="nativeSec" hidden>
   <h2>키와 쓴 돈 · 자체 엔진</h2>
@@ -453,6 +458,8 @@ const usd=(v,d=2)=>v==null||isNaN(v)?'—':'$'+Number(v).toFixed(v>0&&v<0.01?4:d
 const per1M=v=>v?'$'+(v*1e6).toFixed(v*1e6<1?3:2):'free';
 const tok=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1e3)+'k':String(n);
 const short=p=>p?p.replace(/^\/Users\/[^/]+/,'~'):'';
+// A folder as a line has room for: a long path keeps its last two names.
+const place=p=>{const s=short(p),parts=s.split('/');return s.length>34&&parts.length>3?'…/'+parts.slice(-2).join('/'):s};
 const api=async(p,o={})=>{const r=await fetch(p,{...o,headers:{'X-Bisu-Token':TOKEN,...(o.body?{'Content-Type':'application/json'}:{}),...o.headers}});const j=await r.json().catch(()=>({}));if(!r.ok){const e=Error(j.error||r.status);if(j.holder)e.holder=j.holder;throw e}return j};
 const post=(p,b)=>api(p,{method:'POST',body:JSON.stringify(b||{})});
 
@@ -476,7 +483,7 @@ function setMood(state,text){clearTimeout(moodTimer);mood={state,text};
 // What is promised about asking first, as the chosen engine and mode really behave: bisu's own engine,
 // by default, runs what its judge clears and asks for the rest.
 const askPromise=()=>prefs.engine==='native'&&prefs.approve!=='always'?'지우기·보내기·설치처럼 되돌리기 어려운 일은 하기 전에 꼭 물어볼게요.':'파일을 고치거나 명령을 실행하기 전엔 꼭 물어볼게요.';
-const helloHTML=()=>`<div class="hello"><span class="bisu live"></span><b>안녕하세요, bisu예요</b><span>왼쪽에서 폴더를 고르고 새 대화를 시작해요.<br><span class="promise">${askPromise()}</span></span></div>`;
+const helloHTML=()=>`<div class="hello"><span class="bisu live"></span><b>안녕하세요, bisu예요</b><span>아래에 바로 말하면 돼요. 파일 일은 왼쪽에 적힌 폴더에서 해요.<br><span class="promise">${askPromise()}</span></span></div>`;
 // Developer detail (tool calls, steps, cost, model names): off by default, one switch in Settings.
 // Kept by the engine (/api/prefs), not in this page's storage: the menu bar app gets a new port, and
 // so a new, empty origin, on every launch.
@@ -677,12 +684,12 @@ function renderTasks(){const box=$('tasks');if(!box)return;
  else if(!tasks.length&&mood.text.includes('말 걸어도 돼요'))setMood('idle','듣고 있어요');
  box.innerHTML=tasks.map(t=>`<div class="task"><span class="spin"></span><b>${esc(t.type==='local_agent'?agentName(t.agent):'명령')}</b><span class="d">${esc(t.description)}${t.step?' · '+esc(t.step):''}</span><span class="e" data-t="${t.started}">${elapsed(t.started)}</span></div>`).join('')}
 setInterval(()=>{for(const el of document.querySelectorAll('.task .e'))el.textContent=elapsed(Number(el.dataset.t))},1000);
-function chatUI(){const c=cur;$('chatHead').hidden=$('compose').hidden=!c;
+function chatUI(){const c=cur;$('chatHead').hidden=!c;$('compose').hidden=false;
  if(PANEL){$('panelStart').hidden=!!c;$('msgs').hidden=!c;if(!c)fillStartCwd()}
  if(!c){if(!wrap().children.length){wrap().innerHTML=helloHTML();mountBisu(wrap())}mountBisu();renderRecent();renderOnboard();return}
- $('chatTitle').textContent=c.title||'새 대화';$('chatSub').textContent=short(c.cwd);
+ $('chatTitle').textContent=c.title||'새 대화';$('chatSub').textContent=place(c.cwd);$('chatSub').title=short(c.cwd);
  $('stop').hidden=!c.busy;$('input').placeholder=c.busy?(PANEL?'답하는 중 — 보내도 돼요':'답하는 중이에요 — 지금 보내도 이어서 읽어요'):(PANEL?'bisu에게 말하기':'bisu에게 말하기  (Enter 보내기 · Shift+Enter 줄바꿈)');renderList()}
-function renderList(){$('chatList').innerHTML=chats.map(c=>`<div class="ci${cur&&c.id===cur.id?' on':''}" data-id="${c.id}"><div class="t">${esc(c.title||'새 대화')}</div><div class="s"><span class="dot${c.pending?' wait':c.busy||c.tasks?' busy':''}"></span>${esc(short(c.cwd))}</div></div>`).join('')||'<p class="note" style="padding:0 12px">아직 대화가 없어요.</p>';
+function renderList(){$('chatList').innerHTML=chats.map(c=>`<div class="ci${cur&&c.id===cur.id?' on':''}" data-id="${c.id}"><div class="t">${esc(c.title||'새 대화')}</div><div class="s" title="${esc(short(c.cwd))}"><span class="dot${c.pending?' wait':c.busy||c.tasks?' busy':''}"></span>${esc(place(c.cwd))}</div></div>`).join('')||'<p class="note" style="padding:0 12px">아직 대화가 없어요.</p>';
  for(const el of $('chatList').querySelectorAll('.ci'))el.onclick=()=>open(el.dataset.id)}
 async function refreshChats(){try{const r=await api('/api/chats');chats=r.chats;
  if(cur){const c=chats.find(x=>x.id===cur.id);
@@ -704,7 +711,12 @@ function open(id){const c=chats.find(x=>x.id===id);if(!c)return;cur=c;wrap().inn
 function detach(){es?.close();es=null}
 async function answer(request_id,a,el){for(const b of el.querySelectorAll('button'))b.disabled=true;
  try{await post(`/api/chats/${cur.id}/approve`,{request_id,allow:a!=='deny',always:a==='always'})}catch(e){alert(e.message);for(const b of el.querySelectorAll('button'))b.disabled=false}}
-async function sendMsg(){const raw=$('input').value.trim();if(!raw||!cur)return;const t=withContext(raw);$('input').value='';grow();
+async function sendMsg(){const raw=$('input').value.trim();if(!raw)return;
+ // No chat yet: this message starts one, in the folder chosen on the start card or in the sidebar.
+ if(!cur){const box=PANEL?$('startCwd'):$('cwd'),cwd=box.value.trim();try{localStorage.setItem('bisu.cwd',cwd)}catch{}
+  const b=$('sendBtn');b.disabled=true;try{const {chat}=await post('/api/chats',{cwd});chats.unshift(chat);show('chat');open(chat.id)}
+  catch(e){const er=$('startErr');if(PANEL&&er){er.textContent=e.message;er.hidden=false}else alert(e.message);return}finally{b.disabled=false}}
+ const t=withContext(raw);$('input').value='';grow();
  try{await post(`/api/chats/${cur.id}/send`,{text:t})}catch(e){$('input').value=raw;add(`<span class="err">${esc(e.message)}</span>`,null,'sys')}}
 async function startChat(body,errEl){if(errEl){errEl.hidden=true;errEl.textContent=''}try{const {chat}=await post('/api/chats',body);chats.unshift(chat);show('chat');open(chat.id)}
  catch(e){if(errEl){errEl.textContent=e.message;errEl.hidden=false}else alert(e.message)}}
@@ -753,7 +765,7 @@ function fillStartCwd(){const i=$('startCwd');if(!i||i.value)return;
 function startFromPanel(){const cwd=$('startCwd').value.trim();try{localStorage.setItem('bisu.cwd',cwd)}catch{}
  startChat({cwd},$('startErr'))}
 $('startNew').onclick=startFromPanel;
-$('startCwd').onkeydown=e=>{if(e.key==='Enter')startFromPanel()};
+$('startCwd').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('input').focus()}};
 for(const [id,target] of [['startPick','startCwd'],['cwdPick','cwd']]){
  const b=$(id);if(!b||!HOST?.pickFolder)continue;b.hidden=false;
  b.onclick=async()=>{try{const dir=await HOST.pickFolder();if(dir){$(target).value=short(dir);$(target).focus()}}catch(e){if(target==='startCwd'){const er=$('startErr');er.textContent=e.message;er.hidden=false}}}};
@@ -813,7 +825,7 @@ function renderMemory(){
   <div class="k">전달되는 양</div><div>기억 ${m.entries.length}개 · ${m.used.toLocaleString()} / ${m.budget.toLocaleString()}자${cut.length?` <span class="w">· ${cut.length}개는 한도를 넘어 제목만 전달돼요</span>`:''}</div>
   ${cut.length?`<div class="k">빠진 것</div><div>${cut.map(t=>esc(t)).join(', ')}</div>`:''}`;
  $('memList').innerHTML=m.entries.length?m.entries.map(e=>`<div class="mem" data-id="${esc(e.id)}">
-   <div class="h"><b>${esc(e.title)}</b>${e.pin?'<span class="chip">고정</span>':''}${e.key?`<span class="chip">key ${esc(e.key)}</span>`:''}<span class="note" style="margin:0">${whenText(e.updated)}</span><span class="sp"></span>
+   <div class="h"><b>${esc(e.title)}</b>${e.pin?'<span class="chip">고정</span>':''}${e.key?`<span class="chip key">key ${esc(e.key)}</span>`:''}<span class="note" style="margin:0">${whenText(e.updated)}</span><span class="sp"></span>
     <button data-a="pin">${e.pin?'고정 해제':'고정'}</button><button data-a="edit">고치기</button><button class="danger" data-a="del">삭제</button></div>
    ${e.text?`<div class="b">${esc(e.text)}</div>`:''}</div>`).join('')
   :'<p class="note">비어 있어요. 대화 중에 bisu가 스스로 저장하거나, 위에서 직접 추가할 수 있어요.</p>';

@@ -97,12 +97,12 @@ export function isQuiet(d = new Date()) {
   return from < to ? (h >= from && h < to) : (h >= from || h < to);
 }
 // The moment the cadence says it may look again, moved past quiet hours so `nextAt` is not a lie.
+// Never run counts as due now — which in quiet hours is when they end, on the hour.
 function nextAt() {
   const base = (state.lastError ? state.lastAttempt : state.lastRun) || 0;
-  if (!base) return Date.now();
   const gap = state.lastError ? RETRY_MS : state.intervalHours * 3600e3;
-  const at = new Date(base + gap);
-  for (let i = 0; i < 48 && isQuiet(at); i++) at.setTime(at.getTime() + 3600e3);
+  const at = new Date(base ? base + gap : Date.now());
+  if (isQuiet(at)) { at.setMinutes(0, 0, 0); for (let i = 0; i < 48 && isQuiet(at); i++) at.setTime(at.getTime() + 3600e3) }
   return at.getTime();
 }
 // null when a run is allowed now, otherwise the reason it is not. `force` is the person asking for
