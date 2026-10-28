@@ -50,7 +50,7 @@ let wanted = flags.tools && flags.tools !== 'default'
   : [...Object.keys(TOOLS), 'web_search', 'delegate'];
 // A run that may change files (a chat, an edit job) also gets memory, scheduling and the calendar;
 // one that only reads (a read job, like a morning summary) may still read the calendar.
-if (wanted.includes('write_file')) wanted.push('remember', 'forget', 'schedule_job', ...Object.keys(CALENDAR_TOOLS));
+if (wanted.includes('write_file')) wanted.push('remember', 'forget', 'schedule_job', 'goal_add', 'goal_list', ...Object.keys(CALENDAR_TOOLS));
 else if (wanted.includes('read_file')) wanted.push('calendar_list', 'reminders_list');
 const preAllowed = new Set(String(flags.allowedTools || flags['allowed-tools'] || '').split(',').map(t => NAME[t.trim()] || plain(t)).filter(Boolean));
 

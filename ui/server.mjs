@@ -20,7 +20,8 @@ import * as briefing from './briefing.mjs';
 import * as cubench from './cubench.mjs';
 import * as telegram from './telegram.mjs';
 import * as alerts from './alerts.mjs';
-import {releaseSchedule} from './lock.mjs';
+import * as goals from './goals.mjs';
+import {releaseSchedule,holdsSchedule} from './lock.mjs';
 import {PRICES as GLM_PRICES} from '../engine/glm.mjs';
 import {eventKit} from '../engine/calendar.mjs';
 
@@ -340,6 +341,8 @@ function handle(c,j){
 }
 // A job's card continues the run that produced it, so "그럼 고쳐" has the whole context; a suggestion
 // starts a fresh chat and sends what it proposed.
+// The cards a goal left that its answer (or its removal) settles.
+function goalCardsDone(id){for(const it of proactive.snapshot().items)if(it.goal===id&&it.status==='new')try{proactive.resolve(it.id,'dismissed')}catch{}}
 async function acceptSuggestion(item){
  proactive.resolve(item.id,'accepted');
  if(item.kind==='job'){if(!item.sessionId)return null;return newChat({cwd:item.cwd||undefined,resume:item.sessionId})}
@@ -438,6 +441,18 @@ const server=http.createServer(async(req,res)=>{
   if(m==='POST'&&p==='/api/alerts')return json(res,200,await alerts.configure(await body(req)));
   if(m==='POST'&&p==='/api/alerts/test')return json(res,200,alerts.test());
   if(m==='GET'&&p==='/api/notices')return json(res,200,alerts.since(Number(url.searchParams.get('after'))||0));
+  // Goals (ui/goals.mjs): the list, a new one, and what the person does to one.
+  if(m==='GET'&&p==='/api/goals')return json(res,200,goals.snapshot());
+  if(m==='POST'&&p==='/api/goals'){goals.create(await body(req));return json(res,200,goals.snapshot())}
+  const gm=/^\/api\/goals\/(g-[0-9a-f]{6})$/.exec(p);
+  if(gm&&m==='POST'){const {action,text}=await body(req),id=gm[1];
+   if(action==='run'){if(!process.env.GLM_API_KEY)return json(res,400,{error:'Z.ai 키가 없어요: Dec에 https://api.z.ai 키를 저장해 주세요.'});
+    goals.run(id,{force:true}).catch(e=>console.error('bisu goals:',e.message));await new Promise(r=>setTimeout(r,100));return json(res,202,goals.snapshot())}
+   if(action==='answer'){goals.answer(id,text);goalCardsDone(id)}
+   else if(action==='pause'||action==='resume')goals.setStatus(id,action==='pause'?'paused':'active');
+   else if(action==='delete'){goals.remove(id);goalCardsDone(id)}
+   else return json(res,400,{error:'unknown action'});
+   return json(res,200,goals.snapshot())}
   if(m==='GET'&&p==='/api/cubench')return json(res,200,cubench.snapshot());
   if(m==='POST'&&p==='/api/cubench')return json(res,200,cubench.start(await body(req)));
   if(m==='POST'&&p==='/api/cubench/stop')return json(res,200,cubench.stop());
@@ -518,15 +533,22 @@ proactive.start();
 jobs.setContext(proactiveContext);
 jobs.start();
 briefing.start();
-telegram.attach({newChat,say,decide,stop,getChat:id=>chats.get(id),accept:acceptSuggestion});
+telegram.attach({newChat,say,decide,stop,getChat:id=>chats.get(id),accept:acceptSuggestion,answerGoal:(id,text)=>{const g=goals.answer(id,text);goalCardsDone(id);return g}});
 telegram.start();
 alerts.onNotice(n=>telegram.onNotice(n));
 alerts.start();
-for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();telegram.shutdown();alerts.shutdown();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
+// A goal that needs the person, or got done, says so as a card: the panel, the banners and Telegram
+// all pick cards up from there. A question can be answered on the card, under 목표, or by replying on Telegram.
+goals.setQuiet(()=>proactive.isQuiet());
+goals.onGoal((kind,g)=>{
+ if(kind==='question'){goalCardsDone(g.id);proactive.push({id:randomUUID(),kind:'job',job:'goal',goal:g.id,ask:true,title:g.title,body:g.question.text,cwd:g.cwd})}
+ else if(kind==='done')proactive.push({id:randomUUID(),kind:'job',job:'goal',goal:g.id,title:`${g.title} — 달성`,body:g.log[g.log.length-1]?.text||'',cwd:g.cwd})});
+goals.start(holdsSchedule);
+for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();telegram.shutdown();alerts.shutdown();goals.stop();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
 // The desktop shell holds this pipe open for as long as it is running, so the pipe closing means the
 // shell quit or was force-killed. Without this the engine, dec and every Claude Code run outlive it.
 if(PARENT==='stdin'){
- process.stdin.on('end',()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();telegram.shutdown();alerts.shutdown();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');process.exit(0)});
+ process.stdin.on('end',()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();telegram.shutdown();alerts.shutdown();goals.stop();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');process.exit(0)});
  process.stdin.on('error',()=>{});
  process.stdin.resume();
 }

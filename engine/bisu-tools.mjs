@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as memory from '../ui/memory.mjs';
 import {DIR as JOBS_DIR, parseCron, nextRun} from '../ui/jobs.mjs';
+import * as goals from '../ui/goals.mjs';
 
 const ok = text => ({text});
 const err = text => ({text, error: true});
@@ -86,6 +87,53 @@ export const BISU_TOOLS = {
       fs.writeFileSync(file, `---\nname: ${String(name).replace(/\n/g, ' ')}\n${cron ? `schedule: ${cron}` : `at: ${at}`}\ncwd: ${folder}\ntools: ${tools}\n---\n${String(request).trim()}\n`);
       const when = cron ? (() => { const t = nextRun(parseCron(cron)); return t ? new Date(t).toLocaleString('ko-KR', {dateStyle: 'medium', timeStyle: 'short'}) : '?' })() : at;
       return ok(`${existed ? 'Updated' : 'Created'} the job "${name}" (${s}). Next run: ${when}.${tools !== 'read' ? ' It can change things, so it waits until they approve it in Settings → 예약 작업.' : ''}`);
+    },
+  },
+  // Goals (ui/goals.mjs): what they want done over days or weeks, worked on by bisu a little at a time.
+  goal_add: {
+    description: 'Take on something they want done over days or weeks ("이번 달 안에 …", "출장 준비 챙겨줘", "매주 블로그 한 편"): bisu then works on it by itself every few hours — plans it, does what can be done (research, notes, reminders, events), and asks them when it needs a decision. Not for one task to do now (do it) or a fixed repeating task (schedule_job).',
+    parameters: {type: 'object', properties: {
+      title: {type: 'string', description: 'the goal in one line, in their language'},
+      detail: {type: 'string', description: 'what done looks like, and anything they said that matters'},
+      due: {type: 'string', description: 'YYYY-MM-DD, if there is a deadline'},
+      every_hours: {type: 'integer', description: 'how often to work on it, default 6'},
+      cwd: {type: 'string', description: 'a folder it is about, if any (default: home)'},
+    }, required: ['title']},
+    kind: 'memory',
+    run(ctx, {title, detail, due, every_hours, cwd}) {
+      try {
+        const g = goals.create({title, detail, due, every: every_hours, cwd: cwd ? path.resolve(ctx.cwd, String(cwd).replace(/^~(?=\/|$)/, process.env.HOME || '')) : ''});
+        return ok(`Took on the goal "${g.title}" (${g.id}). The first session starts within a few minutes (outside quiet hours); it shows under 목표 with its plan, and asks them when it needs something.`);
+      } catch (e) { return err(`Could not add the goal: ${e.message}`) }
+    },
+  },
+  goal_list: {
+    description: 'Their goals and where each stands: plan, what was done lately, any question waiting for them.',
+    parameters: {type: 'object', properties: {}},
+    kind: 'memory',
+    run() {
+      const list = goals.all();
+      if (!list.length) return ok('No goals yet.');
+      const S = {active: '진행 중', waiting: '답을 기다림', paused: '멈춤', done: '달성'};
+      return ok(list.map(g => `${g.id} · ${S[g.status]} · ${g.title}${g.due ? ` · 기한 ${g.due}` : ''}\n계획 ${g.steps.filter(s => s.status === 'done').length}/${g.steps.length}: ${g.steps.map(s => `${s.status === 'done' ? '✓' : '·'} ${s.text}`).join(' / ') || '(아직 없음)'}${g.log.length ? `\n최근: ${g.log[g.log.length - 1].text}` : ''}${g.question ? `\n묻는 것: ${g.question.text}` : ''}`).join('\n\n'));
+    },
+  },
+  goal_update: {
+    description: 'Write down this session\'s work on the goal: the whole plan with each step\'s status (send all steps every time), one log line of what you did now, the notes (send the whole text; it replaces the old notes), a question when only the person can unblock it, done when the goal is reached, and next_hours to look again sooner or later than usual.',
+    parameters: {type: 'object', properties: {
+      id: {type: 'string'},
+      steps: {type: 'array', items: {type: 'object', properties: {text: {type: 'string'}, status: {type: 'string', enum: ['todo', 'doing', 'done', 'blocked']}, note: {type: 'string'}}, required: ['text', 'status']}},
+      log: {type: 'string', description: 'one or two lines: what you did in this session'},
+      notes: {type: 'string', description: 'what you found and keep for later: options, links, numbers, drafts'},
+      question: {type: 'string', description: 'one question for the person; the goal waits until they answer'},
+      done: {type: 'boolean'},
+      next_hours: {type: 'number'},
+    }, required: ['id']},
+    kind: 'memory',
+    run(ctx, args) {
+      // A goal run may only write its own goal.
+      if (process.env.BISU_GOAL_ID && args.id !== process.env.BISU_GOAL_ID) return err(`This session works on ${process.env.BISU_GOAL_ID}; it cannot change ${args.id}.`);
+      try { return ok(`Saved: ${goals.applyUpdate(args.id, args).join(', ') || 'nothing changed'}.`) } catch (e) { return err(e.message) }
     },
   },
 };

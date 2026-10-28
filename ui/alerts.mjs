@@ -99,7 +99,7 @@ function cards() {
   for (const it of [...proactive.snapshot().items].reverse()) {
     if (it.status !== 'new' || cardsSeen.has(it.id) || (it.at || 0) < BOOT_AT) continue;
     cardsSeen.add(it.id);
-    const head = it.kind !== 'job' ? 'bisu가 하나 찾았어요' : it.job === 'briefing' ? '아침 브리핑' : '예약 작업';
+    const head = it.kind !== 'job' ? 'bisu가 하나 찾았어요' : it.job === 'briefing' ? '아침 브리핑' : it.job === 'goal' ? (it.ask ? '목표 · 물어볼 게 있어요' : '목표') : '예약 작업';
     notice({ kind: 'card', title: `${head} · ${it.title || ''}`.replace(/ · $/, ''), body: plain(it.body).slice(0, 240) });
   }
 }

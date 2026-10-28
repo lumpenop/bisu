@@ -25,12 +25,12 @@ const FRESH_MS = 6 * 3600e3;        // a quiet bisu chat older than this is not 
 const NOTIFY_MS = 20e3;
 const MAX_TEXT = 3800;              // Telegram takes 4096; leave room
 
-const DEFAULTS = { enabled: true, chatId: null, user: null, pairedAt: 0, code: null, codeAt: 0, offset: 0,
+const DEFAULTS = { enabled: true, chatId: null, user: null, pairedAt: 0, code: null, codeAt: 0, offset: 0, goalMsgs: [],
   notify: { approvals: true, suggestions: true, jobs: true, events: true }, cwd: '', bisuChat: null, chats: [], sent: [], bot: null, lastError: null };
 function load() {
   let s = {};
   try { s = JSON.parse(fs.readFileSync(FILE, 'utf8')) || {} } catch {}
-  return { ...DEFAULTS, ...s, notify: { ...DEFAULTS.notify, ...(s.notify || {}) }, chats: Array.isArray(s.chats) ? s.chats : [], sent: Array.isArray(s.sent) ? s.sent : [] };
+  return { ...DEFAULTS, ...s, notify: { ...DEFAULTS.notify, ...(s.notify || {}) }, chats: Array.isArray(s.chats) ? s.chats : [], sent: Array.isArray(s.sent) ? s.sent : [], goalMsgs: Array.isArray(s.goalMsgs) ? s.goalMsgs : [] };
 }
 function save(patch) {
   const s = { ...load(), ...patch };
@@ -146,6 +146,11 @@ async function onMessage(m) {
   if (text === '/stop') { const c = s.bisuChat && hooks.getChat(s.bisuChat); if (c) hooks.stop(c); return void await send(c ? '멈췄어요.' : '하고 있는 일이 없어요.') }
   if (/^\/start\b/.test(text)) return void await send('이미 연결되어 있어요. 그냥 말 걸면 돼요.');
   if (!text) return void await send('아직 글자만 받을 수 있어요.');
+  const goal = m.reply_to_message && s.goalMsgs.find(x => x.message === m.reply_to_message.message_id);
+  if (goal && hooks.answerGoal) {
+    try { const g = hooks.answerGoal(goal.goal, text); return void await send(`「${g.title}」에 전했어요. 곧 이어서 할게요.`) }
+    catch (e) { return void await send(`전하지 못했어요: ${e.message}`) }
+  }
   const c = await ensureChat();
   hooks.say(c, text);
   api('sendChatAction', { chat_id: s.chatId, action: 'typing' }).catch(() => {});
@@ -223,11 +228,13 @@ async function notify() {
     if (job ? !s.notify.jobs : !s.notify.suggestions) continue;
     sent.add(it.id);
     save({ sent: [...sent].slice(-200) });
-    const head = job ? (it.job === 'briefing' ? '☀️ 아침 브리핑' : '⏰ 예약 작업') : '✦ bisu가 하나 찾았어요';
-    const text = `${head} · ${it.title}\n\n${it.body || ''}${!job && it.action ? `\n\n「해볼게」를 누르면 이렇게 부탁해요: ${it.action}` : ''}`;
+    const head = job ? (it.job === 'briefing' ? '☀️ 아침 브리핑' : it.job === 'goal' ? (it.ask ? '🎯 목표 · 물어볼 게 있어요' : '🎯 목표') : '⏰ 예약 작업') : '✦ bisu가 하나 찾았어요';
+    const text = `${head} · ${it.title}\n\n${it.body || ''}${!job && it.action ? `\n\n「해볼게」를 누르면 이렇게 부탁해요: ${it.action}` : ''}${it.goal && it.ask ? '\n\n이 메시지에 답장하면 bisu가 이어서 해요.' : ''}`;
     const buttons = job ? (it.sessionId ? [[{ text: '이어서 대화', callback_data: `s:${it.id}:do` }]] : null)
       : [[{ text: '해볼게', callback_data: `s:${it.id}:do` }, { text: '나중에', callback_data: `s:${it.id}:later` }]];
-    await send(text, { buttons }).catch(e => noteError(e));
+    const m = await send(text, { buttons }).catch(e => noteError(e));
+    // A reply to a goal's question is its answer.
+    if (m && it.goal && it.ask) save({ goalMsgs: [{ message: m.message_id, goal: it.goal }, ...load().goalMsgs].slice(0, 20) });
   }
 }
 

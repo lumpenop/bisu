@@ -127,7 +127,8 @@ td .p{color:var(--muted);font-size:12px;display:-webkit-box;-webkit-line-clamp:2
 .sugAct{font-size:12px;color:var(--muted);margin-top:8px;padding:7px 10px;border-radius:10px;background:var(--bg);line-height:1.45}.sugAct b{color:var(--accent);font-weight:700}
 .sugWhere{margin-left:auto;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 body.panel .sugBody{max-height:4.4em}body.panel .sugBody.job{max-height:11em}
-.sugBody.job{white-space:pre-wrap;word-break:break-word;color:var(--ink);max-height:12em}.sugBody.job.err{color:var(--bad)}
+.sugBody.job{white-space:pre-wrap;word-break:break-word;color:var(--ink);max-height:12em}
+.sugAsk{display:flex;gap:8px;margin-top:10px}.sugAsk input{flex:1;min-width:0}.sugBody.job.err{color:var(--bad)}
 /* proactive controls in Settings */
 .sw{display:flex;align-items:center;gap:8px;font-size:13px}
 #sugForm .kv{margin-top:10px}
@@ -141,6 +142,10 @@ body.panel .sugBody{max-height:4.4em}body.panel .sugBody.job{max-height:11em}
 .mem .h b{font-weight:600}
 .mem .h .sp{margin-left:auto}
 .mem .b{white-space:pre-wrap;word-break:break-word;font-size:13px;margin-top:4px}
+.goal .bar{height:6px;border-radius:99px;background:var(--chip);overflow:hidden;margin:10px 0 8px}.goal .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--g1,var(--accent)),var(--g2,var(--accent)));border-radius:99px}
+.goal ol{margin:6px 0 0;padding-left:20px;font-size:13px;display:flex;flex-direction:column;gap:3px}.goal li.done{color:var(--muted);text-decoration:line-through}.goal li.blocked::marker{color:var(--bad)}.goal li.doing{font-weight:600}
+.goal .ask{margin-top:10px;padding:10px 12px;border-radius:var(--r);background:var(--chip)}.goal .ask .q{font-size:13px;margin-bottom:8px;white-space:pre-wrap}.goal .ask .r{display:flex;gap:8px}.goal .ask input{flex:1}
+.goal details{margin-top:8px;font-size:13px}.goal details pre{white-space:pre-wrap;word-break:break-word;font:inherit;margin:6px 0 0}.goal .log{list-style:none;padding:0;margin:6px 0 0;color:var(--muted)}
 .mem button{padding:3px 9px;font-size:12px}
 #memForm .row{display:flex;flex-direction:column;gap:8px}
 #memCands{border:1px solid var(--warn);border-radius:8px;padding:10px 12px;margin:10px 0 0;font-size:13px}
@@ -319,9 +324,12 @@ button:focus-visible{outline:none;box-shadow:var(--glow)}
 button.primary{background:linear-gradient(180deg,var(--g1),var(--g2));border-color:transparent;color:var(--accent-ink);font-weight:700;box-shadow:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.08),0 8px 18px -10px color-mix(in srgb,var(--g2) 85%,transparent)}
 button.primary:hover:not(:disabled){border-color:transparent;filter:brightness(1.04)}
 button.danger{color:var(--bad)}
+input[type=text],input[type=number],input[type=date],textarea,select{font:inherit;font-size:14px;padding:9px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink);box-shadow:inset 0 1px 2px rgba(0,0,0,.04);transition:border-color .12s ease,box-shadow .12s ease}
+input[type=text]:focus,input[type=number]:focus,input[type=date]:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:var(--glow)}
 input::placeholder,textarea::placeholder{color:color-mix(in srgb,var(--muted) 78%,transparent)}
 select{-webkit-appearance:none;appearance:none;padding-right:34px;background-image:var(--chev);background-repeat:no-repeat;background-position:right 12px center;background-size:12px;cursor:pointer}
 input[type=number],#sugForm input[type=number]{width:4.8em;padding:7px 9px;font-size:13.5px}
+input[type=date]{padding:7px 10px;font-size:13.5px;color-scheme:light dark}
 input.mono{font-size:13px}
 /* cards */
 section,.sugcard,.onboard{background:var(--card);border:1px solid var(--line);border-radius:var(--rc);box-shadow:var(--sh)}
@@ -391,7 +399,7 @@ body.panel .compose{padding:6px 10px 16px}
 <div class="dragbar" aria-hidden="true"></div>
 <header>
  <h1 class="brand"><span class="bisu live"></span>bisu</h1>
- <nav><button data-view="chat" class="on">대화</button><button data-view="history">기록</button><button data-view="memory">기억</button><button data-view="settings">설정</button></nav>
+ <nav><button data-view="chat" class="on">대화</button><button data-view="goals">목표</button><button data-view="history">기록</button><button data-view="memory">기억</button><button data-view="settings">설정</button></nav>
  <span id="key" class="badge">key …</span>
 </header>
 
@@ -445,6 +453,28 @@ body.panel .compose{padding:6px 10px 16px}
   <label class="sw" style="margin-bottom:8px"><input type="checkbox" id="showAuto"> bisu가 스스로 돌린 것(먼저 찾아오기·예약 작업)도 보기</label>
   <div class="table"><table><thead><tr><th>언제</th><th>폴더 · 내용</th><th class="metaCol">모델</th><th class="metaCol">턴</th><th class="metaCol">토큰 입력 / 출력</th><th class="metaCol">비용(추정)</th><th>걸린 시간</th><th></th></tr></thead><tbody id="runs"><tr><td colspan="8" class="note">불러오는 중…</td></tr></tbody></table></div>
   <p class="note">터미널에서 실행한 것도 포함돼요. 비용은 설정 → 보기에서 "작업 세부 보기"를 켜면 보여요.</p>
+ </section>
+</div></div></div>
+
+<div class="view" id="goalsView"><div class="page"><div>
+ <section>
+  <h2>목표</h2>
+  <p class="note">며칠이나 몇 주 걸리는 일을 맡기면 bisu가 몇 시간마다 조금씩 진행해요. 계획을 세우고, 찾아보고, 일정과 미리 알림을 넣고, 결정이 필요하면 물어봐요. 파일을 고치거나 명령을 실행하거나 무언가를 보내고 사지는 않아요. 조용한 시간에는 쉬어요. 대화에서 "이번 달 안에 …" 하고 말해도 돼요.</p>
+  <form id="goalForm">
+   <div class="row">
+    <input type="text" id="goalTitle" placeholder="예: 11월 오사카 출장 준비" spellcheck="false" autocomplete="off">
+    <textarea id="goalDetail" rows="2" placeholder="다 되면 어떤 모습인지, 꼭 알아야 할 것 (선택) — 예: 항공·숙소·일정표까지, 예산 100만 원"></textarea>
+   </div>
+   <div class="kv">
+    <div class="k">기한</div><div><input type="date" id="goalDue"> <span class="note" style="display:inline;margin:0">(선택)</span></div>
+    <div class="k">진행 간격</div><div><select id="goalEvery"><option value="3">3시간마다</option><option value="6" selected>6시간마다</option><option value="12">12시간마다</option><option value="24">하루 한 번</option></select></div>
+   </div>
+   <div class="actions"><button class="primary" id="goalAdd">목표 맡기기</button><span class="note" id="goalNote" style="margin:0"></span></div>
+  </form>
+ </section>
+ <section>
+  <h2>맡긴 목표</h2>
+  <div id="goalList"><p class="note">불러오는 중…</p></div>
  </section>
 </div></div></div>
 
@@ -545,7 +575,7 @@ body.panel .compose{padding:6px 10px 16px}
     <div class="k">텔레그램으로 받기</div><div class="checks">
      <label class="sw"><input type="checkbox" id="tgNApprovals"> 승인 요청 (버튼으로 답해요)</label>
      <label class="sw"><input type="checkbox" id="tgNSuggestions"> bisu의 제안</label>
-     <label class="sw"><input type="checkbox" id="tgNJobs"> 예약 작업 · 아침 브리핑</label>
+     <label class="sw"><input type="checkbox" id="tgNJobs"> 예약 작업 · 아침 브리핑 · 목표 (질문엔 답장으로 답해요)</label>
      <label class="sw"><input type="checkbox" id="tgNEvents"> 일정 전 알림</label></div>
     <div class="k">텔레그램 대화 폴더</div><div><input type="text" id="tgCwd" class="mono" list="cwdList" spellcheck="false" autocomplete="off" placeholder="~ (홈 폴더)"></div>
    </div>
@@ -743,7 +773,7 @@ document.body.classList.toggle('meta',META);
 
 // ---- tabs ----
 function show(v){for(const b of document.querySelectorAll('nav button'))b.classList.toggle('on',b.dataset.view===v);for(const el of document.querySelectorAll('.view'))el.classList.toggle('on',el.id===v+'View');
- if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='settings'){loadAccount();loadRoles();if(prefs.engine==='native')loadNative();renderSugSettings();loadSuggestions();loadJobs();loadBrief();loadCu();loadTg();loadAlerts()}try{localStorage.setItem('bisu.view',v)}catch{}}
+ if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='goals')loadGoals();if(v==='settings'){loadAccount();loadRoles();if(prefs.engine==='native')loadNative();renderSugSettings();loadSuggestions();loadJobs();loadBrief();loadCu();loadTg();loadAlerts()}try{localStorage.setItem('bisu.view',v)}catch{}}
 for(const b of document.querySelectorAll('nav button'))b.onclick=()=>show(b.dataset.view);
 
 // ---- light markdown: fenced code, inline code, paragraphs ----
@@ -1181,10 +1211,11 @@ function renderSug(){
  el.hidden=false;
  // A scheduled job's answer is the same card with other words: nothing to agree to, only to read,
  // and "이어서 대화" picks up the run that wrote it.
- if(it.kind==='job')el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag${it.error?' bad':''}"><span class="bisu" data-state="${it.error?'error':'done'}"></span>${it.job==='briefing'?'아침 브리핑':'예약 작업'}</span>${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
+ if(it.kind==='job')el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag${it.error?' bad':''}"><span class="bisu" data-state="${it.error?'error':it.ask?'waiting':'done'}"></span>${it.job==='briefing'?'아침 브리핑':it.job==='goal'?'목표':'예약 작업'}</span>${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
   <div class="sugTitle">${esc(it.title)}</div>
   ${it.body?`<div class="sugBody job${it.error?' err':''}">${esc(it.body)}</div>`:''}
-  <div class="sugBtns">${it.sessionId?`<button class="primary" data-a="do">이어서 대화</button>`:''}<button data-a="later">확인</button><span class="sugWhere" title="${esc(short(it.cwd||''))}">${ago(it.at)}${it.cwd?' · '+esc(place(it.cwd)):''}</span></div></div>`;
+  ${it.goal&&it.ask?`<div class="sugAsk"><input type="text" data-a="answer" placeholder="여기에 답하면 이어서 해요" autocomplete="off"><button class="primary" data-a="send">보내기</button></div>`:''}
+  <div class="sugBtns">${it.sessionId?`<button class="primary" data-a="do">이어서 대화</button>`:''}<button data-a="later">${it.goal&&it.ask?'나중에':'확인'}</button><span class="sugWhere" title="${esc(short(it.cwd||''))}">${ago(it.at)}${it.cwd?' · '+esc(place(it.cwd)):''}</span></div></div>`;
  else el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag"><span class="bisu" data-state="waiting"></span>bisu가 하나 찾았어요</span>${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
   <div class="sugTitle">${esc(it.title)}</div>
   ${it.body?`<div class="sugBody">${esc(it.body)}</div>`:''}
@@ -1192,6 +1223,11 @@ function renderSug(){
   <div class="sugBtns"><button class="primary" data-a="do">해볼게</button><button data-a="later">나중에</button>${it.cwd?`<span class="sugWhere" title="${esc(short(it.cwd))}">${esc(place(it.cwd))}</span>`:''}</div></div>`;
  mountBisu(el);
  const go=el.querySelector('[data-a=do]');if(go)go.onclick=()=>suggestAnswer(it.id,'accept');
+ // A goal's question, answered right on the card.
+ const sendA=el.querySelector('[data-a=send]'),inA=el.querySelector('input[data-a=answer]');
+ if(sendA){const fire=async()=>{const text=inA.value.trim();if(!text)return inA.focus();sendA.disabled=true;
+   try{await post(`/api/goals/${it.goal}`,{action:'answer',text});await suggestAnswer(it.id,'dismiss')}catch(e){sendA.disabled=false;inA.placeholder=e.message;inA.value=''}};
+  sendA.onclick=fire;inA.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();fire()}})}
  el.querySelector('[data-a=later]').onclick=()=>suggestAnswer(it.id,'dismiss');
  el.querySelector('[data-a=no]').onclick=async()=>{for(const x of list)await post(`/api/proactive/${x.id}`,{action:'dismiss'}).catch(()=>{});loadSuggestions()};
  HOST?.suggest?.(list.filter(i=>!i.seen).length);
@@ -1280,6 +1316,37 @@ $('tgTest').onclick=async()=>{await tgDo('/api/telegram/test');if(!$('tgErr').te
 $('tgUnpair').onclick=()=>{if(confirm('텔레그램 연결을 끊을까요? 다시 쓰려면 연결을 새로 해야 해요.'))tgDo('/api/telegram/unpair')};
 for(const [id,k] of [['tgNApprovals','approvals'],['tgNSuggestions','suggestions'],['tgNJobs','jobs'],['tgNEvents','events']])$(id).addEventListener('change',()=>tgDo('/api/telegram',{notify:{[k]:$(id).checked}}));
 $('tgCwd').addEventListener('change',()=>tgDo('/api/telegram',{cwd:$('tgCwd').value}));
+// ---- goals (ui/goals.mjs): what bisu works on by itself over days or weeks ----
+let goalsSnap=null,goalPoll=null;
+const G_STATUS={active:['진행 중',''],waiting:['답을 기다려요','blush'],paused:['멈춤','blush'],done:['달성','']};
+async function loadGoals(){try{goalsSnap=await api('/api/goals');renderGoals()}catch(e){$('goalNote').textContent=e.message}}
+function renderGoals(){const s=goalsSnap;if(!s)return;const el=$('goalList');
+ if(!s.goals.length){el.innerHTML='<p class="note">아직 맡긴 목표가 없어요.</p>';return}
+ el.innerHTML=s.goals.map(g=>{const done=g.steps.filter(x=>x.status==='done').length,n=g.steps.length,run=s.running?.id===g.id,[st,tone]=G_STATUS[g.status]||['',''];
+  return `<div class="mem goal" data-id="${esc(g.id)}"><div class="h"><b>${esc(g.title)}</b><span class="tag ${tone}">${run?'진행하는 중…':st}</span>${g.due?`<span class="chip">기한 ${esc(g.due)}</span>`:''}
+   <span class="sp"></span><button data-a="run" ${s.running||g.status==='done'?'disabled':''}>지금 진행</button><button data-a="${g.status==='paused'||g.status==='done'?'resume':'pause'}">${g.status==='paused'?'다시 시작':g.status==='done'?'다시 열기':'멈추기'}</button><button class="danger" data-a="delete">지우기</button></div>
+   ${g.detail?`<div class="b note">${esc(g.detail)}</div>`:''}
+   ${n?`<div class="bar"><i style="width:${Math.round(done/n*100)}%"></i></div><ol>${g.steps.map(x=>`<li class="${x.status}">${esc(x.text)}${x.note?` <span class="note" style="display:inline">— ${esc(x.note)}</span>`:''}</li>`).join('')}</ol>`:`<div class="b note">${run?'계획을 세우는 중이에요.':'첫 진행 때 계획을 세워요.'}</div>`}
+   ${g.question?`<div class="ask"><div class="q"><b>bisu가 묻는 것</b>\n${esc(g.question.text)}</div><div class="r"><input type="text" data-answer placeholder="답 적기" autocomplete="off"><button class="primary" data-a="answer">보내기</button></div></div>`:''}
+   ${g.notes?`<details><summary class="note" style="cursor:pointer;margin:0">메모</summary><pre>${esc(g.notes)}</pre></details>`:''}
+   ${g.log.length?`<details><summary class="note" style="cursor:pointer;margin:0">진행 기록 ${g.log.length}개</summary><ul class="log">${g.log.slice(-10).reverse().map(l=>`<li>${esc(whenShort(l.at))} · ${esc(l.text)}</li>`).join('')}</ul></details>`:''}
+   <div class="b note" style="margin-top:6px">${g.status==='active'?`다음 진행: ${g.nextAt>Date.now()?whenShort(g.nextAt):'곧'}`:g.status==='waiting'?'답을 받으면 바로 이어서 해요':g.status==='done'?`${ago(g.doneAt||g.lastRun)} 달성`:'멈춰 있어요'}${g.lastRun?` · 마지막 진행 ${ago(g.lastRun)}`:''}${g.lastError?` · <span class="err">${esc(g.lastError)}</span>`:''}</div></div>`}).join('');
+ for(const b of el.querySelectorAll('button[data-a]'))b.onclick=async()=>{const box=b.closest('[data-id]'),id=box.dataset.id,a=b.dataset.a;
+  if(a==='delete'&&!confirm('이 목표를 지울까요? 계획과 기록도 같이 지워져요.'))return;
+  const body={action:a};if(a==='answer'){body.text=box.querySelector('[data-answer]').value.trim();if(!body.text)return}
+  b.disabled=true;$('goalNote').textContent='';
+  try{goalsSnap=await post(`/api/goals/${id}`,body);renderGoals();watchGoals()}catch(e){$('goalNote').textContent=e.message;b.disabled=false}};
+ for(const i of el.querySelectorAll('[data-answer]'))i.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();i.closest('.ask').querySelector('[data-a=answer]').click()}});
+ watchGoals()}
+// While a session runs, the list follows it.
+function watchGoals(){const busy=goalsSnap?.running;
+ if(busy&&!goalPoll)goalPoll=setInterval(()=>{if(!$('goalsView').classList.contains('on')){clearInterval(goalPoll);goalPoll=null;return}loadGoals()},4000);
+ if(!busy&&goalPoll){clearInterval(goalPoll);goalPoll=null}}
+$('goalForm').addEventListener('submit',async e=>{e.preventDefault();const t=$('goalTitle').value.trim();if(!t){$('goalTitle').focus();return}
+ $('goalAdd').disabled=true;$('goalNote').textContent='';
+ try{goalsSnap=await post('/api/goals',{title:t,detail:$('goalDetail').value.trim(),due:$('goalDue').value||null,every:Number($('goalEvery').value)});
+  $('goalTitle').value='';$('goalDetail').value='';$('goalDue').value='';$('goalNote').textContent='맡겼어요. 곧 계획을 세우기 시작해요.';renderGoals()}
+ catch(e){$('goalNote').textContent=e.message}finally{$('goalAdd').disabled=false}});
 // ---- banners, meeting alerts and keeping the Mac awake (ui/alerts.mjs; the shell shows the banners) ----
 let alSnap=null;
 const AL_B={alBApprovals:'approvals',alBReplies:'replies',alBCards:'cards',alBEvents:'events'};
