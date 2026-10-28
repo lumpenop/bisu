@@ -8,7 +8,7 @@
 // One Telegram chat is trusted: the one that sent the pairing code shown in Settings. Everything else is
 // ignored. Its messages go to one bisu chat (a fresh one after /new or six quiet hours) and the last thing
 // bisu says in a turn goes back; approvals, from any chat, come as buttons; and, if they want them,
-// suggestions, scheduled jobs' answers and the morning briefing are sent too.
+// suggestions, scheduled jobs' answers, the morning briefing and meetings about to start are sent too.
 // Long polling needs nothing reachable from outside, but it only works while this Mac is awake and bisu
 // is running.
 import fs from 'node:fs';
@@ -26,7 +26,7 @@ const NOTIFY_MS = 20e3;
 const MAX_TEXT = 3800;              // Telegram takes 4096; leave room
 
 const DEFAULTS = { enabled: true, chatId: null, user: null, pairedAt: 0, code: null, codeAt: 0, offset: 0,
-  notify: { approvals: true, suggestions: true, jobs: true }, cwd: '', bisuChat: null, chats: [], sent: [], bot: null, lastError: null };
+  notify: { approvals: true, suggestions: true, jobs: true, events: true }, cwd: '', bisuChat: null, chats: [], sent: [], bot: null, lastError: null };
 function load() {
   let s = {};
   try { s = JSON.parse(fs.readFileSync(FILE, 'utf8')) || {} } catch {}
@@ -118,6 +118,7 @@ const approvals = new Map();   // short key → {chat, request_id, message_id}
 const turns = new Map();       // bisu chat id → the last thing said this turn
 const trusted = (s, chatId) => s.chatId && String(chatId) === String(s.chatId);
 const isOurs = id => { const s = load(); return s.bisuChat === id || s.chats.includes(id) };
+export const owns = isOurs;
 function remember(chatId) { const s = load(); save({ bisuChat: chatId, chats: [chatId, ...s.chats.filter(x => x !== chatId)].slice(0, 20) }) }
 
 async function ensureChat() {
@@ -228,6 +229,13 @@ async function notify() {
       : [[{ text: '해볼게', callback_data: `s:${it.id}:do` }, { text: '나중에', callback_data: `s:${it.id}:later` }]];
     await send(text, { buttons }).catch(e => noteError(e));
   }
+}
+
+// A meeting about to start (ui/alerts.mjs), if they want those here too.
+export function onNotice(n) {
+  const s = load();
+  if (n.kind !== 'event' || !s.chatId || !s.enabled || !s.notify.events || !hasToken()) return;
+  send(`📅 ${n.title}${n.body ? `\n${n.body}` : ''}`).catch(e => noteError(e));
 }
 
 // ---- the loop ----

@@ -19,6 +19,7 @@ import * as jobs from './jobs.mjs';
 import * as briefing from './briefing.mjs';
 import * as cubench from './cubench.mjs';
 import * as telegram from './telegram.mjs';
+import * as alerts from './alerts.mjs';
 import {releaseSchedule} from './lock.mjs';
 import {PRICES as GLM_PRICES} from '../engine/glm.mjs';
 import {eventKit} from '../engine/calendar.mjs';
@@ -250,7 +251,9 @@ async function hydrate(c){
 function push(c,ev){ev.at=Date.now();c.events.push(ev);if(c.events.length>MAX_EVENTS)c.events.splice(0,c.events.length-MAX_EVENTS);
  const line=`data: ${JSON.stringify(ev)}\n\n`;for(const res of c.clients)res.write(line);
  // Telegram sees every chat's events too: approvals from any of them, replies in its own.
- try{telegram.onEvent(c,ev)}catch{}}
+ try{telegram.onEvent(c,ev)}catch{}
+ // And the Mac's own banners, for what happens while nobody is looking (ui/alerts.mjs).
+ try{alerts.onEvent(c,ev,{phone:telegram.owns(c.id)})}catch{}}
 function setBusy(c,busy){if(c.busy===busy)return;c.busy=busy;push(c,{kind:'status',busy})}
 function warm(c){if(!c.proc&&canThink()){start(c);idleLater(c)}}
 // Chats run delegated work in the background (see background-agents.mjs), which is what keeps the assistant free to talk.
@@ -430,6 +433,11 @@ const server=http.createServer(async(req,res)=>{
   // engine: this one exits and the shell starts the next (only under the app; a terminal run would just stop).
   if(m==='POST'&&p==='/api/restart'){if(PARENT!=='stdin')return json(res,400,{error:'터미널에서 띄운 bisu는 여기서 다시 켤 수 없어요'});
    json(res,200,{ok:true});setTimeout(()=>process.exit(0),300);return}
+  // Banners, meeting alerts and keeping the Mac awake (ui/alerts.mjs). The shell reads /api/notices.
+  if(m==='GET'&&p==='/api/alerts')return json(res,200,await alerts.snapshot());
+  if(m==='POST'&&p==='/api/alerts')return json(res,200,await alerts.configure(await body(req)));
+  if(m==='POST'&&p==='/api/alerts/test')return json(res,200,alerts.test());
+  if(m==='GET'&&p==='/api/notices')return json(res,200,alerts.since(Number(url.searchParams.get('after'))||0));
   if(m==='GET'&&p==='/api/cubench')return json(res,200,cubench.snapshot());
   if(m==='POST'&&p==='/api/cubench')return json(res,200,cubench.start(await body(req)));
   if(m==='POST'&&p==='/api/cubench/stop')return json(res,200,cubench.stop());
@@ -509,11 +517,13 @@ jobs.start();
 briefing.start();
 telegram.attach({newChat,say,decide,stop,getChat:id=>chats.get(id),accept:acceptSuggestion});
 telegram.start();
-for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();telegram.shutdown();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
+alerts.onNotice(n=>telegram.onNotice(n));
+alerts.start();
+for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();telegram.shutdown();alerts.shutdown();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
 // The desktop shell holds this pipe open for as long as it is running, so the pipe closing means the
 // shell quit or was force-killed. Without this the engine, dec and every Claude Code run outlive it.
 if(PARENT==='stdin'){
- process.stdin.on('end',()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();telegram.shutdown();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');process.exit(0)});
+ process.stdin.on('end',()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();telegram.shutdown();alerts.shutdown();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');process.exit(0)});
  process.stdin.on('error',()=>{});
  process.stdin.resume();
 }

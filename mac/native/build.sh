@@ -15,7 +15,7 @@ build="$here/.build"
 mkdir -p "$build"
 echo "bisu: compiling the shell"
 xcrun swiftc -O -o "$build/bisu" "$here/bisu.swift" \
-  -framework Cocoa -framework WebKit -framework Carbon
+  -framework Cocoa -framework WebKit -framework Carbon -framework UserNotifications
 
 app="$build/bisu.app"
 rm -rf "$app"

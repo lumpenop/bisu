@@ -509,7 +509,21 @@ body.panel .compose{padding:6px 10px 16px}
   <p class="note">bisu가 가끔 스스로 최근 작업을 훑어보고, 지금 말할 만한 걸 하나 남겨요. 읽기만 하는 별도 실행이라 아무것도 바꾸지 못하고, 고르면 그때 폴더에서 진짜 대화가 시작돼요. 마음에 안 든 제안은 “나중에”로 지우면 다시 꺼내지 않아요.</p>
   <div id="sugPast"></div>
  </section>
+ <section id="alertSec">
+  <h2>알림 · 깨어 있기</h2>
+  <div class="kv">
+   <div class="k">맥 깨어 있게</div><div class="checks"><label class="sw"><input type="checkbox" id="alAwake"> 전원이 연결되어 있으면 잠들지 않게</label><span class="note" id="alPower" style="margin:0"></span></div>
+   <div class="k">일정 전 알림</div><div><select id="alBefore"><option value="0">끄기</option><option value="5">5분 전</option><option value="10">10분 전</option><option value="15">15분 전</option><option value="30">30분 전</option></select> <span class="note" id="alAccess" style="display:inline;margin:0"></span></div>
+   <div class="k">맥 알림</div><div class="checks">
+    <div id="alPerm">…</div>
+    <label class="sw"><input type="checkbox" id="alBApprovals"> 확인이 필요할 때</label>
+    <label class="sw"><input type="checkbox" id="alBReplies"> bisu가 답했을 때 (bisu 창이 닫혀 있을 때만)</label>
+    <label class="sw"><input type="checkbox" id="alBCards"> 제안 · 예약 작업 · 아침 브리핑</label>
+    <label class="sw"><input type="checkbox" id="alBEvents"> 일정 전 알림</label></div>
+  </div>
+  <div class="actions"><button class="primary" id="alPermBtn" hidden>알림 허용하기</button><button id="alTest">테스트 알림 보내기</button><span class="note" id="alNote" style="margin:0"></span></div>
   <p class="note">맥이 잠들면 bisu도 멈춰요. 전원이 연결되어 있는 동안은 잠들지 않게 해서, 자리를 비워도 텔레그램과 예약 작업에 답할 수 있어요. 화면은 평소처럼 꺼지고, 뚜껑을 닫으면 잠들어요. 알림을 누르면 그 대화가 열려요.</p>
+ </section>
  <section id="tgSec">
   <h2>텔레그램</h2>
   <div class="tgState" id="tgState">…</div>
@@ -727,7 +741,7 @@ document.body.classList.toggle('meta',META);
 
 // ---- tabs ----
 function show(v){for(const b of document.querySelectorAll('nav button'))b.classList.toggle('on',b.dataset.view===v);for(const el of document.querySelectorAll('.view'))el.classList.toggle('on',el.id===v+'View');
- if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='settings'){loadAccount();loadRoles();if(prefs.engine==='native')loadNative();renderSugSettings();loadSuggestions();loadJobs();loadBrief();loadCu();loadTg()}try{localStorage.setItem('bisu.view',v)}catch{}}
+ if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='settings'){loadAccount();loadRoles();if(prefs.engine==='native')loadNative();renderSugSettings();loadSuggestions();loadJobs();loadBrief();loadCu();loadTg();loadAlerts()}try{localStorage.setItem('bisu.view',v)}catch{}}
 for(const b of document.querySelectorAll('nav button'))b.onclick=()=>show(b.dataset.view);
 
 // ---- light markdown: fenced code, inline code, paragraphs ----
@@ -1261,6 +1275,30 @@ $('tgTest').onclick=async()=>{await tgDo('/api/telegram/test');if(!$('tgErr').te
 $('tgUnpair').onclick=()=>{if(confirm('텔레그램 연결을 끊을까요? 다시 쓰려면 연결을 새로 해야 해요.'))tgDo('/api/telegram/unpair')};
 for(const [id,k] of [['tgNApprovals','approvals'],['tgNSuggestions','suggestions'],['tgNJobs','jobs'],['tgNEvents','events']])$(id).addEventListener('change',()=>tgDo('/api/telegram',{notify:{[k]:$(id).checked}}));
 $('tgCwd').addEventListener('change',()=>tgDo('/api/telegram',{cwd:$('tgCwd').value}));
+// ---- banners, meeting alerts and keeping the Mac awake (ui/alerts.mjs; the shell shows the banners) ----
+let alSnap=null;
+const AL_B={alBApprovals:'approvals',alBReplies:'replies',alBCards:'cards',alBEvents:'events'};
+async function loadAlerts(){renderPerm();try{alSnap=await api('/api/alerts');renderAlerts()}catch(e){$('alNote').textContent=e.message}}
+function renderAlerts(){const a=alSnap;if(!a)return;$('alAwake').checked=a.awake;
+ $('alPower').textContent=!a.awake?'':a.power==='battery'?'지금은 배터리라 평소처럼 잠들어요':a.keepingAwake&&a.power==='ac'?'지금 전원 연결됨 · 잠들지 않아요':'';
+ $('alBefore').value=String(a.before);
+ $('alAccess').textContent=a.before&&a.access===false?'캘린더 접근을 허용해야 알려 줄 수 있어요':'';
+ for(const [id,k] of Object.entries(AL_B))$(id).checked=a.banners[k]}
+// Whether macOS lets bisu show banners is the shell's to know; a page outside the app can only say so.
+async function renderPerm(){const box=$('alPerm'),btn=$('alPermBtn');
+ if(!HOST?.notifications){box.innerHTML='<span class="note" style="margin:0">맥 알림은 bisu 앱에서만 떠요.</span>';btn.hidden=true;return}
+ let st='unknown';try{st=(await HOST.notifications()).status}catch{}
+ const on=st==='authorized'||st==='provisional';
+ box.innerHTML=on?'<span class="tag">허용됨</span>':st==='denied'?'<span class="tag blush">꺼져 있어요</span> 시스템 설정에서 bisu 알림을 켜 주세요.':'<span class="tag blush">아직 허락 안 받음</span>';
+ btn.hidden=on;btn.textContent=st==='denied'?'시스템 설정 열기':'알림 허용하기';btn.dataset.st=st}
+$('alPermBtn').onclick=async()=>{if($('alPermBtn').dataset.st==='denied')HOST.openNotificationSettings?.();else{try{await HOST.requestNotifications()}catch{}}renderPerm()};
+const alSave=async b=>{$('alNote').textContent='';try{alSnap=await post('/api/alerts',b);renderAlerts()}catch(e){$('alNote').textContent=e.message}};
+$('alAwake').addEventListener('change',()=>alSave({awake:$('alAwake').checked}));
+$('alBefore').addEventListener('change',()=>alSave({before:Number($('alBefore').value)}));
+for(const [id,k] of Object.entries(AL_B))$(id).addEventListener('change',()=>alSave({banners:{[k]:$(id).checked}}));
+$('alTest').onclick=async()=>{$('alNote').textContent='';try{await post('/api/alerts/test');$('alNote').textContent=HOST?.notifications?'보냈어요. 몇 초 안에 떠요.':'보냈어요. 맥 알림은 bisu 앱에서만 떠요.'}catch(e){$('alNote').textContent=e.message}};
+// A banner clicked: the shell brings the window up and says which conversation it was about.
+if(HOST?.onOpen)HOST.onOpen(async id=>{await refreshChats();if(chats.some(c=>c.id===id)){show('chat');open(id)}});
 // ---- computer-use test (engine/eval/cu-bench.mjs, run by the engine) ----
 let cuSnap=null,cuPoll=null;
 const CU_GROUP={TextEdit:'텍스트 편집기',Finder:'Finder',Notes:'메모',Calculator:'계산기','System Settings':'시스템 설정'};

@@ -12,6 +12,7 @@
 import Cocoa
 import WebKit
 import Carbon.HIToolbox
+import UserNotifications
 
 // MARK: - small utilities
 
@@ -271,8 +272,13 @@ final class Engine {
     return result
   }
 
-  func getJSON(_ path: String, done: @escaping ([String: Any]?) -> Void) {
-    var req = URLRequest(url: base.appendingPathComponent(path))
+  func getJSON(_ path: String, query: [String: String] = [:], done: @escaping ([String: Any]?) -> Void) {
+    var url = base.appendingPathComponent(path)
+    if !query.isEmpty, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+      parts.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
+      url = parts.url ?? url
+    }
+    var req = URLRequest(url: url)
     req.timeoutInterval = 8
     req.setValue(token, forHTTPHeaderField: "X-Bisu-Token")
     URLSession.shared.dataTask(with: req) { data, _, _ in
@@ -373,7 +379,7 @@ let shimJS = """
     pending.set(id, {res, rej});
     post(cmd, Object.assign({__id: id}, args || {}));
   });
-  const subs = {context: new Set(), shown: new Set(), hidden: new Set()};
+  const subs = {context: new Set(), shown: new Set(), hidden: new Set(), open: new Set()};
   const host = {
     panel: true,
     platform: 'darwin',
@@ -397,6 +403,10 @@ let shimJS = """
     suggest: n => post('suggest', {n: n || 0}),
     onShown: fn => { subs.shown.add(fn); return () => subs.shown.delete(fn) },
     onHidden: fn => { subs.hidden.add(fn); return () => subs.hidden.delete(fn) },
+    notifications: () => call('notifyStatus'),
+    requestNotifications: () => call('notifyRequest'),
+    openNotificationSettings: () => post('notifySettings'),
+    onOpen: fn => { subs.open.add(fn); return () => subs.open.delete(fn) },
     __reply: (id, ok, value) => {
       const p = pending.get(id);
       if (!p) return;
@@ -470,7 +480,7 @@ final class Dialogs: NSObject, WKUIDelegate {
 
 // MARK: - the shell
 
-final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, WKNavigationDelegate {
+final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, WKNavigationDelegate, UNUserNotificationCenterDelegate {
   private var statusItem: NSStatusItem!
   private var panel: Panel!
   private var web: WKWebView!
@@ -495,6 +505,9 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
   /// listening when it hides — which is exactly when the icon matters.
   private var chatState = ""
   private var stateTimer: Timer?
+  /// The engine's notices already shown: ids restart with each engine, which `noticeBoot` tells apart.
+  private var noticeBoot: String?
+  private var noticeLast = 0
   private var engineRestarts: [Date] = []
   private let minW: CGFloat = 380
   private let minH: CGFloat = 320
@@ -510,6 +523,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     buildStatusItem()
     buildPanel()
     registerHotKey()
+    setUpNotifications()
     startEngineThenLoad()
   }
 
@@ -606,6 +620,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
 
   private func pollChats() {
     guard engine?.ready == true else { return }
+    pollNotices()
     engine.getJSON("api/chats") { [weak self] j in
       guard let self else { return }
       let chats = j?["chats"] as? [[String: Any]] ?? []
@@ -617,6 +632,97 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       self.refreshTray()
       log("chats:", next.isEmpty ? "idle" : next)
     }
+  }
+
+  // MARK: notifications
+
+  /// macOS asks once whether bisu may show notifications; after that the answer lives in System
+  /// Settings, which Settings in the page links to.
+  private func setUpNotifications() {
+    let center = UNUserNotificationCenter.current()
+    center.delegate = self
+    center.getNotificationSettings { s in
+      guard s.authorizationStatus == .notDetermined else { return }
+      center.requestAuthorization(options: [.alert, .sound]) { ok, error in
+        log("notifications:", ok ? "allowed" : "not allowed", error?.localizedDescription ?? "")
+      }
+    }
+  }
+
+  private func notificationStatus(_ done: @escaping (String) -> Void) {
+    UNUserNotificationCenter.current().getNotificationSettings { s in
+      let name: String
+      switch s.authorizationStatus {
+      case .authorized: name = "authorized"
+      case .provisional: name = "provisional"
+      case .denied: name = "denied"
+      case .notDetermined: name = "notDetermined"
+      default: name = "unknown"
+      }
+      DispatchQueue.main.async { done(name) }
+    }
+  }
+
+  /// Whether the person can already see bisu: then a banner about a conversation is noise.
+  private var bisuOnScreen: Bool {
+    NSApp.isActive && (panel.isVisible || fullWindow?.isVisible == true)
+  }
+
+  private func pollNotices() {
+    engine.getJSON("api/notices", query: ["after": String(noticeLast)]) { [weak self] j in
+      guard let self, let j else { return }
+      let boot = j["boot"] as? String ?? ""
+      let last = j["last"] as? Int ?? 0
+      // First look: whatever was there before the shell came up is old news.
+      guard let known = self.noticeBoot else { self.noticeBoot = boot; self.noticeLast = last; return }
+      // A new engine counts from 1 again; the next poll asks from there.
+      guard known == boot else { self.noticeBoot = boot; self.noticeLast = 0; return }
+      for n in j["notices"] as? [[String: Any]] ?? [] { self.showNotice(n, boot: boot) }
+      self.noticeLast = max(self.noticeLast, last)
+    }
+  }
+
+  private func showNotice(_ n: [String: Any], boot: String) {
+    let kind = n["kind"] as? String ?? ""
+    let chat = n["chat"] as? String
+    if ["approval", "reply", "card"].contains(kind) && bisuOnScreen { return }
+    let content = UNMutableNotificationContent()
+    content.title = n["title"] as? String ?? "bisu"
+    content.body = n["body"] as? String ?? ""
+    if kind == "approval" || kind == "event" { content.sound = .default }
+    if let chat { content.userInfo = ["chat": chat]; content.threadIdentifier = chat } else { content.threadIdentifier = kind }
+    let id = "bisu-\(boot)-\(n["id"] as? Int ?? 0)"
+    UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: nil)) { error in
+      if let error { log("notification failed:", error.localizedDescription) }
+    }
+  }
+
+  func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                              withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+    completionHandler([.banner, .list, .sound])
+  }
+
+  /// A banner clicked: the window they use comes up on the conversation it was about.
+  func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                              withCompletionHandler completionHandler: @escaping () -> Void) {
+    let chat = (response.notification.request.content.userInfo["chat"] as? String).flatMap {
+      $0.range(of: "^[0-9a-f-]{36}$", options: .regularExpression) != nil ? $0 : nil }
+    DispatchQueue.main.async {
+      var target: WKWebView? = self.web
+      if let w = self.fullWindow, w.isVisible, let view = w.contentView as? WKWebView {
+        w.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        target = view
+      } else {
+        self.showPanel()
+      }
+      if let chat {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+          target?.evaluateJavaScript("window.bisuHost.__emit('open', '\(chat)')", completionHandler: nil)
+        }
+      }
+    }
+    completionHandler()
   }
 
   private func buildStatusItem() {
@@ -1155,6 +1261,17 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     case "selectionSet":
       if let on = args["on"] as? Bool { saveState(["selection": on]) }
       reply(readState()["selection"] as? Bool != false)
+    case "notifyStatus":
+      notificationStatus { reply(["status": $0]) }
+    case "notifyRequest":
+      UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { [weak self] _, _ in
+        self?.notificationStatus { reply(["status": $0]) }
+      }
+    case "notifySettings":
+      let pane = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=com.bisu.desktop")!
+      if !NSWorkspace.shared.open(pane) {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.notifications")!)
+      }
     case "suggest":
       // How many suggestions are waiting unread, for the dot on the menu bar icon. The page reports
       // it after every poll, so nothing here has to know about the engine's schedule.
