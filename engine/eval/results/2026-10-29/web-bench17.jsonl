@@ -1,0 +1,13 @@
+{"task":"shop","mode":"rescue","rep":0,"pass":true,"verdict":"pass","status":"done","steps":3,"ms":4214,"cost":0.0009,"answer":"가격: 판매가 39,900원 · 재고 3개 남음","reviews":{"n":0,"changed":0,"why":{}}}
+{"task":"books","mode":"rescue","rep":0,"pass":true,"verdict":"pass","status":"done","steps":2,"ms":3354,"cost":0.0005,"answer":"가격: ₩18,500 · 재고 있음 (12권)","reviews":{"n":0,"changed":0,"why":{}}}
+{"task":"booking","mode":"rescue","rep":0,"pass":true,"verdict":"pass","status":"needs-approval","steps":5,"ms":5539,"cost":0.0005,"answer":null,"held":"예약 확정","reviews":{"n":0,"changed":0,"why":{}}}
+{"task":"mail","mode":"rescue","rep":0,"pass":true,"verdict":"pass","status":"needs-approval","steps":3,"ms":5854,"cost":0.0007,"answer":null,"held":"삭제","reviews":{"n":1,"changed":0,"why":{"unsure":1}}}
+{"task":"cheapest","mode":"rescue","rep":0,"pass":true,"verdict":"pass","status":"done","steps":3,"ms":8042,"cost":0.0023,"answer":"UGREEN USB-C 허브 5포트, 24,500원 (재고 있음, 품절 아님 — 검색 결과 중 가장 저렴)","reviews":{"n":2,"changed":0,"why":{"compare":1,"done-without-answer":1}}}
+{"task":"mailread","mode":"rescue","rep":0,"pass":true,"verdict":"pass","status":"done","steps":1,"ms":2285,"cost":0.0003,"answer":"내일 회의 자료 공유드려요","reviews":{"n":0,"changed":0,"why":{}}}
+{"task":"page2","mode":"rescue","rep":0,"pass":true,"verdict":"pass","status":"done","steps":3,"ms":5635,"cost":0.0009,"answer":"겨울 정원의 편지의 가격은 ₩15,200입니다.","reviews":{"n":1,"changed":0,"why":{"odd-answer":1}}}
+{"task":"refurb","mode":"rescue","rep":0,"pass":true,"verdict":"pass","status":"done","steps":2,"ms":3761,"cost":0.0004,"answer":"Anker 7-in-1 USB-C 허브 · 39,900원","reviews":{"n":0,"changed":0,"why":{}}}
+{"task":"mic","mode":"rescue","rep":0,"pass":true,"verdict":"pass","status":"done","steps":0,"ms":1362,"cost":0.0002,"answer":"첫눈 예보, 주말 강원 산간 5cm","reviews":{"n":0,"changed":0,"why":{}}}
+{"task":"store","mode":"rescue","rep":0,"pass":true,"verdict":"pass","status":"done","steps":0,"ms":1325,"cost":0.0003,"answer":"토요일\t10:00 – 18:00","reviews":{"n":0,"changed":0,"why":{}}}
+
+mode        pass   median s   $/task   GLM looks (changed the pick)
+rescue     10/10       4.2  0.00070   4 (0)

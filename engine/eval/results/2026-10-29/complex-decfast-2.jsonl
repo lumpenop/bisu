@@ -1,0 +1,10 @@
+{"task":"C1","mode":"decfast","rep":0,"s":40.4,"pass":false,"status":"failed","steps":14,"answer":""}
+{"task":"C2","mode":"decfast","rep":0,"s":5.8,"pass":false,"status":"unverified","steps":3,"answer":"A Shard of Ice (The Black Symphony Saga #1) — £56.63"}
+{"task":"C3","mode":"decfast","rep":0,"s":3.4,"pass":true,"status":"unverified","steps":2,"answer":"가장 비싼: Boar Island (Anna Pigeon #19) £59.48 · 가장 싼: Tastes Like Fear (DI Marnie Rome #3) £10.69 · 차이: £48.79"}
+{"task":"C4","mode":"decfast","rep":0,"s":8.1,"pass":true,"status":"unverified","steps":4,"answer":"제목: Between Shades of Gray, UPC: 155e42df837ee5ff, 재고 수량: In stock (3 available), 리뷰 수: 0"}
+{"task":"C5","mode":"decfast","rep":0,"s":7.5,"pass":true,"status":"unverified","steps":3,"answer":"그 사람이 태어난 날짜: March 14, 1879 · 장소: in Ulm, Germany"}
+{"task":"C1","mode":"decfast","rep":1,"s":34.8,"pass":false,"status":"failed","steps":13,"answer":"Travel: Vagabonding £36.94, Poetry: Poems That Make Grown Women Cry £14.19, Science Fiction: The Project £10.65"}
+{"task":"C2","mode":"decfast","rep":1,"s":9.7,"pass":true,"status":"unverified","steps":4,"answer":"Fantasy 카테고리에서 가장 비싼 책: Myriad (Prentor #1), £58.75"}
+{"task":"C3","mode":"decfast","rep":1,"s":3.3,"pass":true,"status":"unverified","steps":2,"answer":"가장 비싼: Boar Island (Anna Pigeon #19) £59.48 · 가장 싼: Tastes Like Fear (DI Marnie Rome #3) £10.69 · 차이: £48.79"}
+{"task":"C4","mode":"decfast","rep":1,"s":8.1,"pass":true,"status":"unverified","steps":4,"answer":"제목: Between Shades of Gray, UPC: 155e42df837ee5ff, 재고 수량: In stock (3 available), 리뷰 수: 0"}
+{"task":"C5","mode":"decfast","rep":1,"s":6.6,"pass":true,"status":"unverified","steps":3,"answer":"그 사람이 태어난 날짜: March 14, 1879 · 장소: in Ulm, Germany"}

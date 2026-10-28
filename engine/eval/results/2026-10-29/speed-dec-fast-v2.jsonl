@@ -1,0 +1,9 @@
+{"browser":"dec","task":"simple","rep":0,"s":5.3,"pass":true,"answer":"£51.77","status":"unverified","steps":2}
+{"browser":"dec","task":"medium","rep":0,"s":4.7,"pass":true,"answer":"가격: £45.17 · 재고: In stock (19 available)","status":"unverified","steps":3}
+{"browser":"dec","task":"deep","rep":0,"s":7.4,"pass":true,"answer":"제목: The No. 1 Ladies' Detective Agency (No. 1 Ladies' Detective Agency #1) · 가격: £57.70 · 재고 수량: In stock (1 available) · UPC: b0913e67d38d5ed5","status":"unverified","steps":4}
+{"browser":"dec","task":"simple","rep":1,"s":3.9,"pass":true,"answer":"£51.77","status":"unverified","steps":2}
+{"browser":"dec","task":"medium","rep":1,"s":4.6,"pass":true,"answer":"가격: £45.17 · 재고: In stock (19 available)","status":"unverified","steps":3}
+{"browser":"dec","task":"deep","rep":1,"s":6.9,"pass":true,"answer":"제목: The No. 1 Ladies' Detective Agency (No. 1 Ladies' Detective Agency #1) · 가격: £57.70 · 재고 수량: In stock (1 available) · UPC: b0913e67d38d5ed5","status":"unverified","steps":4}
+{"browser":"dec","task":"simple","rep":2,"s":3.6,"pass":true,"answer":"£51.77","status":"unverified","steps":2}
+{"browser":"dec","task":"medium","rep":2,"s":4.5,"pass":true,"answer":"가격: £45.17 · 재고: In stock (19 available)","status":"unverified","steps":3}
+{"browser":"dec","task":"deep","rep":2,"s":23.6,"pass":true,"answer":"제목: The No. 1 Ladies' Detective Agency (No. 1 Ladies' Detective Agency #1) · 가격: £57.70 · 재고 수량: In stock (1 available) · UPC: b0913e67d38d5ed5","status":"unverified","steps":4}

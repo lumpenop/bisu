@@ -1,0 +1,10 @@
+{"task":"C1","mode":"decfast","rep":0,"s":38.7,"pass":false,"status":"unverified","steps":14,"answer":"Travel: The Road to Little Dribbing £23.21; Poetry: Poems That Make Grown Women Cry £14.19; Science Fiction: The Project £10.65"}
+{"task":"C2","mode":"decfast","rep":0,"s":10.1,"pass":true,"status":"unverified","steps":6,"answer":"Fantasy 카테고리에서 가장 비싼 책: Myriad (Prentor #1) - £58.75"}
+{"task":"C3","mode":"decfast","rep":0,"s":29,"pass":false,"status":"unverified","steps":12,"answer":"가장 비싼 책: Boar Island (Anna Pigeon #19) £59.48, 가장 싼 책: Hide Away (Eve Duncan #20) £11.84, 가격 차이: £47.64"}
+{"task":"C4","mode":"decfast","rep":0,"s":7.9,"pass":true,"status":"unverified","steps":4,"answer":"제목: Between Shades of Gray, UPC: 155e42df837ee5ff, 재고: In stock (3 available), 리뷰 수: 0"}
+{"task":"C5","mode":"decfast","rep":0,"s":4.2,"pass":false,"status":"failed","steps":2,"answer":""}
+{"task":"C1","mode":"decfast","rep":1,"s":37.9,"pass":true,"status":"failed","steps":15,"answer":"Travel: The Road to Little Dribbling £23.21, Poetry: Poems That Make Grown Women Cry £14.19, Science Fiction: The Project £10.65"}
+{"task":"C2","mode":"decfast","rep":1,"s":9.9,"pass":true,"status":"unverified","steps":6,"answer":"Myriad (Prentor #1), £58.75"}
+{"task":"C3","mode":"decfast","rep":1,"s":25.1,"pass":false,"status":"failed","steps":13,"answer":""}
+{"task":"C4","mode":"decfast","rep":1,"s":7.8,"pass":true,"status":"unverified","steps":4,"answer":"제목: Between Shades of Gray, UPC: 155e42df837ee5ff, 재고 수량: 3 (In stock), 리뷰 수: 0"}
+{"task":"C5","mode":"decfast","rep":1,"s":5.3,"pass":false,"status":"failed","steps":2,"answer":""}

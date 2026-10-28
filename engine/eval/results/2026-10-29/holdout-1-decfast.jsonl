@@ -1,0 +1,12 @@
+{"task":"O1","mode":"decfast","rep":0,"s":5.3,"pass":true,"status":"unverified","steps":1,"answer":"Iceland의 수도: Reykjavik, 인구: 308910"}
+{"task":"O2","mode":"decfast","rep":0,"s":9.3,"pass":true,"status":"unverified","steps":4,"answer":"42"}
+{"task":"O3","mode":"decfast","rep":0,"s":32.9,"pass":true,"status":"unverified","steps":8,"answer":"가장 비싼 노트북: Asus ROG Strix SCAR Edition GL503VM-ED115T, 가격 $1799, 리뷰 8개"}
+{"task":"O4","mode":"decfast","rep":0,"s":46.6,"pass":true,"status":"failed","steps":17,"answer":"가장 비싼 태블릿: Apple iPad Air — $603.99 (Wi-Fi, 64GB, Silver)"}
+{"task":"O5","mode":"decfast","rep":0,"s":4.9,"pass":true,"status":"unverified","steps":1,"answer":"Jason Doe, $100.00"}
+{"task":"O6","mode":"decfast","rep":0,"s":13.9,"pass":true,"status":"unverified","steps":6,"answer":"Mad Max: Fury Road, 6개의 상(Awards)"}
+{"task":"O1","mode":"decfast","rep":1,"s":4.3,"pass":true,"status":"unverified","steps":1,"answer":"Iceland - Capital: Reykjavik, Population: 308910"}
+{"task":"O2","mode":"decfast","rep":1,"s":10,"pass":true,"status":"unverified","steps":4,"answer":"42"}
+{"task":"O3","mode":"decfast","rep":1,"s":16.4,"pass":true,"status":"unverified","steps":3,"answer":"가장 비싼 노트북: Asus ROG Strix SCAR Edition GL503VM-ED115T, 가격 $1799, 리뷰 수 8"}
+{"task":"O4","mode":"decfast","rep":1,"s":33.9,"pass":false,"status":"failed","steps":16,"answer":""}
+{"task":"O5","mode":"decfast","rep":1,"s":4.8,"pass":true,"status":"unverified","steps":1,"answer":"Jason Doe, $100.00"}
+{"task":"O6","mode":"decfast","rep":1,"s":11.6,"pass":true,"status":"unverified","steps":5,"answer":"가장 많은 상을 받은 영화는 Mad Max: Fury Road로 6개의 상을 받았습니다."}

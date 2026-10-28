@@ -1,0 +1,12 @@
+{"task":"P1","mode":"decfast","rep":0,"s":24.6,"pass":false,"status":"unverified","steps":9,"answer":"전체에서 가장 비싼 상품의 이름: Hiking Boots for Outdoor Adventures · 가격: 4.99"}
+{"task":"P2","mode":"decfast","rep":0,"s":5.5,"pass":true,"status":"unverified","steps":2,"answer":"브랜드: ChocoDelight, Variants: 6개 (orange, small / orange, medium / orange, large / cherry, small / cherry, medium / cherry, large)"}
+{"task":"P3","mode":"decfast","rep":0,"s":6.4,"pass":true,"status":"unverified","steps":2,"answer":"SKU: 24-UG06, Category: Fitness Equipment"}
+{"task":"P4","mode":"decfast","rep":0,"s":3.9,"pass":true,"status":"unverified","steps":1,"answer":"Headphones, $149.99"}
+{"task":"P5","mode":"decfast","rep":0,"s":8.3,"pass":true,"status":"unverified","steps":2,"answer":"NFL 2K1 - 62,99 €"}
+{"task":"P6","mode":"decfast","rep":0,"s":10.8,"pass":true,"status":"unverified","steps":2,"answer":"Developer: Nintendo, Type: singleplayer"}
+{"task":"P1","mode":"decfast","rep":1,"s":46.7,"pass":false,"status":"failed","steps":20,"answer":""}
+{"task":"P2","mode":"decfast","rep":1,"s":5.5,"pass":true,"status":"unverified","steps":2,"answer":"브랜드: ChocoDelight, Variants: 6개 (orange, small / orange, medium / orange, large / cherry, small / cherry, medium / cherry, large)"}
+{"task":"P3","mode":"decfast","rep":1,"s":7.7,"pass":true,"status":"unverified","steps":2,"answer":"SKU: 24-UG06, Category: Fitness Equipment (Affirm Water Bottle, $7.00)"}
+{"task":"P4","mode":"decfast","rep":1,"s":4,"pass":true,"status":"unverified","steps":1,"answer":"Headphones, $149.99"}
+{"task":"P5","mode":"decfast","rep":1,"s":8.9,"pass":true,"status":"unverified","steps":2,"answer":"NFL 2K1, 62,99 €"}
+{"task":"P6","mode":"decfast","rep":1,"s":12.1,"pass":true,"status":"unverified","steps":2,"answer":"Developer: Nintendo, Type: singleplayer"}

@@ -9,6 +9,7 @@ import path from 'node:path';
 
 const BIN = () => process.env.BISU_ASIDE_BIN || path.join(os.homedir(), '.local', 'bin', 'aside');
 const quote = v => JSON.stringify(String(v));
+const unq = n => { try { return JSON.parse(n) } catch { return String(n).replace(/^"|"$/g, '') } };
 
 // "- link "Travel" [ref=e4]:" → "  link "Travel" [ref=e4]"; "- text: "…"" → "  text "…""; "- paragraph: "…"" → the role
 // with the text under it. Also returns what ego's snapshot leaves to page scripts: checkbox states and select options.
@@ -22,16 +23,20 @@ export function toEgo(tree) {
     if (/^\/url:|^\/placeholder:/.test(body)) continue;
     const t = /^text: (".*")$/.exec(body);
     if (t) { out.push(`${ind}text ${t[1]}`); continue }
-    const r = /^([a-z_]+)(?: (".*?(?<!\\)"))?((?: \[[^\]]*\])*)(?:: (".*"|[^"].*))?$/i.exec(body);
+    // role, its quoted name, then what follows: [ref=e4] [checked], (selected), value="desc", and ": text".
+    const r = /^([a-z_]+)(?: ("(?:[^"\\]|\\.)*"))?(.*)$/i.exec(body);
     if (!r) continue;
-    const [, role, name = '', attrsRaw = '', inline] = r;
-    const attrs = [...attrsRaw.matchAll(/\[([^\]]*)\]/g)].map(a => a[1]);
+    const [, role, name = ''] = r;
+    let rest = r[3] || '', inline;
+    const ci = rest.search(/: (?=["\w])/);
+    if (ci >= 0) { inline = rest.slice(ci + 2); rest = rest.slice(0, ci) }
+    const attrs = [...rest.matchAll(/\[([^\]]*)\]/g)].map(a => a[1]).concat(/\(selected\)/.test(rest) ? ['selected'] : [], /\(checked\)/.test(rest) ? ['checked'] : []);
     const ref = attrs.find(a => /^ref=/.test(a));
     out.push(`${ind}${role}${name ? ' ' + name : ''}${ref ? ` [${ref}]` : ''}`);
     if (inline) out.push(`${ind}  text ${/^"/.test(inline) ? inline : quote(inline)}`);
     if (role === 'checkbox' || role === 'radio') boxes.push(attrs.includes('checked') || attrs.includes('checked=true'));
-    if (role === 'combobox') { sel = {name: '', label: name ? JSON.parse(name) : '', options: [], value: '', depth: ind.length}; selects.push(sel) }
-    else if (role === 'option' && sel && ind.length > sel.depth) { const o = name ? JSON.parse(name) : ''; sel.options.push(o); if (attrs.includes('selected')) sel.value = o }
+    if (role === 'combobox') { sel = {name: '', label: name ? unq(name) : '', options: [], value: '', depth: ind.length}; selects.push(sel) }
+    else if (role === 'option' && sel && ind.length > sel.depth) { const o = name ? unq(name) : ''; sel.options.push(o); if (attrs.includes('selected')) sel.value = o }
     else if (sel && ind.length <= sel.depth) sel = null;
   }
   return {snap: out.join('\n'), boxes, selects};
