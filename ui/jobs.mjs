@@ -28,6 +28,7 @@ import { spawn } from 'node:child_process';
 import { randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as proactive from './proactive.mjs';
+import * as routines from './routines.mjs';
 import { holdsSchedule, releaseSchedule } from './lock.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -136,10 +137,21 @@ function parseJob(file) {
       else if (k === 'awake') job.awake = /^(true|yes|on|1)$/i.test(v);
       // Which bot it runs as (ui/bots.mjs); a job without one belongs to the default bot.
       else if (k === 'bot' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(v)) job.bot = v;
+      else if (k === 'routine' && routines.validSlug(v)) job.routine = v;
       else if (k === 'model' && v) job.model = v;
       else if (k === 'timeout') { const n = Number(v); if (Number.isFinite(n)) job.timeoutMin = Math.min(60, Math.max(1, n)) }
     }
     job.prompt = m[2].trim();
+    // A job that runs a routine (ui/routines.mjs) asks for the routine's steps, read at each run; its approval
+    // hash covers the routine's text too, so changing an edit/full routine needs a new approval.
+    if (job.routine) {
+      const r = routines.read(job.routine), text = routines.raw(job.routine);
+      if (!r) throw Error(`routine: ${job.routine} does not exist`);
+      // Pausing is not a change to what it does, so the paused line is left out of the hash.
+      job.hash = createHash('sha256').update(text.replace(/^paused\s*:.*$/m, '') + '\n' + job.hash).digest('hex');
+      job.routinePaused = r.paused;
+      job.prompt = routines.prompt(r) + (job.prompt ? `\n\n${job.prompt}` : '');
+    }
     if (!job.cron && !job.at) throw Error('needs a `schedule:` (cron, five fields) or an `at:` (one time)');
     if (!job.prompt) throw Error('the request below the frontmatter is empty');
     if (!fs.statSync(job.cwd, { throwIfNoEntry: false })?.isDirectory()) throw Error(`cwd: ${job.cwd} is not a folder`);
@@ -196,7 +208,7 @@ export const needsApproval = job => !job.error && job.tools !== 'read' && state.
 // When this job fires next: after its last run, or after the file was written if it never ran, so
 // a job created at nine with "every day at eight" waits for tomorrow instead of firing at once.
 export function nextAt(job, now = Date.now()) {
-  if (job.error || !job.enabled || needsApproval(job)) return null;
+  if (job.error || !job.enabled || job.routinePaused || needsApproval(job)) return null;
   const r = runOf(job.slug);
   if (job.at) return r.lastRun >= job.at ? null : job.at;
   return nextRun(job.cron, Math.max(r.lastRun || 0, job.mtime || 0));
@@ -215,7 +227,7 @@ export function snapshot() {
     jobs: list().map(j => {
       const r = runOf(j.slug);
       return { slug: j.slug, name: j.name, schedule: j.schedule, once: !!j.at, cwd: j.cwd, tools: j.tools, enabled: j.enabled, model: j.model, error: j.error, needsApproval: needsApproval(j), prompt: j.prompt.slice(0, 600),
-        nextAt: nextAt(j, now), lastRun: r.lastRun || null, lastError: r.lastError, lastResult: r.lastResult, lastSession: r.lastSession, running: running?.slug === j.slug, awake: awakeOf(j), bot: j.bot };
+        nextAt: nextAt(j, now), lastRun: r.lastRun || null, lastError: r.lastError, lastResult: r.lastResult, lastSession: r.lastSession, running: running?.slug === j.slug, awake: awakeOf(j), bot: j.bot, routine: j.routine || null };
     }),
   };
 }

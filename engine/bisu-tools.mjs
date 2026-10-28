@@ -7,6 +7,7 @@ import * as memory from '../ui/memory.mjs';
 import {DIR as JOBS_DIR, parseCron, nextRun} from '../ui/jobs.mjs';
 import * as goals from '../ui/goals.mjs';
 import * as bots from '../ui/bots.mjs';
+import * as routines from '../ui/routines.mjs';
 
 const ok = text => ({text});
 const err = text => ({text, error: true});
@@ -90,6 +91,20 @@ export const BISU_TOOLS = {
     kind: 'bot',
     run(ctx, {id, ...patch}) {
       try { const b = bots.update(id, patch); return ok(`Updated the bot "${b.name}".`) }
+      catch (e) { return err(e.message) }
+    },
+  },
+  routine_save: {
+    description: 'Save what was just done well as a routine of this bot, when the person asks ("루틴으로 저장해"): the steps that worked as short lines, the values that change each time as inputs (write them as {이름} inside the steps), and tools: read if it only looked, edit if it changed files, full if it ran commands. They see a preview card first.',
+    parameters: {type: 'object', properties: {
+      name: {type: 'string', description: 'the routine name, in their language'},
+      steps: {type: 'array', items: {type: 'string'}, description: 'one short line per step, in order'},
+      inputs: {type: 'array', items: {type: 'string'}, description: 'names of the values that change each run'},
+      tools: {type: 'string', enum: ['read', 'edit', 'full']},
+    }, required: ['name', 'steps']},
+    kind: 'bot',
+    run(ctx, {name, steps, inputs = [], tools = 'read'}) {
+      try { const r = routines.save({name, steps, inputs, tools, bot: process.env.BISU_BOT || 'bisu'}); return ok(`Saved the routine "${r.name}" (${r.slug}). It is in 루틴, where it can be run, paused or scheduled.`) }
       catch (e) { return err(e.message) }
     },
   },

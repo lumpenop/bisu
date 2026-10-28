@@ -513,6 +513,22 @@ dialog#botDlg::backdrop{background:rgba(0,0,0,.28)}
 .makerCard .t{font-family:var(--display);font-weight:700;font-size:13px}
 .ask .botPrev{display:grid;grid-template-columns:72px 1fr;gap:4px 10px;font-size:13px;margin:4px 0 10px}
 .ask .botPrev .k{color:var(--muted)}.ask .botPrev pre{grid-column:1/-1;margin:2px 0 0;font-family:inherit;font-size:13px;white-space:pre-wrap}
+/* routines */
+dialog#routineDlg{border:1px solid var(--line);border-radius:var(--rc);background:var(--card);color:var(--ink);box-shadow:var(--sh),0 24px 60px -20px rgba(0,0,0,.35);padding:20px 22px;width:min(480px,92vw)}
+dialog#routineDlg::backdrop{background:rgba(0,0,0,.28)}
+#routineDlg form{margin:0;display:flex;flex-direction:column;gap:10px}
+#routineDlg .dt{font-family:var(--display);font-weight:800;font-size:16px;margin:0}
+#routineDlg label.f{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--muted);font-weight:600}
+#routineDlg label.f input,#routineDlg label.f textarea{color:var(--ink);font-weight:400}
+#routineDlg .actions{display:flex;gap:8px;align-items:center}#routineDlg .sp{flex:1}
+.routine .steps{margin:6px 0 0;padding-left:0;list-style:none;font-size:12.5px;color:var(--muted)}
+.routine ol.steps li{all:unset;display:block;padding:1px 0;font-size:12.5px;color:var(--muted);line-height:1.5}
+.routine ol.steps li::before,.routine ol.steps li::after{content:none!important;display:none!important}
+.routine .runrow,.routine .schedrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.routine .runrow input{width:9em}
+.m.saveRow{align-self:flex-start;margin-top:-4px}
+.saveRoutine{border:0;background:none;box-shadow:none;padding:2px 8px;font-size:11.5px;font-weight:600;color:var(--muted);margin-left:6px}
+.saveRoutine:hover:not(:disabled){transform:none;color:var(--accent)}
 </style>
 </head>
 <body>
@@ -528,6 +544,7 @@ dialog#botDlg::backdrop{background:rgba(0,0,0,.28)}
  <button data-view="chat" class="on"><svg viewBox="0 0 20 20"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14h-6.5L6 16.8V14H4a1.5 1.5 0 0 1-1.5-1.5V6A1.5 1.5 0 0 1 4 4.5z"/></svg>대화</button>
  <button data-view="goals"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="3.5"/><circle cx="10" cy="10" r=".6"/></svg>목표</button>
  <button data-view="jobs"><svg viewBox="0 0 20 20"><circle cx="10" cy="10.5" r="6.5"/><path d="M10 7v3.7l2.4 1.6M7.5 2.8h5"/></svg>예약 작업</button>
+ <button data-view="routines"><svg viewBox="0 0 20 20"><path d="M4 6h9M4 10h7M4 14h5"/><path d="M14 12.5l2.5 2-2.5 2"/></svg>루틴</button>
  <button data-view="history"><svg viewBox="0 0 20 20"><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6M3.3 3.6v2.6h2.6M10 6.8V10l2.2 1.6"/></svg>기록</button>
  <button data-view="memory"><svg viewBox="0 0 20 20"><path d="M6 3.5h8A1.5 1.5 0 0 1 15.5 5v12L10 13.8 4.5 17V5A1.5 1.5 0 0 1 6 3.5z"/></svg>기억</button>
  <button data-view="connect"><svg viewBox="0 0 20 20"><path d="M8.5 11.5l3-3M7.2 9.3 5.6 10.9a2.8 2.8 0 0 0 4 4l1.6-1.6M12.8 10.7l1.6-1.6a2.8 2.8 0 0 0-4-4L8.8 6.7"/></svg>연결</button>
@@ -692,6 +709,16 @@ dialog#botDlg::backdrop{background:rgba(0,0,0,.28)}
  </section>
 </div></div></div>
 
+<div class="view" id="routinesView"><div class="page"><div>
+ <div class="hero" id="routinesHero"><div class="hx"><h1 class="ht">루틴</h1><p class="hs" id="routinesSum">…</p></div><button class="primary" id="teachBtn" hidden>보여 주고 가르치기</button></div>
+ <section id="routineSec">
+  <h2>저장한 루틴</h2>
+  <div id="routineList"><p class="note">불러오는 중…</p></div>
+  <p class="note err" id="routineNote"></p>
+  <p class="note">대화에서 잘 끝난 일을 "루틴으로 저장해"라고 하거나, 답 아래 「루틴으로 저장」을 누르면 이 봇의 루틴이 돼요. 바뀌는 값은 {이름}으로 적어 두면 실행할 때 물어요. 파일 수정·명령 실행 루틴을 예약하면 예약 작업처럼 한 번 승인해야 돌고, 루틴을 고치면 다시 승인해야 해요.</p>
+ </section>
+</div></div></div>
+
 <div class="view" id="connectView"><div class="page"><div>
  <div class="hero" id="connectHero"><div class="hx"><h1 class="ht">연결</h1><p class="hs" id="connectSum">…</p></div></div>
  <section id="tgSec">
@@ -831,6 +858,15 @@ dialog#botDlg::backdrop{background:rgba(0,0,0,.28)}
  <p class="note err" id="bErr"></p>
  <div class="actions"><button type="button" class="danger" id="bDel">봇 지우기</button><span class="sp"></span><button value="cancel" type="button" id="bCancel">닫기</button><button class="primary" type="button" id="bSave">저장</button></div>
 </form></dialog>
+<dialog id="routineDlg"><form method="dialog">
+ <p class="dt">루틴 고치기</p>
+ <label class="f">이름<input type="text" id="rName" maxlength="80" autocomplete="off"></label>
+ <label class="f">입력 (쉼표로)<input type="text" id="rInputs" autocomplete="off" placeholder="예: 주제, 기간"></label>
+ <label class="f">할 수 있는 일<select id="rTools"><option value="read">보기만</option><option value="edit">파일 수정까지</option><option value="full">명령 실행까지</option></select></label>
+ <label class="f">단계<textarea id="rSteps" rows="7"></textarea></label>
+ <p class="note err" id="rErr"></p>
+ <div class="actions"><span class="sp"></span><button type="button" id="rCancel">닫기</button><button class="primary" type="button" id="rSave">저장</button></div>
+</form></dialog>
 <dialog id="permDlg"><form method="dialog"><p class="dt" id="permTitle"></p><p class="note" id="permText"></p><div class="actions"><button value="cancel">취소</button><button class="primary" value="ok" id="permOk">설정 열기</button></div></form></dialog>
 
 <script>
@@ -956,6 +992,7 @@ const viewOn=v=>$(v+'View')?.classList.contains('on');
 function show(v){if(!$(v+'View'))v='chat';for(const b of document.querySelectorAll('.side button[data-view]'))b.classList.toggle('on',b.dataset.view===v);for(const el of document.querySelectorAll('.view'))el.classList.toggle('on',el.id===v+'View');
  if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='goals')loadGoals();
  if(v==='jobs'){renderSugSettings();loadSuggestions();loadJobs();loadBrief()}
+ if(v==='routines')loadRoutines();
  if(v==='connect'){loadTg();loadAlerts();loadCalendar()}
  if(v==='settings'){loadAccount();loadRoles();if(prefs.engine==='native')loadNative();loadCu();loadPanelPlace()}
  heroes();try{localStorage.setItem('bisu.view',v)}catch{}}
@@ -1081,8 +1118,9 @@ function toolSummary(name,input={}){
  if(input.path&&!input.command&&!input.pattern)return short(input.path);
  if(input.command)return input.command;if(input.file_path)return short(input.file_path);if(input.pattern)return input.pattern+(input.path?'  in '+short(input.path):'');
  if(input.url)return input.url;if(input.description)return input.description;if(input.prompt)return input.prompt;return JSON.stringify(input)}
-const isBotTool=t=>/(^|__)bot_(create|update)$/.test(t||'');
-function botPreview(tool,input={}){const rows=[['이름',input.name],['맡은 일',input.job],['폴더',input.cwd||'~'],['말투',input.tone]].filter(([,v])=>v);
+const isBotTool=t=>/(^|__)(bot_create|bot_update|routine_save)$/.test(t||'');
+const TOOLS_KO={read:'보기만',edit:'파일 수정까지',full:'명령 실행까지'};
+function botPreview(tool,input={}){if(/routine_save$/.test(tool))return `<div class="botPrev"><span class="k">이름</span><span>${esc(input.name||'')}</span>${input.inputs?.length?`<span class="k">입력</span><span>${esc(input.inputs.join(', '))}</span>`:''}<span class="k">할 수 있는 일</span><span>${esc(TOOLS_KO[input.tools||'read']||input.tools)}</span><span class="k">단계</span><span></span><pre>${esc((input.steps||[]).map((x,i)=>`${i+1}. ${x}`).join('\n'))}</pre></div>`;const rows=[['이름',input.name],['맡은 일',input.job],['폴더',input.cwd||'~'],['말투',input.tone]].filter(([,v])=>v);
  return `<div class="botPrev">${rows.map(([k,v])=>`<span class="k">${k}</span><span>${esc(v)}</span>`).join('')}${input.instructions?`<span class="k">일하는 방식</span><span></span><pre>${esc(input.instructions)}</pre>`:''}</div>`}
 function askBody(tool,input={}){if(isBotTool(tool))return botPreview(tool,input);
  // bisu's own engine names its tools differently and says path instead of file_path.
@@ -1125,8 +1163,8 @@ function render(ev){
   case 'tool_result':{const el=toolEls[ev.id];if(!el)break;const st=el.querySelector('.st');st.textContent=ev.error?'오류':'완료';st.classList.toggle('e',ev.error);
    el.querySelector('details').insertAdjacentHTML('beforeend',`<pre>${esc(ev.text||'(no output)')}</pre>`)}break;
   case 'approval':live=null;{const what=String(ev.description||toolSummary(ev.tool,ev.input)||'').slice(0,90);const el=add(`<div class="ask" data-id="${esc(ev.request_id)}" data-what="${esc(what)}"><div class="q">${esc(askQ(ev.tool))}${ev.description?` <span class="note" style="font-weight:400">${esc(ev.description)}</span>`:''}</div>${askBody(ev.tool,ev.input)}
-   <div class="btns">${isBotTool(ev.tool)?`<button class="primary" data-a="allow">${/create$/.test(ev.tool)?'만들기':'바꾸기'}</button><button class="danger" data-a="deny">다시 할게요</button>`:`<button class="primary" data-a="allow">허용</button><button data-a="always">이 대화에선 계속 허용</button><button class="danger" data-a="deny">안 돼요</button>`}</div></div>`,null);
-   if(isBotTool(ev.tool))el.querySelector('.q').textContent=/create$/.test(ev.tool)?'이렇게 만들까요?':'이렇게 바꿀까요?';
+   <div class="btns">${isBotTool(ev.tool)?`<button class="primary" data-a="allow">${/routine_save$/.test(ev.tool)?'저장하기':/create$/.test(ev.tool)?'만들기':'바꾸기'}</button><button class="danger" data-a="deny">다시 할게요</button>`:`<button class="primary" data-a="allow">허용</button><button data-a="always">이 대화에선 계속 허용</button><button class="danger" data-a="deny">안 돼요</button>`}</div></div>`,null);
+   if(isBotTool(ev.tool))el.querySelector('.q').textContent=/routine_save$/.test(ev.tool)?'이 루틴을 저장할까요?':/create$/.test(ev.tool)?'이렇게 만들까요?':'이렇게 바꿀까요?';
    for(const b of el.querySelectorAll('button'))b.onclick=()=>answer(ev.request_id,b.dataset.a,el);setMood('waiting','확인이 필요해요')}break;
   case 'approval_done':{if(ev.allow&&isBotTool(ev.tool))setTimeout(loadBots,1500);const el=wrap().querySelector(`.ask[data-id="${CSS.escape(ev.request_id)}"]`);if(el){el.className='ask done';const w=el.dataset.what?` · ${esc(el.dataset.what)}`:'';el.innerHTML=ev.allow?`허용했어요${w}${ev.always?' · 이 대화에선 계속':''}`:ev.reason==='stopped'?'답하지 않았어요 (멈춤)':`거절했어요${w}`}
    if(mood.state==='waiting'&&!wrap().querySelector('.ask:not(.done)'))setMood('thinking','이어서 하는 중…')}break;
@@ -1137,7 +1175,11 @@ function render(ev){
    else if(ev.judge==='claim'&&ev.acted){[...wrap().querySelectorAll('.m.text:not(.past)')].pop()?.classList.add('retracted');add('방금 답에 실제로 하지 않은 일이 있어서 다시 확인하고 있어요',null,'sys')}break;
   case 'result':live=null;{const secs=Math.round((ev.ms||0)/1000),meta=`${ev.turns||0}단계 · ${secs}초 · ≈${usd(ev.cost)}`;
    actDone(meta);add(`${ev.error?'<span class="err">멈췄어요</span>':'완료'} · ${meta}`,null,'res');
-   if(!ev.past){if(ev.error)setMood('error','멈췄어요');else setMood('done','다 했어요')}}break;
+   if(!ev.past){if(ev.error)setMood('error','멈췄어요');else setMood('done','다 했어요')}
+   // A turn that used tools can be kept as a routine; only the latest one offers it.
+   if(!ev.past&&!ev.error&&(ev.turns||0)>1&&!cur?.maker){for(const o of wrap().querySelectorAll('.m.saveRow'))o.remove();
+    const row=add('<button type="button" class="saveRoutine">루틴으로 저장</button>',null,'saveRow');
+    row.querySelector('button').onclick=()=>{row.remove();post(`/api/chats/${cur.id}/send`,{text:'방금 한 일을 이 봇의 루틴으로 저장해 줘.'}).catch(()=>{})}}}break;
   case 'error':live=null;actDone();add(`<span class="err">${esc(ev.message)}</span>`,null,'sys');setMood('error','문제가 생겼어요');break;
   case 'status':if(cur){cur.busy=ev.busy;chatUI()}
    if(ev.busy){if(mood.state!=='waiting'&&mood.state!=='working')setMood('thinking','생각하는 중…')}
@@ -1812,6 +1854,36 @@ function makerCard(){let el=$('makerCard');if(!cur?.maker){el?.remove();return}
  el.querySelector('#mkGo').onclick=async()=>{const name=$('mkName').value.trim(),job=$('mkJob').value.trim();if(!name){$('mkName').focus();return}
   try{const r=await post('/api/bots',{name,job});bots=r.bots;$('mkNote').textContent=`“${r.bot.name}” 봇을 만들었어요. 왼쪽에서 골라 대화해 보세요.`;renderBots()}catch(e){$('mkNote').textContent=e.message}}}
 setInterval(loadBots,20000);
+// ---- routines (ui/routines.mjs): the current bot's saved ways of doing something ----
+let routineSnap=null,routineEdit=null;
+const CRONS=[['0 9 * * *','매일 오전 9시'],['0 9 * * 1-5','평일 오전 9시'],['0 9 * * 1','매주 월요일 오전 9시'],['0 18 * * 5','매주 금요일 오후 6시']];
+async function loadRoutines(){try{routineSnap=await api('/api/routines'+mb());renderRoutines()}catch(e){$('routineList').innerHTML=`<p class="note err">${esc(e.message)}</p>`}}
+function renderRoutines(){const s=routineSnap;if(!s)return;const el=$('routineList');
+ const h=$('routinesHero')?.querySelector('.ht');if(h)h.textContent='루틴'+(bots.length>1?` · ${curBotInfo()?.name||''}`:'');
+ $('routinesSum').innerHTML=s.routines.length?`루틴 <b>${s.routines.length}</b>개${s.routines.filter(r=>r.paused).length?` · 일시정지 ${s.routines.filter(r=>r.paused).length}개`:''}`:'잘 끝난 일을 루틴으로 저장하면 다시 시킬 수 있어요';
+ if(!s.routines.length){el.innerHTML='<p class="note">아직 저장한 루틴이 없어요.</p>';return}
+ el.innerHTML=s.routines.map(r=>{const js=s.jobs.filter(j=>j.routine===r.slug);
+  return `<div class="mem routine" data-slug="${esc(r.slug)}"><div class="h"><b>${esc(r.name)}</b><span class="chip">${esc(TOOLS_KO[r.tools]||r.tools)}</span>${r.paused?'<span class="chip">일시정지</span>':''}${r.source==='teach'?'<span class="chip">보여 주기로 배움</span>':''}
+   <span class="sp"></span><button data-a="run" ${r.paused?'disabled':''}>지금 실행</button><button data-a="${r.paused?'resume':'pause'}">${r.paused?'재개':'일시정지'}</button><button data-a="edit">고치기</button><button data-a="sched">예약</button><button class="danger" data-a="delete">삭제</button></div>
+   <ol class="steps">${esc(r.steps).split('\n').map(l=>`<li>${l}</li>`).join('')}</ol>
+   ${r.inputs.length?`<div class="runrow" hidden>${r.inputs.map(k=>`<input type="text" data-in="${esc(k)}" placeholder="${esc(k)}" autocomplete="off">`).join('')}<button class="primary" data-a="go">실행</button></div>`:''}
+   <div class="schedrow" hidden><select data-cron>${CRONS.map(([c,l])=>`<option value="${c}">${l}</option>`).join('')}<option value="custom">직접 입력 (cron)</option></select><input type="text" data-cron-custom placeholder="0 9 * * 1-5" hidden><button data-a="schedgo">예약하기</button></div>
+   ${js.length?`<div class="b note" style="margin-top:6px">${js.map(j=>`예약: ${esc(j.schedule)}${j.needsApproval?' · <span class="w">예약 작업 화면에서 승인해야 돌아요</span>':j.nextAt?` · 다음 ${esc(whenShort(j.nextAt))}`:''}`).join('<br>')}</div>`:''}</div>`}).join('');
+ for(const row of el.querySelectorAll('.routine')){const slug=row.dataset.slug,r=s.routines.find(x=>x.slug===slug);
+  const act=async(body)=>{$('routineNote').textContent='';try{return await post('/api/routines/'+encodeURIComponent(slug),body)}catch(e){$('routineNote').textContent=e.message;return null}};
+  for(const b of row.querySelectorAll('button[data-a]'))b.onclick=async()=>{const a=b.dataset.a;
+   if(a==='run'){if(r.inputs.length){const rr=row.querySelector('.runrow');rr.hidden=!rr.hidden;rr.querySelector('input')?.focus();return}a2run({})}
+   else if(a==='go'){const values={};for(const i of row.querySelectorAll('[data-in]'))values[i.dataset.in]=i.value.trim();a2run(values)}
+   else if(a==='pause'||a==='resume'){if(await act({action:a}))loadRoutines()}
+   else if(a==='edit')openRoutine(r);
+   else if(a==='sched'){const sr=row.querySelector('.schedrow');sr.hidden=!sr.hidden}
+   else if(a==='schedgo'){const sel=row.querySelector('[data-cron]'),cron=sel.value==='custom'?row.querySelector('[data-cron-custom]').value:sel.value;if(await act({action:'schedule',cron})){loadRoutines();loadJobs()}}
+   else if(a==='delete'){if(confirm(`“${r.name}” 루틴을 지울까요? 이 루틴을 쓰는 예약 작업은 돌지 않게 돼요.`)&&await act({action:'delete'}))loadRoutines()}};
+  row.querySelector('[data-cron]').addEventListener('change',e=>{row.querySelector('[data-cron-custom]').hidden=e.target.value!=='custom'});
+  async function a2run(values){const res=await act({action:'run',values});if(res?.chat){chats.unshift(res.chat);show('chat');open(res.chat.id)}}}}
+function openRoutine(r){routineEdit=r.slug;$('rName').value=r.name;$('rInputs').value=r.inputs.join(', ');$('rTools').value=r.tools;$('rSteps').value=r.steps;$('rErr').textContent='';$('routineDlg').showModal()}
+$('rCancel').onclick=()=>$('routineDlg').close();
+$('rSave').onclick=async()=>{try{await post('/api/routines/'+encodeURIComponent(routineEdit),{name:$('rName').value,inputs:$('rInputs').value,tools:$('rTools').value,steps:$('rSteps').value});$('routineDlg').close();loadRoutines()}catch(e){$('rErr').textContent=e.message}};
 // ---- boot ----
 mountBisu();setMood('idle','듣고 있어요');helpify();
 $('metaOn').checked=META;

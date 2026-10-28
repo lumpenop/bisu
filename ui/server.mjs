@@ -14,6 +14,7 @@
 import http from 'node:http';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {execFile,spawn} from 'node:child_process';import {randomBytes,randomUUID} from 'node:crypto';import {fileURLToPath} from 'node:url';
 import * as memory from './memory.mjs';
 import * as bots from './bots.mjs';
+import * as routines from './routines.mjs';
 import * as proactive from './proactive.mjs';
 import * as sessions from './sessions.mjs';
 import * as jobs from './jobs.mjs';
@@ -513,6 +514,21 @@ const server=http.createServer(async(req,res)=>{
   if(m==='POST'&&p==='/api/bots')return json(res,200,{bot:bots.create(await body(req)),bots:bots.list()});
   const bm=/^\/api\/bots\/([a-z0-9-]{1,40})$/.exec(p);
   if(bm&&m==='POST'){const b=await body(req);if(b.action==='delete'){bots.remove(bm[1]);return json(res,200,{bots:bots.list()})}return json(res,200,{bot:bots.update(bm[1],b),bots:bots.list()})}
+  // Routines (ui/routines.mjs): a bot's saved ways of doing something. Running one is a new chat of its bot;
+  // scheduling one writes a job with routine: <slug> (its approval covers the routine's text).
+  if(m==='GET'&&p==='/api/routines'){const b=url.searchParams.get('bot');return json(res,200,{routines:routines.list(bots.validId(b)?b:null),jobs:jobs.snapshot().jobs.filter(j=>j.routine).map(j=>({slug:j.slug,routine:j.routine,schedule:j.schedule,enabled:j.enabled,needsApproval:j.needsApproval,nextAt:j.nextAt}))})}
+  if(m==='POST'&&p==='/api/routines'){const b=await body(req);return json(res,200,{routine:routines.save(b)})}
+  const rm=/^\/api\/routines\/([a-z0-9._-]{1,60})$/.exec(p);
+  if(rm&&m==='POST'){const b=await body(req),r=routines.read(rm[1]);if(!r)return json(res,404,{error:'루틴이 없어요'});
+   if(b.action==='run'){if(r.paused)return json(res,409,{error:'일시정지된 루틴이에요. 먼저 재개해 주세요.'});if(!canThink())return json(res,400,{error:noKey()||''});
+    const c=await newChat({bot:r.bot});c.title=`루틴 · ${r.name}`;say(c,routines.prompt(r,b.values||{}));return json(res,200,{chat:publicChat(c)})}
+   if(b.action==='pause'||b.action==='resume')return json(res,200,{routine:routines.update(r.slug,{paused:b.action==='pause'})});
+   if(b.action==='delete')return json(res,200,routines.remove(r.slug));
+   if(b.action==='schedule'){const cron=String(b.cron||'').trim();try{jobs.parseCron(cron)}catch(e){return json(res,400,{error:`일정 형식이 맞지 않아요: ${e.message}`})}
+    const slug=`routine-${r.slug}`.slice(0,60),file=path.join(jobs.DIR,`${slug}.md`);fs.mkdirSync(jobs.DIR,{recursive:true});
+    fs.writeFileSync(file,`---\nname: ${r.name}\nschedule: ${cron}\ncwd: ${bots.resolve(r.bot).cwd}\ntools: ${r.tools}\nbot: ${r.bot}\nroutine: ${r.slug}\n---\n`);
+    return json(res,200,{job:jobs.snapshot().jobs.find(j=>j.slug===slug)||null})}
+   return json(res,200,{routine:routines.update(r.slug,b)})}
   if(m==='GET'&&p==='/api/chats')return json(res,200,{chats:[...chats.values()].map(publicChat).sort((a,b)=>b.lastAt-a.lastAt),home:os.homedir()});
   if(m==='POST'&&p==='/api/chats'){if(!canThink())return json(res,400,{error:noKey()||''});const c=await newChat(await body(req));return json(res,200,{chat:publicChat(c)})}
   const cm=/^\/api\/chats\/([0-9a-f-]{36})(\/[a-z]+)?$/.exec(p);const c=cm&&chats.get(cm[1]);

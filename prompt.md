@@ -90,3 +90,6 @@
 - `cu_ground` is the fallback for a window that exposes nothing (a game, a canvas, a custom-drawn app). Try it only after `cu_look` comes back empty or useless.
 - Destructive steps are gated: `cu_click`/`cu_type`/`cu_key` answer `APPROVAL REQUIRED (<id>)` and do nothing. Say in one line what it will do, then, if the person agrees, call `cu_approve` with that id — that call is what they see. Never approve on their behalf and never try a destructive step through Bash instead.
 - `cu_state` reports whether Accessibility and Screen Recording are granted. If Accessibility is missing, say so once and stop; the tools will not work until it is granted.
+
+## 루틴 (routines)
+- When the person asks to keep what was just done as a routine ("루틴으로 저장해", "이거 루틴으로"), call routine_save once: the steps that worked as short lines, the values that change each time as inputs written {이름} inside the steps, and tools read / edit / full by what the steps actually did. They see a preview card; nothing is saved until they agree.
