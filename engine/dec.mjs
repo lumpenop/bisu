@@ -67,7 +67,8 @@ export async function api(method, p, body, {timeoutMs = 15_000} = {}) {
   for (let i = 0; ; i++) {
     try { return await raw(d, await pairKey(d, false), method, p, body, timeoutMs) } catch (e) {
       if (e.code === 'UNAUTHORIZED' && i === 0) { await pairKey(d, true); continue }
-      if (e.code === 'RATE_LIMITED' && i < 3) { await sleep(Math.min(10, Number(e.retryAfter) || 5) * 1000); continue }
+      // dec says when its per-minute budget frees up again.
+      if (e.code === 'RATE_LIMITED' && i < 4) { await sleep(Math.min(30, Math.max(1, Number(e.retryAfter) || 5)) * 1000); continue }
       throw e;
     }
   }
@@ -173,11 +174,14 @@ export function directDriver({readText = true, tab = null} = {}) {
     if (w.ended) return {ended: true, status: w.run.result?.status ?? 'ended', answer: w.run.result?.answer ?? null, snap: '', url: '', title: '', did};
     if (w.waiting) return {waiting: w.waiting, why: w.run.pendingConfirmation?.summary ?? w.run.handoff?.reason ?? null, snap: '', url: viewNow?.url ?? '', title: viewNow?.title ?? '', did};
     const q = w.p.request, page = q.observation?.page ?? {};
-    let body = '';
-    if (readText) { try { body = String((await api('POST', `/v1/tabs/${tabId}/content`, {limit: 12000})).text || '') } catch {} }
+    // dec sends this agent every line of the page with each request; a dec that sends only the lines around the
+    // viewport (20 of them) is read in full instead. Every call outside run polls counts against dec's per-minute budget.
+    const lines = (page.texts || []).map(t => typeof t === 'string' ? t : t.text);
+    let body = lines.join('\n');
+    if (readText && lines.length === 20) { try { body = String((await api('POST', `/v1/tabs/${tabId}/content`, {limit: 12000})).text || '') } catch {} }
     // dec rates each action's risk itself: what is not "safe" is a step bisu holds for the person.
     const cands = (q.candidates || []).map((c, i) => ({index: i, decIndex: c.index, requestId: w.p.requestId, kind: c.kind, name: c.name || c.kind, label: c.name || '', risk: c.risk ?? 'safe'}));
-    viewNow = {snap: (page.texts || []).map(t => `text ${esc(typeof t === 'string' ? t : t.text)}`).join('\n'), url: q.url || q.origin || '', title: page.title || '', did, cands, body, y: 0, maxY: 0};
+    viewNow = {snap: lines.map(t => `text ${esc(t)}`).join('\n'), url: q.url || q.origin || '', title: page.title || '', did, cands, body, y: 0, maxY: 0};
     return viewNow;
   };
   const start = async (goal, ins = []) => {
@@ -192,9 +196,9 @@ export function directDriver({readText = true, tab = null} = {}) {
     candidates: v => v.cands,
     // One tab per conversation: the last task's tab goes to the new page; a new tab only when there is none.
     async open(url, ins = [], goal = '') {
-      const have = tabId && tabsOf(await api('GET', '/v1/tabs')).some(t => t.id === tabId);
-      if (have) await api('POST', `/v1/tabs/${tabId}/navigate`, {url, agent: 'bisu'});
-      else tabId = (await api('POST', '/v1/tabs', {url, background: true, agent: 'bisu'})).tab.id;
+      let moved = false;
+      if (tabId) try { await api('POST', `/v1/tabs/${tabId}/navigate`, {url, agent: 'bisu'}); moved = true } catch (e) { if (e.status !== 404) throw e }
+      if (!moved) tabId = (await api('POST', '/v1/tabs', {url, background: true, agent: 'bisu'})).tab.id;
       await loaded();
       await start(goal, ins);
       return look([`opened ${url}`]);

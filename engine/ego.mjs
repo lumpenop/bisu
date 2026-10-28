@@ -270,6 +270,20 @@ function blocked(c, goal) {
 // ---- pickers ----
 
 // What earlier pages showed, so a goal that compares (the cheapest of three) does not reopen each page to remember it.
+// A code copied from the page (a UPC, an order or tracking number) must be the page's own: a model retyping one can
+// drop characters ("b0913e67d38d5ed5" came back as "b0913e67d5ed5"). A code the pages seen do not have is replaced by
+// the one code there that starts and ends like it; with none or several, it stays as written.
+const CODE = /\b(?=[A-Za-z0-9-]*\d)(?=[A-Za-z0-9-]*[A-Za-z])[A-Za-z0-9-]{8,}\b/g;
+export function verbatim(answer, text) {
+  if (!answer || !text) return answer;
+  const page = new Set(String(text).match(CODE) || []);
+  return String(answer).replace(CODE, t => {
+    if (page.has(t)) return t;
+    const like = [...page].filter(p => p.slice(0, 4) === t.slice(0, 4) && p.slice(-3) === t.slice(-3));
+    return like.length === 1 ? like[0] : t;
+  });
+}
+
 const seenText = (seen, url) => [...seen].filter(([u]) => u !== url).slice(-5).map(([u, t]) => `- ${t}`).join('\n');
 function pagePrompt(goal, view, hist, inputs, seen = new Map()) {
   const {rows} = parse(view.snap);
@@ -422,7 +436,7 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
   // Where the page stands: the same action again is a repeat only if nothing moved since (scrolling on is not).
   const pageSig = v => { const r = parse(v.snap).rows; return `${v.url}|${v.y ?? ''}|${r.slice(0, 3).join('/')}|${r.slice(-3).join('/')}` };
   let prevUrl = null;
-  const finish = s => ({status: s, answer, held, space: driver.id, url: view.url, title: view.title, steps, ms: Date.now() - t0, mode, reviews,
+  const finish = s => ({status: s, answer: verbatim(answer, [view.body, view.snap, ...seen.values()].join('\n')), held, space: driver.id, url: view.url, title: view.title, steps, ms: Date.now() - t0, mode, reviews,
     cost: +(glmUse.usd - spent0.usd + judge.usage.usd - judge0).toFixed(4), history: hist, notice: view.notice});
   let failed = false;
   // The site the task is about: a run that wanders off it (a new-tab page, another site the goal never named) is
