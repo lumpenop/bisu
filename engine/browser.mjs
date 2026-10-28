@@ -1,8 +1,10 @@
 // Doing things on the web for the person, in a browser where they are already signed in (both engines, and the
-// Claude Code chats through ui/cu/server.mjs). dec first: with its fast mode on, the whole task is handed over in
-// one call (engine/dec.mjs). Otherwise ego lite, driven by bisu itself (engine/ego.mjs) — one task space per
-// conversation, reused task after task. Either way the person approves what pays, sends, deletes or books: dec asks
-// in dec with Touch ID; in ego the run stops on it and browser_approve goes through bisu's approval card.
+// Claude Code chats through ui/cu/server.mjs). dec first: with its fast mode on (a paid plan), the whole task is
+// handed over in one call (engine/dec.mjs task()); with it off, bisu drives dec itself, step by step, with the same
+// loop it drives ego with (engine/ego.mjs drive(), engine/dec.mjs directDriver()). Without dec, ego lite. One tab or
+// task space per conversation, reused task after task. The person approves what pays, sends, deletes or books: in
+// fast mode dec asks in dec with Touch ID; when bisu drives, the run stops on it and browser_approve goes through
+// bisu's approval card.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,7 +22,7 @@ const chat = () => process.env.BISU_CHAT_ID || `p${process.pid}`;
 const SPACE = () => `bisu-${chat().slice(0, 40)}`;
 
 // What this conversation did last, so browser_read and browser_approve know where to look.
-const state = {space: null, held: new Map(), last: null, handedOff: false};
+const state = {space: null, decTab: null, held: new Map(), last: null, handedOff: false};
 let heldNo = 0;
 
 function inputsOf(typing) {
@@ -57,6 +59,26 @@ async function viaDec({goal, url, inputs, lookOnly}) {
     r.status === 'failed' && 'It did not get there: say so plainly, with what dec reported.'));
 }
 
+// dec with its fast mode off: bisu picks every step, dec carries it out in the conversation's tab.
+async function viaDecDirect({goal, url, inputs, budget}) {
+  const driver = dec.directDriver({tab: state.decTab});
+  const r = await ego.drive({goal, url, inputs, driver, budget});
+  state.decTab = driver.tabId;
+  state.last = {via: 'dec', tabId: driver.tabId};
+  const head = `${r.status === 'done' ? 'Done' : 'Stopped'} in dec, bisu driving (${r.status}, ${r.steps} steps, ${(r.ms / 1000).toFixed(0)} s). Page: ${r.title || ''} — ${r.url || ''}`;
+  const did = r.history.length ? `What was done: ${r.history.slice(-8).join(' → ')}` : '';
+  if (r.status === 'needs-approval') {
+    const id = `h${++heldNo}`;
+    state.held.set(id, {dec: true, tabId: driver.tabId, held: r.held, at: Date.now()});
+    return ok(lines(head, did, `Waiting for the person: the next step is "${r.held.label}", which dec marks as one that commits something.`,
+      `Tell them exactly what it will do and ask; when they say yes, call browser_approve with id "${id}" and step "${r.held.label}".`));
+  }
+  if (r.status === 'needs-login' || r.status === 'needs-person')
+    return ok(lines(head, did, `dec is waiting for the person in the dec window (${r.held?.label || 'sign in or confirm'}). Ask them to do it there, then call browser_task again. Never ask for their password.`));
+  return ok(lines(head, r.answer && `Answer (from the page): ${r.answer}`, did,
+    r.status !== 'done' && 'It did not finish. Try browser_task once more at most (a closer start url, a simpler goal); after that, tell the person what was reached and what is left. Report only what a browser tool returned — never fill in an answer it did not give.'));
+}
+
 async function viaEgo({goal, url, inputs, budget}) {
   if (state.handedOff && state.space != null) { await ego.takeBack(state.space).catch(() => {}); state.handedOff = false }
   const r = await ego.run({goal, url, inputs, space: state.space ?? SPACE(), budget});
@@ -88,7 +110,7 @@ export const BROWSER_TOOLS = {
       url: {type: 'string', description: 'the page to start on (full address). If you do not know the site, a search page: https://search.naver.com/search.naver?query=...'},
       typing: {type: 'string', description: 'texts it may type, one per line as name: value, referred to as @name in the goal (search words, a name, a date). Never passwords or card numbers.'},
       look_only: {type: 'boolean', description: 'only look and read, never click anything that changes something'},
-      browser: {type: 'string', enum: ['auto', 'dec', 'ego'], description: 'auto (default): dec when its fast mode is on, else ego'},
+      browser: {type: 'string', enum: ['auto', 'dec', 'ego'], description: 'auto (default): dec (fast mode hands it the whole task; without it bisu drives dec), else ego'},
     }, required: ['goal', 'url']},
     kind: 'net',
     async run(ctx, {goal, url, typing, look_only, browser = 'auto'}) {
@@ -101,8 +123,8 @@ export const BROWSER_TOOLS = {
         try {
           const st = await dec.up();
           if (st?.fastMode?.enabled) return await viaDec({goal, url, inputs, lookOnly: !!look_only});
-          note = st ? 'dec is open but its fast mode is off, so ego did this. ' : '';
-          if (browser === 'dec') return err(st ? 'dec\'s fast mode is off: the person can turn it on in dec (설정 → 빠른 모드), or use browser "ego".' : 'dec is not available (not installed, or its agent connection is off).');
+          if (st) return await viaDecDirect({goal: look_only ? `${goal} (only look and read; do not change anything)` : goal, url, inputs});
+          if (browser === 'dec') return err('dec is not available (not installed, or its agent connection is off).');
         } catch (e) {
           if (browser === 'dec') return err(`dec failed: ${e.code || e.message}`);
           note = `dec failed (${e.code || e.message}), so ego did this. `;
@@ -133,10 +155,15 @@ export const BROWSER_TOOLS = {
       state.held.delete(String(id));
       if (Date.now() - h.at > 30 * 60_000) return err('That step was held more than 30 minutes ago: run browser_task again so the page is current.');
       try {
+        if (h.dec) {
+          const r = await dec.directDriver({tab: h.tabId}).approve(h.held);
+          if (!r.ok) return err(`Not pressed: ${r.error}. Run browser_task again from the current page.`);
+          return ok(lines(`Pressed "${h.held.label}" in dec. Now on: ${r.title || ''} — ${r.url || ''}`, `Page says: ${r.text.replace(/\s+/g, ' ').slice(0, 1500)}`));
+        }
         const r = await ego.approve(h);
         if (!r.ok) return err(`Not pressed: ${r.error}. Run browser_task again from the current page.`);
         return ok(lines(`Pressed "${h.held.label}". Now on: ${r.title} — ${r.url}`, `Page says: ${r.texts.slice(0, 25).join(' / ').slice(0, 1500)}`));
-      } catch (e) { return err(`Pressing it failed: ${e.message}`) }
+      } catch (e) { return err(`Pressing it failed: ${e.code || e.message}`) }
     },
   },
   browser_check: {

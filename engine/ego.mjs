@@ -38,6 +38,12 @@ const SECRET_FIELD = /비밀\s*번호|암호|password|passcode|\bpin\b|카드\s*
 // A select-all puts every row under the next toolbar action: only a goal about the whole list may use one.
 const BULK = /전체\s*(메일|선택)|모두\s*선택|select\s*all/i;
 const WANTS_ALL = goal => /전체\s*(메일|선택)|모든\s*메일|메일함\s*(전체|비우)|select\s*all|everything/i.test(goal) && !/보낸\s*사람|발신|에게서|에서\s*온|관련|from\b|['"‘’“”「」]/i.test(goal);
+// A goal that picks one item out of a list by comparing ("가장 비싼", "cheapest", "최신"): Decisions picks one option
+// at a time and does not compare twenty prices; GLM, given the whole page, does.
+const COMPARE = goal => /가장|제일|최저|최고|최신|최소|최대|비싼|저렴|cheapest|most|least|highest|lowest|best|latest|newest|oldest/i.test(goal);
+// A page listing things to compare: five or more lines with a price, a count or a score on them.
+const NUMBERED = /[£$€₩¥]\s?\d|\d[\d,.]*\s*(원|달러|개|명|점|%|권|건|회)/;
+const listy = view => String(view.body || parse(view.snap).rows.join('\n')).split('\n').filter(l => NUMBERED.test(l)).length >= 5;
 const WANTS_ANSWER = goal => /알려|보고|찾아|얼마|언제|몇|무엇|뭐|어디|확인해|report|tell|what|which|how many|price|title|list/i.test(goal);
 
 // ---- talking to ego ----
@@ -63,12 +69,14 @@ const LOOK = `
 const look = async () => {
   const info = await p.info().catch(() => ({}));
   if (info.dialog) return {snap: '', url: info.url, title: info.title, dialog: {type: info.dialog.type, message: String(info.dialog.message || '').slice(0, 300)}};
-  const snap = await p.snapshot();
+  // The whole page, off screen included (as Aside's snapshot is): the item a goal picks may be the eighth of twelve,
+  // and a next link sits at the bottom. No scrolling to find things, and every item is a choice.
+  const snap = await p.snapshot({scope: "full_page"});
   const extra = await p.evaluate(() => ({url: location.href, title: document.title, y: Math.round(scrollY), maxY: Math.max(0, document.documentElement.scrollHeight - innerHeight),
     body: (document.body?.innerText || '').slice(0, 30000),
     selects: [...document.querySelectorAll('select')].map(s => ({name: s.name, label: s.getAttribute('aria-label') || s.labels?.[0]?.innerText?.trim() || s.name, options: [...s.options].map(o => o.text.trim()).slice(0, 30), value: s.selectedOptions[0]?.text?.trim() || ''})),
-    // In document order, only those in view: the same ones, in the same order, as the checkboxes in the snapshot.
-    boxes: [...document.querySelectorAll('input[type=checkbox],input[type=radio]')].filter(x => { const r = x.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight && r.width > 0 }).map(x => x.checked)})).catch(() => ({}));
+    // In document order, the ones shown: the same ones, in the same order, as the checkboxes in the (whole-page) snapshot.
+    boxes: [...document.querySelectorAll('input[type=checkbox],input[type=radio]')].filter(x => x.getBoundingClientRect().width > 0).map(x => x.checked)})).catch(() => ({}));
   return {snap, ...extra};
 };`;
 const quote = v => JSON.stringify(String(v));
@@ -116,11 +124,13 @@ export function parse(snap) {
   const els = [], texts = [], rowOf = new Map();
   const rows = lines.map(l => {
     const m = /^(\s*)(\S+)(?:\s+"((?:[^"\\]|\\.)*)")?(?:\s+\[(.*)\])?\s*$/.exec(l);
-    return m ? {depth: m[1].length, role: m[2], name: m[3] ? m[3].replace(/\\"/g, '"') : '', attrs: m[4] || ''} : null;
+    // Names keep the page's own line breaks as \n: read them as spaces, so "£52.29\n    \n  In stock" is one line;
+    // zero-width characters and icon-font glyphs (private use area: a check mark that reads as a blank) are dropped.
+    return m ? {depth: m[1].length, role: m[2], name: m[3] ? m[3].replace(/\\"/g, '"').replace(/\\[nt]/g, ' ').replace(/[\u200b-\u200d\u2060\ufeff\ue000-\uf8ff]/g, '').replace(/\s+/g, ' ').trim() : '', attrs: m[4] || ''} : null;
   });
   rows.forEach((r, i) => {
     if (!r) return;
-    if (r.role === 'text' && r.name) {
+    if (r.role === 'text' && r.name.trim()) {
       texts.push(r.name);
       // The row a text belongs to: its nearest ancestor that is not a mere wrapper of this one text (a link's label
       // and the price next to it are one row: "UGREEN USB-C 허브 5포트 · 24,500원").
@@ -132,7 +142,7 @@ export function parse(snap) {
       if (!rowOf.has(a)) rowOf.set(a, []);
       rowOf.get(a).push(r.name);
     }
-    const ref = /(?:^|,\s*)ref=(\d+)/.exec(r.attrs)?.[1];
+    const ref = /(?:^|,\s*)ref=([\w-]+)/.exec(r.attrs)?.[1];
     if (!ref) return;
     let name = r.name;
     // A control without a name of its own: the text inside it, else the text right after it (a radio's label).
@@ -156,17 +166,18 @@ export function parse(snap) {
   });
   // One line per row, in page order; a row too long to be one fact stays as its separate texts.
   const rowsOut = [];
-  for (const [, t] of [...rowOf].sort((x, y) => x[0] - y[0])) { const j = t.join(' · '); if (j.length <= 240) rowsOut.push(j); else rowsOut.push(...t) }
+  for (const [, t] of [...rowOf].sort((x, y) => x[0] - y[0])) { const j = t.map(x => x.trim()).join(' · '); if (j.length <= 240) rowsOut.push(j); else rowsOut.push(...t) }
   return {els, texts, rows: rowsOut};
 }
 
 // ---- the numbered actions a picker chooses from ----
 
-function candidates(view, inputs, last, canBack = true) {
+// Moving through a list: a page number, next, 다음, ›.
+const PAGING = /^(next|다음|다음\s*(페이지|쪽)|›|»|>|\d{1,3}|page\s*\d+|\d+\s*(쪽|페이지))$/i;
+function candidates(view, inputs, last, canBack = true, goal = '') {
   const {els} = parse(view.snap);
-  const out = [];
-  // Seventy controls at most, so the moves that are always there (Enter, scroll, back, done) still fit.
-  const add = (c, always) => { if (always || out.length < 70) out.push({...c, index: out.length}) };
+  let out = [];
+  const add = (c, always) => out.push({...c, always});
   const boxes = els.filter(e => CHECKABLE.has(e.role));
   const checked = view.boxes?.length === boxes.length ? new Map(boxes.map((e, i) => [e.ref, view.boxes[i]])) : null;
   for (const e of els) {
@@ -188,7 +199,24 @@ function candidates(view, inputs, last, canBack = true) {
   // Back only to a page this run came from: from the first page it would leave the site.
   if (canBack) add({kind: 'back', name: 'go back to the previous page'}, true);
   add({kind: 'done', name: 'done: the goal is achieved on this page (or its answer is visible)'}, true);
-  return out;
+  // Seventy controls at most. A page with more (a whole catalogue in one snapshot) keeps those the goal names, the
+  // ones that move through the list, and what the task may type into, then the rest in page order; the moves that
+  // are always there (Enter, scroll, back, done) always stay.
+  const fixed = out.filter(c => c.always);
+  // The same link twice (a book's cover and its title) is one choice.
+  const seenLabel = new Set();
+  const rest = out.filter(c => !c.always && !(c.kind === 'click' && c.label && (seenLabel.has(c.label) || !seenLabel.add(c.label))));
+  if (rest.length > 70) {
+    const words = goalWords(goal).map(w => w.toLowerCase());
+    // Items of a list carry a number on the lines right after them (a price, a count): the things a goal picks among.
+    const lines = String(view.body || '').split('\n').map(l => l.trim()).filter(Boolean);
+    const items = lines.filter((l, i) => !NUMBERED.test(l) && lines.slice(i + 1, i + 4).some(x => NUMBERED.test(x))).map(l => l.slice(0, 24).toLowerCase());
+    const isItem = c => items.some(t => String(c.label || '').toLowerCase().startsWith(t.slice(0, Math.min(24, String(c.label || '').length))) && String(c.label || '').length >= 4);
+    const score = c => (PAGING.test(String(c.label || '').trim()) ? 3 : 0) + (c.kind !== 'click' ? 2 : 0) + (words.some(w => String(c.label || '').toLowerCase().includes(w)) ? 2 : 0) + (isItem(c) ? 2 : 0);
+    const keep = new Set([...rest].sort((a, b) => score(b) - score(a)).slice(0, 70));
+    out = [...rest.filter(c => keep.has(c)), ...fixed];
+  }
+  return out.map(({always, ...c}, index) => ({...c, index}));
 }
 
 // After an action changes the page, ego retires the snapshot's refs ("Stale ref"): the second and later actions of
@@ -197,7 +225,7 @@ const FIND = `
 const find = async (ref, role, own, nth) => {
   if (!acted) return ref;
   let k = 0;
-  for (const l of (await p.snapshot()).split('\\n')) {
+  for (const l of (await p.snapshot({scope: "full_page"})).split('\\n')) {
     const m = /^\\s*(\\S+)(?:\\s+"((?:[^"\\\\]|\\\\.)*)")?\\s+\\[(?:.*,\\s*)?ref=(\\d+)/.exec(l);
     if (m && m[1] === role && (m[2] || '').replace(/\\\\"/g, '"') === own && k++ === nth) return '@' + m[3];
   }
@@ -230,6 +258,8 @@ ${settle(approved)} }`;
 
 // What stops before it happens: a risky click, and a select-all the goal did not ask for.
 function blocked(c, goal) {
+  // dec says which of its actions are risky (anything not "safe"): that is the rule there.
+  if (c.risk) return c.risk !== 'safe' && c.kind !== 'done' ? 'risky' : c.kind === 'check' && BULK.test(c.label || '') && !WANTS_ALL(goal) ? 'bulk' : null;
   // A link only goes to another page; what commits is a button (or Enter in a form).
   if (c.kind === 'click' && !['anchor', 'link', 'checkbox', 'radio'].includes(c.role) && RISKY.test(c.label || '')) return 'risky';
   if (c.kind === 'key' && RISKY.test(c.label || '')) return 'risky';
@@ -249,19 +279,29 @@ Goal: ${goal}
 ${inputs.length ? `Texts the agent may type: ${inputs.map(([k, v]) => `@${k} = "${v}"`).join(', ')}\n` : ''}${hist.length ? `Actions already taken (most recent last):\n${hist.slice(-8).join('\n')}\n` : 'No actions taken yet.\n'}${before ? `Seen on pages visited before (do not reopen them to check again):\n${before}\n` : ''}Current page: ${view.title} (${view.url})
 Visible page text:
 ${rows.slice(0, 90).map(t => t.slice(0, 240)).join('\n')}
-${more.length ? `Elsewhere on this page (off screen), lines about the goal:\n${more.join('\n')}\n` : ''}Notes: a text the goal names with @ has to be typed into the box before a search button does anything; a search box may first need its magnifier icon or "검색" control to open. After typing, pressing Enter or the search button runs it.`.slice(0, 14000);
+${more.length ? `Elsewhere on this page (off screen), lines about the goal:\n${more.join('\n')}\n` : ''}Notes: to reach page N of a list ("2쪽", "page 2"), click its page number or next / 다음 — it is among the actions even when it sits at the bottom of the page, no scrolling needed;
+a text the goal names with @ has to be typed into the box before a search button does anything; a search box may first need its magnifier icon or "검색" control to open. After typing, pressing Enter or the search button runs it.`.slice(0, 14000);
 }
 const noteOf = view => `${view.title}: ${parse(view.snap).rows.slice(0, 14).join(' / ')}`.slice(0, 500);
 
 // A snapshot is what is on screen; the answer is often further down ("많이 본 뉴스" under the fold). Lines of the whole
 // page that share a word with the goal come along, each with the few lines under it (a heading and its list).
 const STOP = new Set(['알려줘', '알려', '주세요', '해줘', '찾아줘', '보여줘', '에서', '으로', '그리고', '무엇', '뭐야', '어떤', 'the', 'and', 'what', 'tell', 'report']);
+const goalWords = goal => String(goal).replace(/@\w+/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(w => w.length >= 2 && !STOP.has(w.toLowerCase())).map(w => w.replace(/(을|를|이|가|은|는|의|에|도|로|과|와)$/, '')).filter(w => w.length >= 2);
 function related(view, goal, skip = new Set()) {
-  const words = String(goal).replace(/@\w+/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(w => w.length >= 2 && !STOP.has(w.toLowerCase())).map(w => w.replace(/(을|를|이|가|은|는|의|에|도|로|과|와)$/, '')).filter(w => w.length >= 2);
+  const words = goalWords(goal);
   if (!words.length || !view.body) return [];
   const lines = view.body.split('\n').map(l => l.trim()).filter(l => l.length > 1 && l.length <= 240);
   const out = [];
-  lines.forEach((l, i) => { if (words.some(w => l.includes(w))) for (const x of lines.slice(i, i + 5)) if (!skip.has(x) && !out.includes(x)) out.push(x) });
+  const add = x => { if (!skip.has(x) && !out.includes(x)) out.push(x) };
+  lines.forEach((l, i) => {
+    if (!words.some(w => l.includes(w))) return;
+    // A fact a page spreads over short neighbouring lines ("£45.17" / "In stock (19 available)") is also offered
+    // as one line, so a single pick can answer both halves of the goal.
+    const near = lines.slice(i, i + 3).filter(x => x.length <= 80);
+    if (near.length >= 2) add(near.join(' · '));
+    for (const x of lines.slice(i, i + 5)) add(x);
+  });
   return out.slice(0, 40);
 }
 function answerLines(view, goal) {
@@ -305,17 +345,24 @@ async function review(goal, view, cands, hist, inputs, pick, why, seen) {
   const wants = WANTS_ANSWER(goal);
   const c = pick ? cands[pick.index] : null;
   pick ??= {index: -1, confidence: 0, answer: null};
-  const r = await glm(`${pagePrompt(goal, view, hist, inputs, seen)}
+  // Comparing: the whole page instead of the screen's lines (not both: a big prompt made GLM take 20 s), and only the
+  // options that open something, since the point is to pick the item that wins.
+  const comparing = why === 'compare' && view.body;
+  const shown = comparing ? cands.filter(x => x.kind === 'click') : cands;
+  const r = await glm(`${comparing ? `You are choosing the next action for a browser agent.\nGoal: ${goal}\nCurrent page: ${view.title} (${view.url})\nThe whole page, to compare every item (prices, dates, counts):\n${view.body.slice(0, 6000)}` : pagePrompt(goal, view, hist, inputs, seen)}
 
 Options:
-${cands.map(x => `${x.index}. ${x.kind}: ${x.name}`).join('\n')}
+${shown.map(x => `${x.index}. ${x.kind}: ${x.name}`).join('\n')}
 
 A fast model proposes: ${c ? `${c.index}. ${c.kind}: ${c.name}` : 'none'} (confidence ${pick.confidence.toFixed(2)})${pick.answer ? `, with the answer "${pick.answer}"` : ''}. You are the careful second opinion (reason: ${why}).
 - If the proposal is "done": decide from the visible text whether the goal is really achieved. If not, pick the action that makes progress.
 - Never pick a select-all checkbox unless the goal asks for everything in the list.
+- If the goal picks one item by comparing (the most expensive, the cheapest, the newest), compare every item listed on the page and pick the option that opens the one that wins.
 ${wants ? '- The goal asks to report something: if the visible text (or what was seen on earlier pages) states it, put the full answer in "answer" — every part the goal asks for, only from those pages — and set goal_met true.\n' : ''}Reply: {"choice":"<option number>","goal_met":true|false${wants ? ',"answer":"<from the page or empty>"' : ''}}`, 1500);
   if (!r) return pick;
   const i = Number(r.choice);
+  // A comparison is answered by opening the winner, not by ending here: its details are on its own page.
+  if (comparing && Number.isInteger(i) && cands[i]) return {index: i, confidence: i === pick.index ? 0.9 : 0.8, answer: null};
   if (r.goal_met && (r.answer || !wants)) return {index: cands.findIndex(x => x.kind === 'done'), done: true, confidence: 0.9, answer: r.answer || pick.answer};
   if (Number.isInteger(i) && cands[i]) return {index: i, confidence: i === pick.index ? 0.9 : 0.8, answer: null};
   return pick;
@@ -343,19 +390,39 @@ Reply: {"actions":[...],"done":true|false,"answer":"<what the goal asks to repor
 
 // ---- a whole task ----
 
+// ego as a driver of the loop below: open a page, run steps, go to a page, close an alert. Other browsers bisu
+// drives itself (Aside through its REPL, dec with its fast mode off) bring their own: engine/aside.mjs, engine/dec.mjs.
+function egoDriver(space) {
+  return {
+    get id() { return space },
+    async open(url) { const v = await step(space, url ? `await p.goto(${quote(url)}); did.push(${quote('opened ' + url)});` : ''); space = v.space; return v },
+    act: (cs, approved = false) => step(space, cs.map(c => code(c, approved)).join('\n')),
+    goto: url => step(space, code({kind: 'goto', url})),
+    acceptAlert: msg => step(space, `await p.acceptDialog(); did.push(${quote('closed alert: ' + msg)});`),
+  };
+}
+
 // Runs a task in ego to the end, to a held risky step, or to the step budget. `space` is the conversation's task
 // space (name or id); the result says which id to resume with.
-export async function run({goal, url, inputs = {}, space, budget = 15, mode = picker(), log = () => {}}) {
+export const run = ({space, ...o}) => drive({...o, driver: egoDriver(space)});
+
+// The loop itself, for any driver: a view is {snap (ego's snapshot format), url, title, did, dialog?, ...}. A driver
+// may offer its own candidates (dec numbers its own actions) and confirm risky steps itself (dec asks the person).
+export async function drive({goal, url, inputs = {}, driver, budget = 15, mode = picker(), log = () => {}}) {
   const ins = Object.entries(inputs).filter(([, v]) => v != null && String(v) !== '').map(([k, v]) => [k, String(v)]);
   const t0 = Date.now(), hist = [], spent0 = {...glmUse}, judge0 = judge.usage.usd;
-  let view = await step(space, url ? `await p.goto(${quote(url)}); did.push(${quote('opened ' + url)});` : '');
-  space = view.space;
+  // Whatever happens, the driver gets to clean up (an Aside REPL, a dec tab).
+  try { return await loop() } catch (e) { await driver.end?.('error').catch?.(() => {}); throw e }
+  async function loop() {
+  let view = await driver.open(url, ins, goal);
   let last = null, answer = null, held = null, status = 'budget', steps = 0, repeats = 0, prevSig = '';
-  const seen = new Map(), visits = new Map(), tried = new Set(), reviews = {n: 0, changed: 0, why: {}};
+  const seen = new Map(), visits = new Map(), tried = new Set(), compared = new Set(), reviews = {n: 0, changed: 0, why: {}};
   // The same control, not the same words: three "LinkedIn 메일 선택" boxes are three different steps.
   const sigOf = c => `${c.kind}|${c.role || ''}|${c.own ?? c.label ?? ''}|${c.nth ?? ''}|${c.value || ''}|${c.dir || ''}`;
+  // Where the page stands: the same action again is a repeat only if nothing moved since (scrolling on is not).
+  const pageSig = v => { const r = parse(v.snap).rows; return `${v.url}|${v.y ?? ''}|${r.slice(0, 3).join('/')}|${r.slice(-3).join('/')}` };
   let prevUrl = null;
-  const finish = s => ({status: s, answer, held, space, url: view.url, title: view.title, steps, ms: Date.now() - t0, mode, reviews,
+  const finish = s => ({status: s, answer, held, space: driver.id, url: view.url, title: view.title, steps, ms: Date.now() - t0, mode, reviews,
     cost: +(glmUse.usd - spent0.usd + judge.usage.usd - judge0).toFixed(4), history: hist, notice: view.notice});
   let failed = false;
   // The site the task is about: a run that wanders off it (a new-tab page, another site the goal never named) is
@@ -363,6 +430,9 @@ export async function run({goal, url, inputs = {}, space, budget = 15, mode = pi
   const home = siteOf(url || view.url), names = String(goal);
   let lastOnSite = view.url, strays = 0;
   for (; steps < budget; steps++) {
+    // The browser ended the run itself (dec finishing or failing it), or wants the person (a login, its own check).
+    if (view.ended) { status = view.status || 'ended'; if (view.answer && !answer) answer = view.answer; break }
+    if (view.waiting) { status = view.waiting === 'handoff' ? 'needs-login' : 'needs-person'; held = {kind: 'person', label: view.why || view.waiting, url: view.url}; break }
     // A sign-in form: bisu never types a password, so the person signs in themselves (browser.mjs hands ego over).
     if (parse(view.snap).els.some(e => TYPABLE.has(e.role) && /비밀\s*번호|password|암호/i.test(e.name))) { status = 'needs-login'; break }
     let todo = [];
@@ -388,7 +458,7 @@ export async function run({goal, url, inputs = {}, space, budget = 15, mode = pi
         else if (a.do === 'back') todo.push({kind: 'back'});
       }
     } else {
-      const cands = candidates(view, ins, last, visits.size > 1);
+      const cands = driver.candidates ? driver.candidates(view) : candidates(view, ins, last, visits.size > 1, goal);
       if (process.env.BISU_EGO_DEBUG) log({url: view.url, cands: cands.map(c => `${c.index}. ${c.kind}: ${c.name}`)});
       let pick = await decisionsPick(goal, view, cands, hist, ins, seen);
       if (!pick || !cands[pick.index]) pick = null;
@@ -402,10 +472,13 @@ export async function run({goal, url, inputs = {}, space, budget = 15, mode = pi
         !pick ? 'no-pick' : failed ? 'step-failed'
         // its answer looks wrong
         : c0.kind === 'done' && WANTS_ANSWER(goal) && !pick.answer && !answer ? 'done-without-answer'
-        : pick.answer && (pick.answerConfidence < 0.6 || pick.answer.length > 160) ? 'odd-answer'
+        // (only when it would end on that answer: a guess offered on the way is checked when the run ends)
+        : c0.kind === 'done' && pick.answer && (pick.answerConfidence < 0.6 || pick.answer.length > 160) ? 'odd-answer'
+        // it would choose among compared items on a list page: GLM compares, once per page, with the whole page
+        : COMPARE(goal) && c0.kind === 'click' && !PAGING.test(String(c0.label || '').trim()) && listy(view) && !compared.has(pageSig(view)) ? (compared.add(pageSig(view)), 'compare')
         : pick.confidence < 0.4 ? 'unsure'
         // it slowed down
-        : c0.kind !== 'done' && tried.has(view.url + '#' + sigOf(c0)) ? 'repeat' : visits.get(view.url) >= 3 ? 'loop' : steps >= 8 && steps % 3 === 2 ? 'long' : null;
+        : c0.kind !== 'done' && tried.has(pageSig(view) + '#' + sigOf(c0)) ? 'repeat' : visits.get(view.url) >= 3 ? 'loop' : steps >= 8 && steps % 3 === 2 ? 'long' : null;
       if (why) {
         const r = await review(goal, view, cands, hist, ins, pick, why, seen);
         reviews.n++; reviews.why[why] = (reviews.why[why] || 0) + 1; if (r.index !== pick?.index) reviews.changed++;
@@ -431,25 +504,25 @@ export async function run({goal, url, inputs = {}, space, budget = 15, mode = pi
     // Run up to the first step that must wait for the person.
     let stop = null;
     const now = [];
-    for (const c of todo) { const b = blocked(c, goal); if (b) { stop = {c, b}; break } now.push(c) }
+    for (const c of todo) { const b = blocked(c, goal); if (b && !(b === 'risky' && driver.confirmsRisk)) { stop = {c, b}; break } now.push(c) }
     if (now.length) {
-      const sig = now.map(c => `${c.kind}${c.ref}${c.value || ''}${c.dir || ''}`).join('|');
+      const sig = pageSig(view) + '#' + now.map(c => `${c.kind}${c.ref}${c.value || ''}${c.dir || ''}`).join('|');
       repeats = sig === prevSig ? repeats + 1 : 0; prevSig = sig;
       if (repeats >= 2) { status = 'stuck'; break }
-      for (const c of now) tried.add(view.url + '#' + sigOf(c));
-      view = await step(space, now.map(c => code(c)).join('\n'));
+      for (const c of now) tried.add(pageSig(view) + '#' + sigOf(c));
+      view = await driver.act(now);
       hist.push(...view.did);
       failed = view.did.some(d => d.startsWith('error: '));
       const there = siteOf(view.url);
       if (home && there !== home && !(there && names.includes(there.split('.')[0]))) {
         if (++strays > 2) { status = 'stuck'; break }
         hist.push(`(left ${home} for ${/^https?:/.test(view.url) ? there : 'a browser page'}; went back — stay on ${home})`);
-        view = await step(space, code({kind: 'goto', url: lastOnSite}));
+        view = await driver.goto(lastOnSite);
       } else lastOnSite = view.url;
       last = now.at(-1);
       log({step: steps + 1, did: view.did, url: view.url});
       // A plain alert only informs: close it and go on. A confirm or prompt asks for a decision: the person's.
-      if (view.dialog?.type === 'alert') view = await step(space, `await p.acceptDialog(); did.push(${quote('closed alert: ' + view.dialog.message)});`);
+      if (view.dialog?.type === 'alert') view = await driver.acceptAlert(view.dialog.message);
       if (view.dialog) { held = {kind: 'dialog', label: view.dialog.message, url: view.url}; status = 'needs-approval'; break }
     }
     if (stop) {
@@ -460,7 +533,9 @@ export async function run({goal, url, inputs = {}, space, budget = 15, mode = pi
       break;
     }
   }
+  await driver.end?.(status);
   return finish(status);
+  }
 }
 
 // The held step, once the person said yes: the page must still be the one it was held on.

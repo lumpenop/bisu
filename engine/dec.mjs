@@ -144,3 +144,91 @@ export async function task({goal, url, inputs = [], readOnly = false, budget, wa
   }
   return {...v, tabId, status: 'running'};
 }
+
+// ---- dec with its fast mode off: bisu makes every pick ----
+
+// dec offers numbered actions each step (pendingDecision) and carries out the one bisu sends back; its own
+// confirmation of risky steps stays with the person, in dec. The view handed to the shared loop (engine/ego.mjs
+// drive()) is the page's visible text in ego's snapshot format plus dec's own candidates; the tab's whole text,
+// read through the endpoint, is what the loop searches for answers off screen.
+const esc = t => JSON.stringify(String(t ?? ''));
+export function directDriver({readText = true, tab = null} = {}) {
+  let tabId = tab, runId = null, lastReq = null, viewNow = null;
+  // Stop at the person: a login handed to them, a step dec wants them to confirm, the tab taken over.
+  const pending = async (waitMs = 120_000) => {
+    const t0 = Date.now();
+    for (const end = Date.now() + waitMs; Date.now() < end;) {
+      if (process.env.BISU_DEC_DEBUG && Date.now() - t0 > 3000 && (Date.now() - t0) % 5000 < 100) { const r = (await api('GET', `/v1/runs/${runId}`)).run; process.stderr.write(`[dec wait ${((Date.now() - t0) / 1000).toFixed(0)}s] awaiting=${r.awaiting} status=${r.status} progress=${JSON.stringify(r.progress)}\n`) }
+      const r = (await api('GET', `/v1/runs/${runId}`)).run;
+      if (r.end || r.result) return {ended: true, run: r};
+      if (NEEDS_PERSON[r.awaiting]) return {waiting: NEEDS_PERSON[r.awaiting], run: r};
+      const p = r.pendingDecision;
+      if (r.awaiting === 'agent-decision' && p && p.requestId !== lastReq) return {p, run: r};
+      await sleep(80);
+    }
+    throw new DecError('TIMEOUT');
+  };
+  const look = async (did = []) => {
+    const w = await pending();
+    if (w.ended) return {ended: true, status: w.run.result?.status ?? 'ended', answer: w.run.result?.answer ?? null, snap: '', url: '', title: '', did};
+    if (w.waiting) return {waiting: w.waiting, why: w.run.pendingConfirmation?.summary ?? w.run.handoff?.reason ?? null, snap: '', url: viewNow?.url ?? '', title: viewNow?.title ?? '', did};
+    const q = w.p.request, page = q.observation?.page ?? {};
+    let body = '';
+    if (readText) { try { body = String((await api('POST', `/v1/tabs/${tabId}/content`, {limit: 12000})).text || '') } catch {} }
+    // dec rates each action's risk itself: what is not "safe" is a step bisu holds for the person.
+    const cands = (q.candidates || []).map((c, i) => ({index: i, decIndex: c.index, requestId: w.p.requestId, kind: c.kind, name: c.name || c.kind, label: c.name || '', risk: c.risk ?? 'safe'}));
+    viewNow = {snap: (page.texts || []).map(t => `text ${esc(typeof t === 'string' ? t : t.text)}`).join('\n'), url: q.url || q.origin || '', title: page.title || '', did, cands, body, y: 0, maxY: 0};
+    return viewNow;
+  };
+  const start = async (goal, ins = []) => {
+    const s = await api('POST', '/v1/runs', {tabId, goal: String(goal || 'bisu drives this tab').slice(0, 500), decider: 'agent', ...(ins.length ? {inputs: ins.slice(0, 8).map(([name, value]) => ({name, value}))} : {})});
+    runId = s.runId ?? s.id; lastReq = null;
+  };
+  const loaded = async () => { for (let i = 0; i < 50; i++) { const t = tabsOf(await api('GET', '/v1/tabs')).find(x => x.id === tabId); if (t && t.loading === false) return true; await sleep(100) } return false };
+  const stop = async () => { try { await api('POST', `/v1/runs/${runId}/stop`, {}) } catch {} for (let i = 0; i < 30; i++) { try { if ((await api('GET', `/v1/runs/${runId}`)).run.end) break } catch { break } await sleep(100) } };
+  return {
+    get id() { return runId },
+    get tabId() { return tabId },
+    candidates: v => v.cands,
+    // One tab per conversation: the last task's tab goes to the new page; a new tab only when there is none.
+    async open(url, ins = [], goal = '') {
+      const have = tabId && tabsOf(await api('GET', '/v1/tabs')).some(t => t.id === tabId);
+      if (have) await api('POST', `/v1/tabs/${tabId}/navigate`, {url, agent: 'bisu'});
+      else tabId = (await api('POST', '/v1/tabs', {url, background: true, agent: 'bisu'})).tab.id;
+      await loaded();
+      await start(goal, ins);
+      return look([`opened ${url}`]);
+    },
+    async act(cs) {
+      const did = [];
+      for (const c of cs) {
+        lastReq = c.requestId;
+        await api('POST', `/v1/runs/${runId}/decision`, {requestId: c.requestId, candidateIndex: c.decIndex});
+        did.push(`${c.kind} ${c.label}`.trim());
+      }
+      return look(did);
+    },
+    async goto(url) { const c = viewNow?.cands.find(x => x.kind === 'back'); return c ? this.act([c]) : viewNow },
+    acceptAlert: () => viewNow,
+    // The loop is done: end dec's run and keep the tab, for reading it and for the next task.
+    async end(status) {
+      if (status === 'done') try { const d = viewNow?.cands.find(x => x.kind === 'done'); if (d) { lastReq = d.requestId; await api('POST', `/v1/runs/${runId}/decision`, {requestId: d.requestId, candidateIndex: d.decIndex}) } } catch {}
+      await stop();
+    },
+    // The step held for the person, once they said yes: a fresh run on the same tab, the same action found again by
+    // what it does and says, and only that one step.
+    async approve(held) {
+      await start('bisu: the person approved this step');
+      let v = await look();
+      const c = v.cands?.find(x => x.kind === held.kind && x.label === held.label) ?? v.cands?.find(x => x.kind === held.kind && x.label.includes(held.label));
+      if (!c) { await stop(); return {ok: false, error: `"${held.label}" is not on the page any more`} }
+      v = await this.act([c]);
+      // dec may still ask the person itself (its own confirmation): give them a minute.
+      for (let i = 0; v.waiting === 'confirm' && i < 60; i++) { await sleep(1000); v = await look(v.did) }
+      await stop();
+      let page = {};
+      try { page = await api('POST', `/v1/tabs/${tabId}/content`, {limit: 4000}) } catch {}
+      return {ok: true, did: v.did, url: page.url ?? v.url, title: page.title ?? v.title, text: String(page.text ?? '')};
+    },
+  };
+}
