@@ -194,6 +194,8 @@ export function directDriver({readText = true, tab = null} = {}) {
     get id() { return runId },
     get tabId() { return tabId },
     candidates: v => v.cands,
+    // The page's text in full, every line where it stands (the view's lines are each sent once).
+    readPage: async () => String((await api('POST', `/v1/tabs/${tabId}/content`, {limit: 20000})).text || ''),
     // One tab per conversation: the last task's tab goes to the new page; a new tab only when there is none.
     async open(url, ins = [], goal = '') {
       let moved = false;
