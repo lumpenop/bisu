@@ -170,6 +170,7 @@ body.panel #panelStart:not([hidden]){display:flex;flex:1;justify-content:center;
 #panelStart .row{display:flex;gap:6px}
 #panelStart .row .lbl{align-self:center;font-size:12px;color:var(--muted)}
 details.note summary{cursor:pointer;width:max-content}details.note p{margin:6px 0 0}
+.cuLog{max-height:260px;overflow:auto;font-size:11.5px;line-height:1.5;white-space:pre-wrap;margin:6px 0 0}
 #panelStart input{flex:1;min-width:0}
 #panelStart .err{margin:0;font-size:12px;min-height:0}
 .ctxbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 12px;border-top:1px solid var(--line);background:var(--accent-soft);font-size:12px;color:var(--muted)}
@@ -425,6 +426,19 @@ body.meta .act .actM{display:inline}body.meta .res{display:block}
   <div class="actions"><button id="calAsk" hidden>접근 허용 요청</button><span class="note" id="calNote" style="margin:0"></span></div>
   <p class="note">자체 엔진이 일정과 할 일을 보고, 넣고, 옮길 때 써요. 지우기는 항상 먼저 물어요. 미리 알림에 넣은 시간 알림은 아이폰에도 와요.</p>
  </section>
+ <section id="cuSec">
+  <h2>컴퓨터 조작 시험</h2>
+  <p class="note">bisu가 텍스트 편집기·Finder·메모·계산기·시스템 설정을 직접 조작해 12가지 일(줄을 추가해 저장, 이름 바꾸기, 메모 만들기, 계산기 열기 같은 것)을 하고, 파일과 답을 보고 채점해요. 시험하는 동안에는 마우스와 창을 bisu가 쓰니 자리를 비울 때 시작하세요. 만든 파일·메모·창은 끝나면 치우고, 휴지통 같은 되돌리기 어려운 동작은 실행하지 않아요.</p>
+  <div class="actions"><button id="cuCheck">권한 확인</button><button id="cuDry">준비만 해 보기</button></div>
+  <p class="note">처음 한 번은 자리에 있을 때 눌러 주세요. 「권한 확인」을 누르면 macOS가 bisu에게 Finder·텍스트 편집기·메모를 다뤄도 되는지 물을 수 있어요 — 허용을 눌러 주세요. 「준비만 해 보기」는 모델 없이 과제를 차렸다 치우기만 해요(창이 잠깐씩 열렸다 닫혀요).</p>
+  <div class="kv">
+   <div class="k">반복</div><div><select id="cuRepeat"><option value="1">1번</option><option value="2" selected>2번</option><option value="3">3번</option></select></div>
+   <div class="k">모델</div><div><select id="cuModels"><option value="glm-5.3">GLM-5.3 (비서)</option><option value="glm-5.3-flash">GLM-5.3-flash</option><option value="glm-5.3,glm-5.3-flash">둘 다 (시간 두 배)</option></select></div>
+  </div>
+  <div class="actions"><button class="primary" id="cuRun">시험 시작 (30초 뒤)</button><button id="cuStop" hidden>멈추기</button><span class="note" id="cuNote" style="margin:0"></span></div>
+  <div id="cuResult"></div>
+  <details id="cuLogBox" class="note" hidden><summary>자세한 기록</summary><pre id="cuLog" class="cuLog"></pre></details>
+ </section>
  <section id="orKey">
   <h2>키</h2>
   <div class="kv" id="keyInfo"><div class="k">상태</div><div>…</div></div>
@@ -505,7 +519,7 @@ document.body.classList.toggle('meta',META);
 
 // ---- tabs ----
 function show(v){for(const b of document.querySelectorAll('nav button'))b.classList.toggle('on',b.dataset.view===v);for(const el of document.querySelectorAll('.view'))el.classList.toggle('on',el.id===v+'View');
- if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='settings'){loadAccount();loadRoles();if(prefs.engine==='native')loadNative();renderSugSettings();loadSuggestions();loadJobs();loadBrief()}try{localStorage.setItem('bisu.view',v)}catch{}}
+ if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='settings'){loadAccount();loadRoles();if(prefs.engine==='native')loadNative();renderSugSettings();loadSuggestions();loadJobs();loadBrief();loadCu()}try{localStorage.setItem('bisu.view',v)}catch{}}
 for(const b of document.querySelectorAll('nav button'))b.onclick=()=>show(b.dataset.view);
 
 // ---- light markdown: fenced code, inline code, paragraphs ----
@@ -1003,6 +1017,39 @@ $('briefForm').onsubmit=e=>{e.preventDefault();saveBrief()};
 $('briefRun').onclick=async()=>{const b=$('briefRun');b.disabled=true;$('briefNote').textContent='';
  try{const r=await post('/api/briefing/run');$('briefNote').textContent=r.error?r.error:r.skipped?BRIEF_SKIP[r.skipped]||r.skipped:'패널에 남겼어요.';loadSuggestions();loadBrief()}
  catch(e){$('briefNote').textContent=e.message}finally{b.disabled=false}};
+// ---- computer-use test (engine/eval/cu-bench.mjs, run by the engine) ----
+let cuSnap=null,cuPoll=null;
+const CU_GROUP={TextEdit:'텍스트 편집기',Finder:'Finder',Notes:'메모',Calculator:'계산기','System Settings':'시스템 설정'};
+const CU_DOING={check:'권한을 확인하는 중…',dry:'과제를 차렸다 치우는 중… 창이 열렸다 닫혀요',run:'시험하는 중 — 끝날 때까지 마우스와 창을 bisu가 써요'};
+async function loadCu(){try{cuSnap=await api('/api/cubench');renderCu()}catch(e){$('cuNote').textContent=e.message}}
+function cuTable(rows){
+ const pass=a=>a.filter(r=>r.pass).length,med=a=>{const x=a.map(r=>r.ms||0).sort((p,q)=>p-q);return x.length?Math.round(x[Math.floor(x.length/2)]/1000):0};
+ const models=[...new Set(rows.map(r=>r.model))],groups=[...new Set(rows.map(r=>r.group))];
+ return models.map(m=>{const mine=rows.filter(r=>r.model===m),fails=mine.filter(r=>!r.pass);
+  return `<div class="kv" style="margin-top:8px"><div class="k">${esc(m)}</div><div><b>${pass(mine)}/${mine.length}</b> 통과 · 과제당 중간 ${med(mine)}초 · $${mine.reduce((a,r)=>a+(r.cost||0),0).toFixed(3)}</div>
+   ${groups.map(g=>{const r=mine.filter(x=>x.group===g);return r.length?`<div class="k">${esc(CU_GROUP[g]||g)}</div><div>${pass(r)}/${r.length}</div>`:''}).join('')}</div>
+   ${fails.length?`<p class="note" style="margin:4px 0 0">못 한 것: ${[...new Set(fails.map(r=>r.task))].map(t=>{const f=fails.filter(r=>r.task===t),all=mine.filter(r=>r.task===t),why=f.map(r=>r.stop==='stopped'?'멈춤':r.stop==='timeout'?'시간 초과':r.error?String(r.error).slice(0,60):'').filter(Boolean);
+    return `#${t} ${esc(f[0].name)} (${all.length}번 중 ${f.length}번${why.length?' · '+esc([...new Set(why)].join(', ')):''})`}).join(' · ')}</p>`:''}`}).join('')}
+function renderCu(){const s=cuSnap;if(!s)return;
+ const busy=s.state==='running'||s.state==='waiting';
+ for(const id of ['cuCheck','cuDry','cuRun'])$(id).disabled=busy||!s.available;
+ $('cuStop').hidden=!busy;
+ $('cuNote').textContent=!s.available?'이 bisu에는 시험이 들어 있지 않아요. 앱을 다시 설치해 주세요.'
+  :s.state==='waiting'?`${Math.max(0,Math.ceil((s.startsAt-Date.now())/1000))}초 뒤에 시작해요 — 이제 자리를 비워도 돼요`
+  :s.state==='running'?CU_DOING[s.mode]||''
+  :s.state==='done'?(s.stopped?'멈췄어요.':s.exit===0?(s.mode==='run'?'끝났어요.':'다 봤어요. 아래 결과를 확인해 주세요.'):`끝났지만 문제가 있었어요 (코드 ${s.exit}). 자세한 기록을 봐 주세요.`):'';
+ $('cuResult').innerHTML=s.rows?.length?cuTable(s.rows)+(s.endedAt&&!busy?`<p class="note" style="margin:4px 0 0">${whenShort(s.endedAt)}에 끝난 시험이에요.</p>`:''):'';
+ const log=s.log||[];$('cuLogBox').hidden=!log.length;$('cuLog').textContent=log.join('\n');
+ // What check and dry say is the result itself; a run's log is detail behind its table.
+ if(log.length&&s.mode!=='run')$('cuLogBox').open=true;
+ if(busy&&!cuPoll)cuPoll=setInterval(()=>{if(!$('settingsView').classList.contains('on')){clearInterval(cuPoll);cuPoll=null;return}loadCu()},s.state==='waiting'?1000:2000);
+ if(!busy&&cuPoll){clearInterval(cuPoll);cuPoll=null}}
+async function cuStart(mode){$('cuNote').textContent='';
+ try{cuSnap=await post('/api/cubench',{mode,repeat:Number($('cuRepeat').value),models:$('cuModels').value,delaySec:30});renderCu()}catch(e){$('cuNote').textContent=e.message}}
+$('cuCheck').onclick=()=>cuStart('check');
+$('cuDry').onclick=()=>cuStart('dry');
+$('cuRun').onclick=()=>{if(confirm('30초 뒤에 시험을 시작해요. 끝날 때까지 마우스와 창을 bisu가 쓰니, 그동안은 맥을 쓰지 말아 주세요. 중간에 멈추려면 이 화면의 「멈추기」를 누르면 돼요.'))cuStart('run')};
+$('cuStop').onclick=async()=>{try{cuSnap=await post('/api/cubench/stop');renderCu()}catch(e){$('cuNote').textContent=e.message}};
 // ---- scheduled jobs ----
 let jobsSnap=null;
 const whenShort=ts=>ts?new Date(ts).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';

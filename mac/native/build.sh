@@ -30,6 +30,8 @@ cp -R "$repo/ui" "$res/ui"
 # bisu's own engine (BISU_ENGINE=native), without its benchmarks.
 cp -R "$repo/engine" "$res/engine"
 rm -rf "$res/engine/eval"
+# Except the computer-use benchmark, which Settings runs (and the pretend calendar it does not need).
+mkdir -p "$res/engine/eval" && cp "$repo/engine/eval/cu-bench.mjs" "$res/engine/eval/"
 cp "$repo/launch.zsh" "$repo/agents.json" "$repo/prompt.md" "$repo/prompt-suggest.md" "$repo/prompt-job.md" "$res/"
 cp "$mac/assets/trayTemplate.png" "$mac/assets/trayTemplate@2x.png" "$res/mac/assets/"
 cp "$mac/cu/bisu-cu.swift" "$res/mac/cu/" 2>/dev/null || true
