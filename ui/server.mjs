@@ -21,6 +21,7 @@ import * as cubench from './cubench.mjs';
 import * as telegram from './telegram.mjs';
 import * as alerts from './alerts.mjs';
 import * as goals from './goals.mjs';
+import * as webwaits from './webwaits.mjs';
 import {releaseSchedule,holdsSchedule} from './lock.mjs';
 import {PRICES as GLM_PRICES} from '../engine/glm.mjs';
 import {eventKit} from '../engine/calendar.mjs';
@@ -272,7 +273,7 @@ function start(c){
   '-p','--input-format','stream-json','--output-format','stream-json','--verbose','--include-partial-messages','--permission-prompt-tool','stdio','--replay-user-messages',
   '--settings',BACKGROUND_AGENTS,
   ...(c.sessionId?['--resume',c.sessionId]:[])];
- const proc=spawn('zsh',args,{cwd:c.cwd,env:process.env,stdio:['pipe','pipe','pipe']});c.proc=proc;c.models=r;c.costSoFar=0;
+ const proc=spawn('zsh',args,{cwd:c.cwd,env:{...process.env,BISU_CHAT_ID:c.id},stdio:['pipe','pipe','pipe']});c.proc=proc;c.models=r;c.costSoFar=0;
  // A chat started in a folder macOS has not granted access to does not fail — zsh blocks in getcwd
  // until the permission dialog is answered, which looks like a spinner forever. Say what is happening.
  // Only when it is actually still the launcher: Claude Code says nothing until the first message, so
@@ -549,11 +550,18 @@ goals.onGoal((kind,g)=>{
  if(kind==='question'){goalCardsDone(g.id);proactive.push({id:randomUUID(),kind:'job',job:'goal',goal:g.id,ask:true,title:g.title,body:g.question.text,cwd:g.cwd})}
  else if(kind==='done')proactive.push({id:randomUUID(),kind:'job',job:'goal',goal:g.id,title:`${g.title} — 달성`,body:g.log[g.log.length-1]?.text||'',cwd:g.cwd})});
 goals.start(holdsSchedule);
-for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();telegram.shutdown();alerts.shutdown();goals.stop();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
+// A web task dec was still doing when its chat moved on: once it ends, the chat hears the result and reports it.
+webwaits.start((w,r)=>{
+ const how={verified:'끝남',unverified:'끝남',failed:'실패',stopped:'중지됨'}[r.status]||r.status;
+ const body=[`작업: ${w.goal}`,`결과: ${how}${r.answer?` — ${r.answer}`:''}${r.reason&&/failed|stopped/.test(r.status)?` (${r.reason})`:''}`,r.url&&`마지막 페이지: ${r.url}`].filter(Boolean).join('\n');
+ const c=w.chat&&chats.get(w.chat);
+ if(c)say(c,`(dec에서 기다리던 웹 작업이 끝났어요. 결과를 알려 주세요.)\n${body}`);
+ else alerts.notice({kind:'reply',title:'웹 작업이 끝났어요',body})});
+for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();telegram.shutdown();alerts.shutdown();goals.stop();webwaits.stop();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
 // The desktop shell holds this pipe open for as long as it is running, so the pipe closing means the
 // shell quit or was force-killed. Without this the engine, dec and every Claude Code run outlive it.
 if(PARENT==='stdin'){
- process.stdin.on('end',()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();telegram.shutdown();alerts.shutdown();goals.stop();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');process.exit(0)});
+ process.stdin.on('end',()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();telegram.shutdown();alerts.shutdown();goals.stop();webwaits.stop();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');process.exit(0)});
  process.stdin.on('error',()=>{});
  process.stdin.resume();
 }

@@ -184,7 +184,8 @@ async function editButtons(message, note) {
 }
 
 // ---- what happens in bisu, out ----
-const summarize = (tool, input = {}) => input.command ? `$ ${String(input.command).slice(0, 300)}`
+const summarize = (tool, input = {}) => /browser_approve$/.test(tool) && input.step ? `웹에서 누르기: 「${String(input.step).slice(0, 120)}」`
+  : input.command ? `$ ${String(input.command).slice(0, 300)}`
   : input.file_path || input.path ? `${tool} · ${input.file_path || input.path}` : tool;
 // Called by the server for every event of every chat.
 export function onEvent(c, ev) {

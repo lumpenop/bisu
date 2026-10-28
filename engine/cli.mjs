@@ -18,6 +18,7 @@ import {Transcript, loadMessages} from './store.mjs';
 import * as judge from './judge.mjs';
 import {BISU_TOOLS} from './bisu-tools.mjs';
 import {CALENDAR_TOOLS, nowLines} from './calendar.mjs';
+import {BROWSER_TOOLS} from './browser.mjs';
 import {connect as connectMcp} from './mcp.mjs';
 import {complete} from './glm.mjs';
 
@@ -44,13 +45,13 @@ const cwd = fs.realpathSync(process.cwd());
 // Claude Code's tool names, as launch.zsh and the jobs still spell them, to this engine's tools.
 const NAME = {Read: 'read_file', Write: 'write_file', Edit: 'edit_file', MultiEdit: 'edit_file', Glob: 'list_files', Grep: 'search_files', Bash: 'run_command', WebFetch: 'web_fetch', WebSearch: 'web_search', Task: 'delegate', Agent: 'delegate'};
 const plain = n => String(n).trim().replace(/^mcp__[^_]+(?:_[^_]+)*__/, '');
-const EXTRA = {...BISU_TOOLS, ...CALENDAR_TOOLS};
+const EXTRA = {...BISU_TOOLS, ...CALENDAR_TOOLS, ...BROWSER_TOOLS};
 let wanted = flags.tools && flags.tools !== 'default'
   ? [...new Set(flags.tools.split(',').map(t => NAME[t.trim()] || t.trim()).filter(t => TOOLS[t] || EXTRA[t] || t === 'delegate'))]
   : [...Object.keys(TOOLS), 'web_search', 'delegate'];
 // A run that may change files (a chat, an edit job) also gets memory, scheduling and the calendar;
 // one that only reads (a read job, like a morning summary) may still read the calendar.
-if (wanted.includes('write_file')) wanted.push('remember', 'forget', 'schedule_job', 'goal_add', 'goal_list', ...Object.keys(CALENDAR_TOOLS));
+if (wanted.includes('write_file')) wanted.push('remember', 'forget', 'schedule_job', 'goal_add', 'goal_list', ...Object.keys(CALENDAR_TOOLS), ...Object.keys(BROWSER_TOOLS));
 else if (wanted.includes('read_file')) wanted.push('calendar_list', 'reminders_list');
 const preAllowed = new Set(String(flags.allowedTools || flags['allowed-tools'] || '').split(',').map(t => NAME[t.trim()] || plain(t)).filter(Boolean));
 

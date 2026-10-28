@@ -17,6 +17,7 @@ import {fileURLToPath} from 'node:url';
 import * as sessions from '../sessions.mjs';
 import {CALENDAR_TOOLS} from '../../engine/calendar.mjs';
 import {BISU_TOOLS} from '../../engine/bisu-tools.mjs';
+import {BROWSER_TOOLS} from '../../engine/browser.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SUPPORT = path.join(os.homedir(), 'Library', 'Application Support', 'bisu');
@@ -570,11 +571,11 @@ const cuDefinitions = [
     inputSchema: {type: 'object', properties: {}},
   },
 ];
-// ---- the assistant's own tools: calendar and reminders, web search, goals ----
-// The same tools bisu's own engine has (engine/calendar.mjs, engine/bisu-tools.mjs), so a Claude Code
-// chat can do what a native one does. Short ids (e1, r2) live in this process, which lasts as long as
-// the chat. calendar_delete is not pre-allowed by launch.zsh: it goes through the approval card.
-const ASSISTANT = {...CALENDAR_TOOLS, web_search: BISU_TOOLS.web_search, goal_add: BISU_TOOLS.goal_add, goal_list: BISU_TOOLS.goal_list, goal_update: BISU_TOOLS.goal_update};
+// ---- the assistant's own tools: calendar and reminders, web search, goals, the browser ----
+// The same tools bisu's own engine has (engine/calendar.mjs, engine/bisu-tools.mjs, engine/browser.mjs), so a
+// Claude Code chat can do what a native one does. Short ids (e1, r2, h1) live in this process, which lasts as long
+// as the chat. calendar_delete and browser_approve are not pre-allowed by launch.zsh: they go through the approval card.
+const ASSISTANT = {...CALENDAR_TOOLS, web_search: BISU_TOOLS.web_search, goal_add: BISU_TOOLS.goal_add, goal_list: BISU_TOOLS.goal_list, goal_update: BISU_TOOLS.goal_update, ...BROWSER_TOOLS};
 const failed = new WeakSet();
 for (const [name, t] of Object.entries(ASSISTANT)) tools[name] = async args => {
   const r = await t.run({cwd: process.cwd()}, args);
