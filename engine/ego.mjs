@@ -395,6 +395,8 @@ export function verbatim(answer, text) {
 // A page is its address and its title: dec masks a path segment it takes for a token (「/catalogue/[redacted-token]/」),
 // so two books' pages share an address and their notes and visits would run together.
 const pageKey = view => `${view.url}#${view.title}`;
+// What a page shows, scroll position aside: whether a step changed anything.
+const contentOf = view => `${view.url}#${view.title}#${String(view.body || '').length}#${parse(view.snap).rows.join('\n')}`;
 const seenText = (seen, url) => [...seen].filter(([u]) => u !== url).slice(-6).map(([u, t]) => `- ${t}`).join('\n').slice(-9000);
 function pagePrompt(goal, view, hist, inputs, seen = new Map()) {
   // A list a goal compares or adds up is read whole: its first ninety lines are often the menu (dec sends each text alone).
@@ -522,7 +524,7 @@ async function review(goal, view, cands, hist, inputs, pick, why, seen) {
   // options that open something, since the point is to pick the item that wins.
   const comparing = why === 'compare' && view.body;
   const shown = comparing ? cands.filter(x => x.kind === 'click') : cands;
-  const r = await glm(`${comparing ? `You are choosing the next action for a browser agent.\nGoal: ${goal}\nCurrent page: ${view.title} (${view.url})\nThe whole page, to compare every item (prices, dates, counts):\n${view.body.slice(0, 6000)}` : pagePrompt(goal, view, hist, inputs, seen)}
+  const r = await glm(`${comparing ? `You are choosing the next action for a browser agent.\nGoal: ${goal}\nCurrent page: ${view.title} (${view.url})\nThe whole page, to compare every item (prices, dates, counts):\n${view.body.slice(0, 24000)}` : pagePrompt(goal, view, hist, inputs, seen)}
 
 Options:
 ${shown.map(x => `${x.index}. ${x.kind}: ${x.name}`).join('\n')}
@@ -572,6 +574,7 @@ export function egoDriver(space) {
     act: (cs, approved = false) => step(space, cs.map(c => code(c, approved)).join('\n')),
     goto: url => step(space, code({kind: 'goto', url})),
     acceptAlert: msg => step(space, `await p.acceptDialog(); did.push(${quote('closed alert: ' + msg)});`),
+    wait: () => step(space, 'await p.waitForTimeout(1500);'),
   };
 }
 
@@ -589,11 +592,13 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
   async function loop() {
   let view = await driver.open(url, ins, goal);
   let opened = null, targets = null, answerAt = null, last = null, answer = null, held = null, status = 'budget', steps = 0, repeats = 0, prevSig = '';
-  const eachTried = new Set(), doneExt = new Set(), ticked = new Set(), seen = new Map(), visits = new Map(), tried = new Set(), compared = new Set(), reviews = {n: 0, changed: 0, why: {}};
+  const noScroll = new Set(), eachTried = new Set(), doneExt = new Set(), ticked = new Set(), seen = new Map(), visits = new Map(), tried = new Set(), compared = new Set(), reviews = {n: 0, changed: 0, why: {}};
   // The same control, not the same words: three "LinkedIn 메일 선택" boxes are three different steps.
   const sigOf = c => `${c.kind}|${c.role || ''}|${c.own ?? c.label ?? ''}|${c.nth ?? ''}|${c.value || ''}|${c.dir || ''}`;
   // Where the page stands: the same action again is a repeat only if nothing moved since (scrolling on is not).
-  const pageSig = v => { const r = parse(v.snap).rows; return `${v.url}|${v.y ?? ''}|${r.slice(0, 3).join('/')}|${r.slice(-3).join('/')}` };
+  // (all of what it shows: pages of one list share their header and pager, so the first and last rows told them apart
+  // from nothing)
+  const pageSig = v => { const r = parse(v.snap).rows.join('\n'); let h = 0; for (let i = 0; i < r.length; i++) h = (h * 31 + r.charCodeAt(i)) | 0; return `${v.url}|${v.title}|${v.y ?? ''}|${r.length}|${h}` };
   let prevUrl = null;
   const finish = s => ({status: s, answer: verbatim(answer, [view.body, view.snap, ...seen.values()].join('\n')), held, space: driver.id, url: view.url, title: view.title, steps, ms: Date.now() - t0, mode, reviews,
     cost: +(glmUse.usd - spent0.usd + judge.usage.usd - judge0).toFixed(4), history: hist, notice: view.notice});
@@ -632,8 +637,9 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
       }
     } else {
       let cands = driver.candidates ? driver.candidates(view) : candidates(view, ins, last, visits.size > 1, goal);
+      if (noScroll.has(pageKey(view))) cands = cands.filter(c => !/^scroll/.test(c.kind)).map((c, i) => ({...c, index: i}));
       // Already on the page of the list the goal names (「1쪽」 on page 1): its "next" only leads away.
-      if (goalPage(goal) != null && listy(view) && pageOf(view.url) === goalPage(goal)) cands = cands.filter(c => !(c.kind === 'click' && /^(next|다음|›|»|>|다음\s*(페이지|쪽))$/i.test(String(c.label || '').trim())));
+      if (goalPage(goal) != null && listy(view) && pageOf(view.url) === goalPage(goal)) cands = cands.filter(c => !(c.kind === 'click' && /^(next|다음|›|»|>|다음\s*(페이지|쪽))$/i.test(String(c.label || '').trim()))).map((c, i) => ({...c, index: i}));
       if (process.env.BISU_EGO_DEBUG) log({url: view.url, cands: cands.map(c => `${c.index}. ${c.kind}: ${c.name}`)});
       // A comparing goal on a list page: the page's whole text, read once (dec sends each line once, so its driver reads
       // it in full), gives the pages-visited note its cheapest and dearest item, for goals that span several lists.
@@ -726,7 +732,13 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
       if (repeats >= 2) { status = 'stuck'; break }
       for (const c of now) tried.add(pageSig(view) + '#' + sigOf(c));
       { const c = now.at(-1); opened = c.kind === 'click' && !PAGING.test(String(c.label || '').trim()) && !named(c.label, goal) ? String(c.label || '').replace(/\s*(\.\.\.|…)$/, '').trim().toLowerCase() : null; if (opened && opened.length < 4) opened = null }
+      const before = contentOf(view), lastKind = now.at(-1).kind;
       view = await driver.act(now);
+      // A click that changed nothing yet: the page may fill in by script (a table loaded for the year clicked). Wait and
+      // look again, twice at most, before the next pick takes the same click for a dead one.
+      for (let w = 0; w < 2 && lastKind === 'click' && driver.wait && !view.ended && !view.waiting && contentOf(view) === before; w++) { const v = await driver.wait(); if (!v) break; view = {...v, did: [...view.did, ...(v.did || [])]} }
+      // A scroll that brought nothing new (the snapshot already held the whole page): no more scrolling here.
+      if (/^scroll/.test(lastKind) && contentOf(view) === before) noScroll.add(pageKey(view));
       hist.push(...view.did);
       failed = view.did.some(d => d.startsWith('error: '));
       const there = siteOf(view.url);

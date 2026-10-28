@@ -219,10 +219,30 @@ export function directDriver({readText = true, tab = null} = {}) {
       const did = [];
       for (const c of cs) {
         lastReq = c.requestId;
-        await api('POST', `/v1/runs/${runId}/decision`, {requestId: c.requestId, candidateIndex: c.decIndex});
+        // The page moved on while the step was being picked (a shop's script redrawing it): dec has dropped that request
+        // and asks again on the page as it is now, which is the next look.
+        try { await api('POST', `/v1/runs/${runId}/decision`, {requestId: c.requestId, candidateIndex: c.decIndex}) } catch (e) {
+          if (e.code === 'STALE_REQUEST' || e.code === 'NO_PENDING_DECISION') { did.push('(the page changed before this step; looked again)'); break }
+          throw e;
+        }
         did.push(`${c.kind} ${c.label}`.trim());
       }
       return look(did);
+    },
+    // A click that filled the page in later (a table loaded by script): dec offers 「wait」 after a step that changed
+    // nothing; take it, and look again.
+    async wait() {
+      const w = viewNow?.cands?.find(x => x.kind === 'wait');
+      if (w) return this.act([w]);
+      // No wait offered (the click only changed the address's #): give the page a moment and read its text again. The
+      // actions stay the ones dec offered; the lines are the page as it is now.
+      await sleep(1500);
+      let text = '';
+      try { text = String((await api('POST', `/v1/tabs/${tabId}/content`, {limit: 20000})).text || '') } catch { return viewNow }
+      if (!text || text === viewNow.body) return viewNow;
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      viewNow = {...viewNow, body: text, snap: lines.map(t => `text ${esc(t)}`).join('\n'), did: ['(waited for the page to fill in)']};
+      return viewNow;
     },
     async goto(url) { const c = viewNow?.cands.find(x => x.kind === 'back'); return c ? this.act([c]) : viewNow },
     acceptAlert: () => viewNow,

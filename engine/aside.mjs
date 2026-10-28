@@ -63,7 +63,8 @@ function repl() {
 }
 
 // The look at the end of every call: url, title and the whole tree, as one JSON line.
-const LOOK = `const sn = await snapshot(page); console.log('@@BISU ' + JSON.stringify({url: page.url(), title: await page.title(), tree: sn.tree, did}))`;
+// (and the page's own text: a long page's tree can stop short of what the goal asks — the 250th country)
+const LOOK = `const sn = await snapshot(page); const text = await page.evaluate(() => (document.body?.innerText || '').slice(0, 30000)).catch(() => ''); console.log('@@BISU ' + JSON.stringify({url: page.url(), title: await page.title(), tree: sn.tree, text, did}))`;
 
 function viewOf(out) {
   // The REPL prints its prompt ("repl > ") in front of what the next call prints.
@@ -72,7 +73,7 @@ function viewOf(out) {
   const v = JSON.parse(line.slice(line.indexOf('@@BISU ') + 7));
   const e = toEgo(v.tree);
   // The tree is the whole page, so it is also the text the loop searches for answers off screen.
-  const body = [...v.tree.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(x => x[1].replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n');
+  const body = v.text || [...v.tree.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(x => x[1].replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n');
   return {...e, url: v.url, title: v.title, did: v.did || [], y: 0, maxY: 0, body};
 }
 
@@ -97,6 +98,7 @@ export function driver() {
     act: cs => call(cs.map(step).join(' ')),
     goto: url => call(step({kind: 'goto', url})),
     acceptAlert: () => call(''),
+    wait: () => call('await page.waitForTimeout(1500);'),
     async end() { try { await r.run('await closeTab(page)', 15_000) } catch {} r.close() },
   };
 }
