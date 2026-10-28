@@ -379,7 +379,7 @@ let shimJS = """
     pending.set(id, {res, rej});
     post(cmd, Object.assign({__id: id}, args || {}));
   });
-  const subs = {context: new Set(), shown: new Set(), hidden: new Set(), open: new Set()};
+  const subs = {context: new Set(), shown: new Set(), hidden: new Set(), open: new Set(), view: new Set()};
   const host = {
     panel: true,
     platform: 'darwin',
@@ -387,7 +387,9 @@ let shimJS = """
     consume: () => call('consume'),
     session: (sessionId, cwd) => post('session', {sessionId, cwd}),
     hide: () => post('hide'),
-    openFull: () => post('full'),
+    openFull: view => post('full', {view: view || ''}),
+    openPane: pane => post('openPane', {pane}),
+    quit: () => post('quit'),
     resize: (width, height) => call('resize', {width, height}),
     bounds: () => call('bounds'),
     pickFolder: () => call('pickFolder'),
@@ -407,6 +409,7 @@ let shimJS = """
     requestNotifications: () => call('notifyRequest'),
     openNotificationSettings: () => post('notifySettings'),
     onOpen: fn => { subs.open.add(fn); return () => subs.open.delete(fn) },
+    onView: fn => { subs.view.add(fn); return () => subs.view.delete(fn) },
     __reply: (id, ok, value) => {
       const p = pending.get(id);
       if (!p) return;
@@ -482,6 +485,8 @@ final class Dialogs: NSObject, WKUIDelegate {
 
 final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, WKNavigationDelegate, UNUserNotificationCenterDelegate {
   private var statusItem: NSStatusItem!
+  /// The screen the full window should open on ("settings" from the menu or the panel); empty for the last one.
+  private var fullView = ""
   private var panel: Panel!
   private var web: WKWebView!
   private var container: NSView!
@@ -754,24 +759,14 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     // Nothing: the menu is rebuilt in statusMenu() so state (Accessibility, spend) is current.
   }
 
+  /// Laid out like Control Center: who and how bisu is, the one thing to do, the switches, then open,
+  /// settings and quit. Rebuilt on every click so the switches and the spend are current.
   private func statusMenu() -> NSMenu {
     let menu = NSMenu()
-    let show = NSMenuItem(title: panel?.isVisible == true ? "bisu 숨기기" : "bisu 열기", action: #selector(toggleFromMenu), keyEquivalent: "")
-    show.target = self
-    menu.addItem(show)
-    let full = NSMenuItem(title: "전체 창 (기록 · 기억 · 설정)", action: #selector(openFullFromMenu), keyEquivalent: "o")
-    full.target = self
-    menu.addItem(full)
-    let ask = NSMenuItem(title: "지금 제안 받기", action: #selector(askForSuggestion), keyEquivalent: "")
-    ask.target = self
-    menu.addItem(ask)
-    menu.addItem(.separator())
-
-    if let spend {
-      let item = NSMenuItem(title: "오늘: \(spend)", action: nil, keyEquivalent: "")
-      item.isEnabled = false
-      menu.addItem(item)
-    } else {
+    let state = NSMenuItem(title: "bisu · " + (engine == nil ? "엔진 꺼짐" : "듣고 있어요") + (spend.map { " · 오늘 \($0)" } ?? ""), action: nil, keyEquivalent: "")
+    state.isEnabled = false
+    menu.addItem(state)
+    if spend == nil {
       engine?.getJSON("api/account") { [weak self] j in
         guard let self,
               let key = j?["key"] as? [String: Any],
@@ -779,19 +774,33 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
         self.spend = String(format: "$%.2f", daily)
       }
     }
+    menu.addItem(.separator())
+
+    let show = NSMenuItem(title: panel?.isVisible == true ? "bisu 숨기기" : "bisu에게 말하기", action: #selector(toggleFromMenu), keyEquivalent: "")
+    show.target = self
+    menu.addItem(show)
+    menu.addItem(.separator())
 
     let selection = NSMenuItem(title: "선택한 텍스트 읽기", action: #selector(toggleSelection), keyEquivalent: "")
     selection.target = self
     selection.state = (readState()["selection"] as? Bool == false) ? .off : .on
     menu.addItem(selection)
-
     if !AXIsProcessTrusted() {
-      let ax = NSMenuItem(title: "접근성 허용…", action: #selector(grantAccessibility), keyEquivalent: "")
+      let ax = NSMenuItem(title: "손쉬운 사용 허용…", action: #selector(grantAccessibility), keyEquivalent: "")
       ax.target = self
       menu.addItem(ax)
     }
-
+    let ask = NSMenuItem(title: "지금 제안 받기", action: #selector(askForSuggestion), keyEquivalent: "")
+    ask.target = self
+    menu.addItem(ask)
     menu.addItem(.separator())
+
+    let full = NSMenuItem(title: "전체 창 열기", action: #selector(openFullFromMenu), keyEquivalent: "o")
+    full.target = self
+    menu.addItem(full)
+    let settings = NSMenuItem(title: "설정…", action: #selector(openSettingsFromMenu), keyEquivalent: ",")
+    settings.target = self
+    menu.addItem(settings)
     let quit = NSMenuItem(title: "bisu 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
     menu.addItem(quit)
     return menu
@@ -799,6 +808,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
 
   @objc private func toggleFromMenu() { togglePanel() }
   @objc private func openFullFromMenu() { openFull() }
+  @objc private func openSettingsFromMenu() { openFull(view: "settings") }
 
   /// The one action a suggestion needs from the shell: ask for one now. The page shows it on its next
   /// poll, so the panel is opened here — asking and seeing nothing would look broken.
@@ -904,6 +914,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     comps.path = "/"
     var items = [URLQueryItem(name: "token", value: engine.token)]
     if let id = activeChatId { items.append(URLQueryItem(name: "chat", value: id)) }
+    if !fullView.isEmpty { items.append(URLQueryItem(name: "view", value: fullView)) }
     comps.queryItems = items
     return comps.url!
   }
@@ -1086,12 +1097,17 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
 
   // MARK: full window
 
-  func openFull() {
+  func openFull(view: String = "") {
     if let w = fullWindow {
+      // Screen names are plain words ("settings"); anything else is ignored rather than quoted into script.
+      if !view.isEmpty, view.allSatisfy({ $0.isASCII && $0.isLetter }), let web = w.contentView as? WKWebView {
+        web.evaluateJavaScript("window.bisuHost.__emit('view', '\(view)')", completionHandler: nil)
+      }
       w.makeKeyAndOrderFront(nil)
       NSApp.activate(ignoringOtherApps: true)
       return
     }
+    fullView = view
     hidePanel()
     let bridge = Bridge()
     bridge.shell = self
@@ -1117,6 +1133,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     fullWindow = w
 
     view.load(URLRequest(url: fullURL()))
+    fullView = ""
     w.makeKeyAndOrderFront(nil)
     NSApp.activate(ignoringOtherApps: true)
   }
@@ -1203,7 +1220,16 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     case "hide":
       hidePanel()
     case "full":
-      openFull()
+      openFull(view: (args["view"] as? String) ?? "")
+    case "openPane":
+      // Privacy panes the page may send someone to, after asking. Nothing else is reachable from here.
+      let panes = ["calendars": "Privacy_Calendars", "reminders": "Privacy_Reminders", "accessibility": "Privacy_Accessibility",
+                   "automation": "Privacy_Automation", "screen": "Privacy_ScreenCapture"]
+      if let anchor = panes[(args["pane"] as? String) ?? ""] {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")!)
+      }
+    case "quit":
+      NSApp.terminate(nil)
     case "resize":
       guard let w = args["width"] as? Double, let h = args["height"] as? Double else { return reply(nil) }
       let f = panel.frame
