@@ -395,6 +395,7 @@ let shimJS = """
     pickFolder: () => call('pickFolder'),
     move: (x, y) => post('move', {x, y}),
     panelPlace: (place, reset) => call('panelPlace', {place: place || '', reset: !!reset}),
+    iconOpens: value => call('iconOpens', {value: value || ''}),
     endMove: () => post('endMove'),
     accessibility: () => call('accessibility'),
     grantAccessibility: () => post('axGrant'),
@@ -752,6 +753,11 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       statusItem.menu = statusMenu()
       statusItem.button?.performClick(nil)
       statusItem.menu = nil
+      return
+    }
+    // With the full window open, the icon can bring that forward instead (설정 → 패널); the panel is the default.
+    if readState()["iconOpens"] as? String == "full", let w = fullWindow, w.isVisible, !panel.isVisible {
+      openFull()
       return
     }
     togglePanel()
@@ -1294,6 +1300,9 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       var spots = readState()["panelSpots"] as? [String: Any] ?? [:]
       spots[screenKey(screen)] = ["x": f.minX, "y": f.minY]
       saveState(["panelSpots": spots, "panelPlace": "free"])
+    case "iconOpens":
+      if let v = args["value"] as? String, v == "panel" || v == "full" { saveState(["iconOpens": v]) }
+      reply(readState()["iconOpens"] as? String ?? "panel")
     case "panelPlace":
       // 메뉴바 아래 or 마지막으로 옮긴 곳; reset forgets every display's spot and goes back under the icon.
       var patch: [String: Any] = [:]
