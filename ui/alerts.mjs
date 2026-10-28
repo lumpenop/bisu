@@ -6,8 +6,12 @@
 // a macOS notification. It leaves out the ones about a conversation when bisu's window is on screen.
 // Telegram (ui/telegram.mjs) is told about each notice too and sends the meeting ones.
 //
-// Awake: while on power, `caffeinate -s` keeps the system from sleeping for as long as this engine
-// runs (-w ties it to our pid). The display still sleeps as usual, and a closed lid still sleeps.
+// Awake: while on power, `caffeinate -s` keeps the system from sleeping (-w ties it to our pid, so a
+// dead engine leaves no assertion behind). The display still sleeps as usual, and a closed lid still
+// sleeps. When it holds is the person's choice (`awakeMode`):
+//   always · timer (until `awakeUntil`, then off) · tasks (while a turn, a background agent, a job or a
+//   goal runs, at most `awakeMaxH` hours in a row) · off.
+// A job marked 「실행 중엔 맥 깨어 있게」 holds it while it runs, whatever the mode.
 //
 // Meetings: once a minute, events that start within `before` minutes (10 by default) and have not
 // been announced. Read the way the briefing reads them: only if bisu already has full access.
@@ -24,7 +28,8 @@ const CONFIG_DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir
 const FILE = path.join(CONFIG_DIR, 'alerts.json');
 const BEFORE = [0, 5, 10, 15, 30];
 const KINDS = ['approvals', 'replies', 'cards', 'events'];
-const DEFAULTS = { awake: true, before: 10, banners: Object.fromEntries(KINDS.map(k => [k, true])) };
+const MODES = ['always', 'timer', 'tasks', 'off'];
+const DEFAULTS = { awakeMode: 'tasks', awakeMaxH: 4, before: 10, banners: Object.fromEntries(KINDS.map(k => [k, true])) };
 const KEEP = 60;
 
 function load() {
@@ -32,8 +37,12 @@ function load() {
   try { s = JSON.parse(fs.readFileSync(FILE, 'utf8')) || {} } catch {}
   const banners = { ...DEFAULTS.banners };
   for (const k of KINDS) if (typeof s.banners?.[k] === 'boolean') banners[k] = s.banners[k];
+  // Before the modes there was one switch: on kept the Mac awake all the time, so it stays 「always」.
+  const awakeMode = MODES.includes(s.awakeMode) ? s.awakeMode : s.awake === true ? 'always' : s.awake === false ? 'off' : DEFAULTS.awakeMode;
   return {
-    awake: typeof s.awake === 'boolean' ? s.awake : DEFAULTS.awake,
+    awakeMode,
+    awakeUntil: Number(s.awakeUntil) || 0,
+    awakeMaxH: Number(s.awakeMaxH) >= 1 && Number(s.awakeMaxH) <= 24 ? Number(s.awakeMaxH) : DEFAULTS.awakeMaxH,
     before: BEFORE.includes(s.before) ? s.before : DEFAULTS.before,
     banners,
     sent: Array.isArray(s.sent) ? s.sent : [],
@@ -80,6 +89,8 @@ const said = new Map();
 // already go to the phone.
 export function onEvent(c, ev, { phone = false } = {}) {
   if (ev.past) return;
+  // A turn or a background agent starting or ending changes whether the Mac should stay awake.
+  if (ev.kind === 'status' || ev.kind === 'tasks') queueMicrotask(() => { try { decide() } catch {} });
   if (ev.kind === 'approval') {
     const what = ev.description || (ev.input?.command ? `$ ${ev.input.command}` : ev.input?.file_path || ev.input?.path || ev.tool || '');
     notice({ kind: 'approval', title: '확인이 필요해요', body: `${plain(what).slice(0, 200)}${c.title ? ` · ${c.title}` : ''}`, chat: c.id });
@@ -159,26 +170,56 @@ function keepAwake(on) {
     caf.on('error', () => { if (caf === me) caf = null });
   } else if (!on && caf) { caf.kill(); caf = null }
 }
+// What is running right now, from the server: [{what}] for turns, background agents, jobs and goals,
+// and the running job if it asked to keep the Mac awake.
+let workFn = () => ({ work: [], forced: null });
+export function setWork(fn) { if (typeof fn === 'function') workFn = fn }
+let workSince = 0, why = null;
+function decide(now = Date.now()) {
+  const s = load();
+  let w = { work: [], forced: null };
+  try { w = workFn() || w } catch {}
+  if (w.work.length) { if (!workSince) workSince = now } else workSince = 0;
+  // A timer that ran out turns itself off, so the page says off rather than a time in the past.
+  if (s.awakeMode === 'timer' && s.awakeUntil && now >= s.awakeUntil) save({ awakeMode: 'off', awakeUntil: 0 });
+  const mode = load().awakeMode;
+  const capped = mode === 'tasks' && workSince && now - workSince > s.awakeMaxH * 3600e3;
+  why = mode === 'always' ? 'always' : mode === 'timer' ? 'timer' : mode === 'tasks' && w.work.length && !capped ? 'tasks' : w.forced?.awake ? 'job' : null;
+  keepAwake(!!why);
+  return { work: w.work, forced: w.forced, capped: !!capped };
+}
 const power = () => new Promise(resolve => execFile('/usr/bin/pmset', ['-g', 'ps'], { timeout: 5000 }, (e, out) =>
   resolve(e ? null : /'AC Power'/.test(out) ? 'ac' : /'Battery Power'/.test(out) ? 'battery' : null)));
 
 // ---- the page ----
 export async function snapshot() {
-  const s = load();
+  const d = decide(), s = load();
   let access = null;
   try { access = (await eventKit().status()).events === 'full' } catch {}
-  return { awake: s.awake, keepingAwake: !!caf, power: await power(), before: s.before, banners: s.banners, access, lastError: s.lastError };
+  const now = Date.now();
+  return { awakeMode: s.awakeMode, awake: s.awakeMode !== 'off', awakeUntil: s.awakeMode === 'timer' ? s.awakeUntil : 0,
+    remainingMs: s.awakeMode === 'timer' ? Math.max(0, s.awakeUntil - now) : 0, awakeMaxH: s.awakeMaxH, work: d.work, capped: d.capped,
+    holding: why, keepingAwake: !!caf, power: await power(), before: s.before, banners: s.banners, access, lastError: s.lastError };
 }
 export async function configure(patch = {}) {
   const s = load(), next = {};
-  if (typeof patch.awake === 'boolean') next.awake = patch.awake;
+  if (typeof patch.awake === 'boolean') next.awakeMode = patch.awake ? 'always' : 'off';
+  if (MODES.includes(patch.awakeMode)) {
+    next.awakeMode = patch.awakeMode;
+    if (patch.awakeMode === 'timer') {
+      const min = Number(patch.minutes);
+      if (!(min >= 1 && min <= 24 * 60)) throw Object.assign(Error('minutes: 1 to 1440'), { status: 400 });
+      next.awakeUntil = Date.now() + Math.round(min) * 60e3;
+    } else next.awakeUntil = 0;
+  }
+  if (Number(patch.awakeMaxH) >= 1 && Number(patch.awakeMaxH) <= 24) next.awakeMaxH = Math.round(Number(patch.awakeMaxH));
   if (BEFORE.includes(patch.before)) next.before = patch.before;
   if (patch.banners && typeof patch.banners === 'object') {
     next.banners = { ...s.banners };
     for (const k of KINDS) if (typeof patch.banners[k] === 'boolean') next.banners[k] = patch.banners[k];
   }
-  const saved = save(next);
-  keepAwake(saved.awake);
+  save(next);
+  decide();
   return snapshot();
 }
 export function test() { return notice({ kind: 'test', title: 'bisu', body: '이렇게 알려 드려요.' }) }
@@ -186,7 +227,9 @@ export function test() { return notice({ kind: 'test', title: 'bisu', body: '이
 let timers = [];
 export function start() {
   if (timers.length) return;
-  keepAwake(load().awake);
+  decide();
+  // Not gated by the schedule lock: each engine holds or lets go of its own assertion.
+  const tick = setInterval(() => decide(), 15e3); tick.unref?.(); timers.push(tick);
   const every = (fn, ms) => { const t = setInterval(() => { if (holdsSchedule()) fn() }, ms); t.unref?.(); timers.push(t) };
   every(() => meetings().catch(() => {}), 60e3);
   every(cards, 15e3);

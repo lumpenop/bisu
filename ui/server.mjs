@@ -497,6 +497,7 @@ const server=http.createServer(async(req,res)=>{
      return json(res,202,jobs.snapshot())}
     if(action==='approve')return json(res,200,jobs.approve(jm[1]));
     if(action==='enable'||action==='disable')return json(res,200,jobs.setEnabled(jm[1],action==='enable'));
+    if(action==='awake'||action==='asleep')return json(res,200,jobs.setAwake(jm[1],action==='awake'));
     if(action==='delete')return json(res,200,jobs.remove(jm[1]));
     return json(res,400,{error:'unknown action'})
    }catch(e){return json(res,e.status||500,{error:e.message})}}
@@ -541,6 +542,12 @@ briefing.start();
 telegram.attach({newChat,say,decide,stop,getChat:id=>chats.get(id),accept:acceptSuggestion,answerGoal:(id,text)=>{const g=goals.answer(id,text);goalCardsDone(id);return g}});
 telegram.start();
 alerts.onNotice(n=>telegram.onNotice(n));
+// What counts as 「작업 중」 for keeping the Mac awake: a reply being written, background agents, a job, a goal session.
+alerts.setWork(()=>{const work=[];
+ for(const c of chats.values()){if(c.busy)work.push({kind:'turn',what:c.title||'대화'});for(const t of c.tasks?.values?.()||[])work.push({kind:'agent',what:t.description||t.agent||'백그라운드 작업'})}
+ const job=jobs.runningAwake();if(job)work.push({kind:'job',what:job.name});
+ const g=goals.snapshot().running;if(g)work.push({kind:'goal',what:'목표 진행'});
+ return {work,forced:job}});
 alerts.start();
 // A goal that needs the person, or got done, says so as a card: the panel, the banners and Telegram
 // all pick cards up from there. A question can be answered on the card, under 목표, or by replying on Telegram.

@@ -119,7 +119,7 @@ function parseJob(file) {
   const slug = path.basename(file, '.md');
   let st = null, text = '';
   try { st = fs.statSync(file); text = fs.readFileSync(file, 'utf8') } catch (e) { return { slug, file, error: e.message } }
-  const job = { slug, file, mtime: st.mtimeMs, hash: createHash('sha256').update(text).digest('hex'), name: slug, schedule: null, cron: null, at: null, cwd: os.homedir(), tools: 'read', enabled: true, model: null, timeoutMin: 10, prompt: '', error: null };
+  const job = { slug, file, mtime: st.mtimeMs, hash: createHash('sha256').update(text).digest('hex'), name: slug, schedule: null, cron: null, at: null, cwd: os.homedir(), tools: 'read', enabled: true, awake: false, model: null, timeoutMin: 10, prompt: '', error: null };
   try {
     const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
     if (!m) throw Error('the file needs a frontmatter block (--- … ---) and the request below it');
@@ -133,6 +133,7 @@ function parseJob(file) {
       else if (k === 'cwd' && v) job.cwd = expand(v);
       else if (k === 'tools') { if (!(v in TOOLS)) throw Error(`tools: "${v}" — use read, edit or full`); job.tools = v }
       else if (k === 'enabled') job.enabled = !/^(false|no|off|0)$/i.test(v);
+      else if (k === 'awake') job.awake = /^(true|yes|on|1)$/i.test(v);
       else if (k === 'model' && v) job.model = v;
       else if (k === 'timeout') { const n = Number(v); if (Number.isFinite(n)) job.timeoutMin = Math.min(60, Math.max(1, n)) }
     }
@@ -171,6 +172,7 @@ function fresh() {
   state = s && typeof s === 'object' ? s : {};
   if (!state.runs || typeof state.runs !== 'object') state.runs = {};
   if (!state.approved || typeof state.approved !== 'object') state.approved = {};
+  if (!state.awake || typeof state.awake !== 'object') state.awake = {};
 }
 fresh();
 function save() {
@@ -211,7 +213,7 @@ export function snapshot() {
     jobs: list().map(j => {
       const r = runOf(j.slug);
       return { slug: j.slug, name: j.name, schedule: j.schedule, once: !!j.at, cwd: j.cwd, tools: j.tools, enabled: j.enabled, model: j.model, error: j.error, needsApproval: needsApproval(j), prompt: j.prompt.slice(0, 600),
-        nextAt: nextAt(j, now), lastRun: r.lastRun || null, lastError: r.lastError, lastResult: r.lastResult, lastSession: r.lastSession, running: running?.slug === j.slug };
+        nextAt: nextAt(j, now), lastRun: r.lastRun || null, lastError: r.lastError, lastResult: r.lastResult, lastSession: r.lastSession, running: running?.slug === j.slug, awake: awakeOf(j) };
     }),
   };
 }
@@ -297,6 +299,23 @@ export function setEnabled(slug, on) {
   else text = text.replace(/^---\r?\n/, `---\n${line}\n`);
   fs.writeFileSync(job.file, text);
   return snapshot();
+}
+// 「실행 중엔 맥 깨어 있게」: kept in the state file, not the job file, so switching it does not change the
+// file and with it the approval. `awake: true` in the file's frontmatter turns it on too.
+function awakeOf(job) { return state.awake[job.slug] ?? !!job.awake }
+export function setAwake(slug, on) {
+  fresh();
+  const job = list().find(j => j.slug === slug);
+  if (!job) throw Object.assign(Error(`no job "${slug}"`), { status: 404 });
+  state.awake[job.slug] = !!on;
+  save();
+  return snapshot();
+}
+// The running job, and whether it asked to keep the Mac awake while it runs (ui/alerts.mjs asks).
+export function runningAwake() {
+  if (!running) return null;
+  const job = list().find(j => j.slug === running.slug);
+  return { slug: running.slug, name: job?.name || running.slug, awake: !!(job && awakeOf(job)) };
 }
 export function approve(slug) {
   fresh();
