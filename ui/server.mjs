@@ -258,7 +258,10 @@ function push(c,ev){ev.at=Date.now();c.events.push(ev);if(c.events.length>MAX_EV
 function setBusy(c,busy){if(c.busy===busy)return;c.busy=busy;push(c,{kind:'status',busy})}
 function warm(c){if(!c.proc&&canThink()){start(c);idleLater(c)}}
 // Chats run delegated work in the background (see background-agents.mjs), which is what keeps the assistant free to talk.
-const BACKGROUND_AGENTS=JSON.stringify({hooks:{PreToolUse:[{matcher:'Agent|Task',hooks:[{type:'command',command:`'${process.execPath}' '${path.join(here,'background-agents.mjs').replace(/'/g,"'\\''")}'`}]}]}});
+// A worker's report is read against its brief before bisu sees it (review-agent.mjs), and sent back once when something looks missing.
+const hookCmd=f=>`'${process.execPath}' '${path.join(here,f).replace(/'/g,"'\\''")}'`;
+const BACKGROUND_AGENTS=JSON.stringify({hooks:{PreToolUse:[{matcher:'Agent|Task',hooks:[{type:'command',command:hookCmd('background-agents.mjs')}]}],
+ SubagentStop:[{matcher:'developer|publisher|refactorer|researcher',hooks:[{type:'command',command:hookCmd('review-agent.mjs'),timeout:30}]}]}});
 function start(c){
  // A folder deleted or renamed since the chat was made: spawn would fail asynchronously, and before
  // this check that error took the whole engine down with every other chat.
@@ -298,7 +301,7 @@ const send=(c,obj)=>{c.proc?.stdin.write(JSON.stringify(obj)+'\n')};
 // while they run, so the person can keep talking; Claude Code wakes the assistant again when one finishes.
 function pushTasks(c){push(c,{kind:'tasks',tasks:[...c.tasks.values()]})}
 function tasksEvent(c,j){
- if(j.subtype==='task_started'){c.tasks.set(j.task_id,{id:j.task_id,type:j.task_type,agent:j.subagent_type||null,description:j.description||'',started:Date.now(),stoppable:!!c.native&&j.task_type==='local_agent'});pushTasks(c)}
+ if(j.subtype==='task_started'){c.tasks.set(j.task_id,{id:j.task_id,type:j.task_type,agent:j.subagent_type||null,description:j.description||'',started:Date.now(),stoppable:j.task_type==='local_agent'});pushTasks(c)}
  else if(j.subtype==='task_progress'){const t=c.tasks.get(j.task_id);if(t){t.step=j.description||'';pushTasks(c)}}
  else if(j.subtype==='task_notification'||(j.subtype==='task_updated'&&/completed|failed|killed|stopped/.test(j.patch?.status||''))){
   const t=c.tasks.get(j.task_id);if(!t)return;c.tasks.delete(j.task_id);if(t.type==='local_agent')push(c,{kind:'task_done',agent:t.agent,description:t.description,status:j.status||j.patch?.status});pushTasks(c)}
@@ -509,7 +512,8 @@ const server=http.createServer(async(req,res)=>{
   if(c&&m==='POST'&&cm[2]==='/send'){const {text}=await body(req);if(typeof text!=='string'||!text.trim())return json(res,400,{error:'empty'});say(c,text.trim());return json(res,200,{ok:true})}
   if(c&&m==='POST'&&cm[2]==='/approve'){decide(c,await body(req));return json(res,200,{ok:true})}
   if(c&&m==='POST'&&cm[2]==='/stop'){stop(c);return json(res,200,{ok:true})}
-  // One worker of bisu's own engine, stopped from the task bar; the rest of the chat goes on.
+  // One worker, stopped from the task bar; the rest of the chat goes on. Claude Code and bisu's own
+  // engine both take this control request.
   if(c&&m==='POST'&&cm[2]==='/stoptask'){const {task_id}=await body(req);if(!/^[0-9a-f]{8}$/.test(String(task_id||'')))return json(res,400,{error:'bad task'});
    send(c,{type:'control_request',request_id:randomUUID(),request:{subtype:'stop_task',task_id}});return json(res,200,{ok:true})}
   if(c&&m==='DELETE'&&!cm[2]){close(c);return json(res,200,{ok:true})}
@@ -540,6 +544,7 @@ alerts.start();
 // A goal that needs the person, or got done, says so as a card: the panel, the banners and Telegram
 // all pick cards up from there. A question can be answered on the card, under 목표, or by replying on Telegram.
 goals.setQuiet(()=>proactive.isQuiet());
+goals.setContext(proactiveContext);
 goals.onGoal((kind,g)=>{
  if(kind==='question'){goalCardsDone(g.id);proactive.push({id:randomUUID(),kind:'job',job:'goal',goal:g.id,ask:true,title:g.title,body:g.question.text,cwd:g.cwd})}
  else if(kind==='done')proactive.push({id:randomUUID(),kind:'job',job:'goal',goal:g.id,title:`${g.title} — 달성`,body:g.log[g.log.length-1]?.text||'',cwd:g.cwd})});

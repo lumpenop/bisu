@@ -956,7 +956,7 @@ function render(ev){
 // Background agents keep working after the assistant's turn ends; the bar shows who is on what, so the person
 // knows the conversation is free while it runs.
 let tasks=[];
-const AGENTS={developer:'개발 담당',publisher:'퍼블리싱 담당',refactorer:'리팩토링 담당',mac:'맥 담당'};
+const AGENTS={developer:'개발 담당',publisher:'퍼블리싱 담당',refactorer:'리팩토링 담당',researcher:'조사 담당',mac:'맥 담당'};
 const agentName=a=>AGENTS[a]||(a?a+' 담당':'담당');
 const elapsed=t=>{const s=Math.max(0,Math.round((Date.now()-t)/1000));return s<60?s+'s':Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s'};
 function renderTasks(){const box=$('tasks');if(!box)return;

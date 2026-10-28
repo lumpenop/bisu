@@ -12,6 +12,7 @@
 // Deliberate limits: a goal run reads (files in its folder, the web, the calendar), adds events and
 // reminders, and writes only into the goal itself (plan, notes, log). It never edits files, runs
 // commands or deletes anything, so it needs no approval; one run at a time; nothing in quiet hours.
+// It runs on whichever engine the chats use: Claude Code reaches the same tools through bisu's MCP server.
 //
 //   node goals.mjs                 # every goal with its state
 //   node goals.mjs run <id>        # one session now, printing what it did
@@ -28,8 +29,10 @@ export const DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir
 const TICK_MS = 60e3;
 const RUN_MIN = 15;
 // What a goal run may use: looking (files in its folder, the web, the calendar), adding events and
-// reminders, and its own goal.
+// reminders, and its own goal. bisu's own engine takes them by name; Claude Code gets the read tools
+// here and the rest from bisu's MCP server, which launch.zsh narrows to this list when BISU_GOAL_ID is set.
 export const RUN_TOOLS = 'Read,Glob,Grep,WebFetch,WebSearch,calendar_list,calendar_add,reminders_list,reminder_add,reminder_change,goal_update';
+const CLAUDE_TOOLS = 'Read,Glob,Grep,WebFetch';
 const STATUS = ['active', 'waiting', 'paused', 'done'];
 const clip = (s, n) => { s = String(s ?? '').trim(); return s.length > n ? s.slice(0, n) + '…' : s };
 const expand = p => path.resolve(String(p || '').replace(/^~(?=\/|$)/, os.homedir()) || os.homedir());
@@ -74,11 +77,24 @@ export function create({ title, detail = '', due = null, cwd = '', every = 6 } =
 
 // What a run (goal_update) may change. Called inside bisu's engine, so it only writes the file; the
 // engine that started the run sees the change when the run ends.
+const MARKS = { x: 'done', X: 'done', '~': 'doing', '!': 'blocked', ' ': 'todo', '': 'todo' };
+// The plan as a model sends it: an array of {text, status}, that array as a JSON string, or plain lines
+// ("1. [x] 항공권 비교 — 피치 21만 원"), which weaker tool callers manage more reliably.
+export function readSteps(steps) {
+  if (typeof steps === 'string') {
+    const t = steps.trim();
+    if (t.startsWith('[')) { try { return readSteps(JSON.parse(t)) } catch {} }
+    return t.split('\n').map(l => /^\s*(?:[-*]|\d+[.)])?\s*(?:\[(.?)\]\s*)?(.+?)\s*$/.exec(l)).filter(m => m && m[2])
+      .map(m => { const [text, note] = m[2].split(/\s+[—–]\s+/); return { text, status: MARKS[m[1] ?? ''] || 'todo', ...(note ? { note } : {}) } });
+  }
+  return Array.isArray(steps) ? steps : null;
+}
 export function applyUpdate(id, { steps, log, notes, question, done, next_hours } = {}) {
   const g = read(id);
   if (!g) throw Error(`no goal ${id}`);
   const did = [];
-  if (Array.isArray(steps)) {
+  steps = readSteps(steps);
+  if (Array.isArray(steps) && steps.length) {
     g.steps = steps.slice(0, 12).map(s => ({ text: clip(s?.text ?? s, 200), status: ['todo', 'doing', 'done', 'blocked'].includes(s?.status) ? s.status : 'todo', ...(s?.note ? { note: clip(s.note, 300) } : {}) })).filter(s => s.text);
     did.push(`plan: ${g.steps.filter(s => s.status === 'done').length}/${g.steps.length} done`);
   }
@@ -86,7 +102,9 @@ export function applyUpdate(id, { steps, log, notes, question, done, next_hours 
   if (typeof notes === 'string') { g.notes = clip(notes, 8000); did.push('notes') }
   if (question) { g.question = { text: clip(question, 500), at: Date.now() }; g.status = 'waiting'; did.push('question (the goal now waits for them)') }
   if (done) { g.status = 'done'; g.doneAt = Date.now(); g.question = null; did.push('done') }
-  if (Number.isFinite(next_hours)) { g.nextAt = Date.now() + Math.min(72, Math.max(1, next_hours)) * 3600e3; did.push(`next session in ${Math.min(72, Math.max(1, next_hours))}h`) }
+  next_hours = Number(next_hours);
+  if (!did.length && !(Number.isFinite(next_hours) && next_hours > 0)) throw Error('Nothing was saved: id alone changes nothing. Send the fields to save, for example {"id": "' + id + '", "steps": "1. [x] 항공권 비교\\n2. [ ] 숙소 후보 3곳", "log": "항공권 3개 비교함", "notes": "- 피치 21만 원 (출처 …)"} — and "question" when you need the person, "done": true when it is reached.');
+  if (Number.isFinite(next_hours) && next_hours > 0) { g.nextAt = Date.now() + Math.min(72, Math.max(1, next_hours)) * 3600e3; did.push(`next session in ${Math.min(72, Math.max(1, next_hours))}h`) }
   g.updatedAt = Date.now();
   write(g);
   return did;
@@ -141,13 +159,17 @@ const listeners = new Set();
 export function onGoal(fn) { listeners.add(fn) }
 const tell = (kind, g) => { for (const fn of listeners) { try { fn(kind, g) } catch {} } };
 export function setQuiet(fn) { if (typeof fn === 'function') quietFn = fn }
+// The models the person chose for each role, as jobs get them.
+let contextFn = async () => ({});
+export function setContext(fn) { if (typeof fn === 'function') contextFn = fn }
 
-function runEngine(g) {
+function runEngine(g, models) {
   return new Promise((resolve, reject) => {
-    const args = ['-f', path.join(root, 'launch.zsh'), 'z-ai/glm-5.3', 'qwen/qwen3.8-max-0902', 'deepseek/deepseek-v4.1-flash', path.join(root, 'agents.json'),
+    const args = ['-f', path.join(root, 'launch.zsh'), models?.main || 'z-ai/glm-5.3', models?.code || 'qwen/qwen3.8-max-0902', models?.dev || 'deepseek/deepseek-v4.1-flash', path.join(root, 'agents.json'),
       '-p', brief(g), '--output-format', 'json'];
-    // Always bisu's own engine: goal_update is its tool, whatever engine the chats use.
-    const env = { ...process.env, BISU_ENGINE: 'native', BISU_PROMPT: path.join(root, 'prompt-goal.md'), BISU_TOOLS: RUN_TOOLS, BISU_CU: '0', BISU_GOAL_ID: g.id };
+    // The engine the chats use (Settings → 엔진): both have the goal tools.
+    const native = process.env.BISU_ENGINE === 'native';
+    const env = { ...process.env, BISU_PROMPT: path.join(root, 'prompt-goal.md'), BISU_TOOLS: native ? RUN_TOOLS : CLAUDE_TOOLS, BISU_CU: '0', BISU_GOAL_ID: g.id };
     const proc = spawn('zsh', args, { cwd: g.cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
     child = proc;
     let out = '', err = '';
@@ -175,7 +197,8 @@ export async function run(id, { force = false } = {}) {
   running = { id, at: Date.now() };
   const t0 = Date.now(), hadQuestion = g0.question?.at || 0;
   try {
-    const r = await runEngine(g0).catch(e => ({ error: e }));
+    const ctx = await contextFn().catch(() => ({}));
+    const r = await runEngine(g0, ctx.models).catch(e => ({ error: e }));
     const g = read(id) || g0;
     g.lastRun = Date.now(); g.lastSession = r.session || r.error?.session || g.lastSession;
     if (r.error) g.lastError = clip(r.error.message, 300);

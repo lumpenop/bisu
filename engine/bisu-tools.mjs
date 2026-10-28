@@ -119,10 +119,10 @@ export const BISU_TOOLS = {
     },
   },
   goal_update: {
-    description: 'Write down this session\'s work on the goal: the whole plan with each step\'s status (send all steps every time), one log line of what you did now, the notes (send the whole text; it replaces the old notes), a question when only the person can unblock it, done when the goal is reached, and next_hours to look again sooner or later than usual.',
+    description: 'Write down this session\'s work on the goal — id alone saves nothing. steps: the whole plan every time, one step per line with its state ("1. [x] 항공권 비교 — 피치 21만 원" / "[ ]" to do, "[~]" doing, "[!]" blocked), or an array of {text, status}. log: one line of what you did now. notes: the whole notes text (replaces the old). question: when only the person can unblock it. done: true when reached. next_hours: to look again sooner or later.',
     parameters: {type: 'object', properties: {
       id: {type: 'string'},
-      steps: {type: 'array', items: {type: 'object', properties: {text: {type: 'string'}, status: {type: 'string', enum: ['todo', 'doing', 'done', 'blocked']}, note: {type: 'string'}}, required: ['text', 'status']}},
+      steps: {type: 'string', description: 'the whole plan, one step per line: "1. [x] text — note"'},
       log: {type: 'string', description: 'one or two lines: what you did in this session'},
       notes: {type: 'string', description: 'what you found and keep for later: options, links, numbers, drafts'},
       question: {type: 'string', description: 'one question for the person; the goal waits until they answer'},

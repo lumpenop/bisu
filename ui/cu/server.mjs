@@ -15,6 +15,8 @@ import path from 'node:path';
 import {spawn, execFile} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import * as sessions from '../sessions.mjs';
+import {CALENDAR_TOOLS} from '../../engine/calendar.mjs';
+import {BISU_TOOLS} from '../../engine/bisu-tools.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SUPPORT = path.join(os.homedir(), 'Library', 'Application Support', 'bisu');
@@ -568,7 +570,20 @@ const cuDefinitions = [
     inputSchema: {type: 'object', properties: {}},
   },
 ];
-const definitions = process.env.BISU_CU === '0' ? sessionDefinitions : [...sessionDefinitions, ...cuDefinitions];
+// ---- the assistant's own tools: calendar and reminders, web search, goals ----
+// The same tools bisu's own engine has (engine/calendar.mjs, engine/bisu-tools.mjs), so a Claude Code
+// chat can do what a native one does. Short ids (e1, r2) live in this process, which lasts as long as
+// the chat. calendar_delete is not pre-allowed by launch.zsh: it goes through the approval card.
+const ASSISTANT = {...CALENDAR_TOOLS, web_search: BISU_TOOLS.web_search, goal_add: BISU_TOOLS.goal_add, goal_list: BISU_TOOLS.goal_list, goal_update: BISU_TOOLS.goal_update};
+const failed = new WeakSet();
+for (const [name, t] of Object.entries(ASSISTANT)) tools[name] = async args => {
+  const r = await t.run({cwd: process.cwd()}, args);
+  const out = new String(r?.text ?? '');
+  if (r?.error) failed.add(out);
+  return out;
+};
+const assistantDefinitions = Object.entries(ASSISTANT).map(([name, t]) => ({name, description: t.description, inputSchema: t.parameters}));
+const definitions = [...sessionDefinitions, ...assistantDefinitions, ...(process.env.BISU_CU === '0' ? [] : cuDefinitions)];
 const allowed = new Set(definitions.map(d => d.name));
 
 // ---- MCP plumbing ----
@@ -581,7 +596,7 @@ async function callTool(name, args) {
   const fn = allowed.has(name) ? tools[name] : null;
   if (!fn) throw Object.assign(Error(`unknown tool ${name}`), {code: -32602});
   const text = await fn(args || {});
-  return {content: [{type: 'text', text: String(text)}], isError: /^(click failed|typing failed|key failed|scroll failed|screenshot failed|could not|no decision|that element id|no element|\[.*\] has no clickable)/.test(String(text))};
+  return {content: [{type: 'text', text: String(text)}], isError: failed.has(text) || /^(click failed|typing failed|key failed|scroll failed|screenshot failed|could not|no decision|that element id|no element|\[.*\] has no clickable)/.test(String(text))};
 }
 
 async function handle(msg) {

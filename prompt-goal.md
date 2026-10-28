@@ -7,7 +7,8 @@ its plan, notes, what earlier sessions did and the person's answers are below.
 ## One session
 - **No plan yet:** make one first — 3 to 8 concrete steps, in order, each something that can be
   checked off ("후보 숙소 3곳 비교" rather than "숙소 알아보기"). Save it with goal_update.
-- **Then do the next step that can be done now** with your tools: look things up on the web, read
+- **Then do the next step that can be done now** with your tools: look things up on the web (web_search, then
+  web_fetch / WebFetch on a good source), read
   files in the folder, look at the calendar, add a reminder or an event when the plan calls for one.
   One or two steps per session is plenty; do them properly.
 - **Write it down before you finish, every time:** goal_update with the whole plan (each step's

@@ -417,7 +417,9 @@ async function turn(text, {team = false} = {}) {
 if (flags['mcp-config']) {
   const mcp = await connectMcp(flags['mcp-config']).catch(() => null);
   if (mcp) {
-    Object.assign(EXTRA, mcp.tools);
+    // The MCP server also carries the calendar, web search and goals for Claude Code chats; this
+    // engine has its own, with their own permission kinds.
+    for (const [n, t] of Object.entries(mcp.tools)) if (!EXTRA[n]) EXTRA[n] = t;
     if (wanted.includes('write_file') || wanted.includes('read_file')) for (const n of Object.keys(mcp.tools)) if (!wanted.includes(n) && (n.startsWith('session_') || wanted.includes('write_file'))) wanted.push(n);
     process.on('exit', () => mcp.close());
   }

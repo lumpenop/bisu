@@ -15,7 +15,9 @@ agents="$(<"$4")"
 shift 4
 # Tools: Claude Code's core set only. The full default set (plus any MCP servers from your Claude config, which bisu can't
 # use anyway) is ~25k tokens of tool definitions sent with every request; the core set is ~6k. BISU_TOOLS=default restores it.
-tools="${BISU_TOOLS:-Bash,Read,Edit,Write,Glob,Grep,Task,WebFetch,WebSearch,NotebookEdit}"
+# SendMessage, TaskStop and TaskOutput are the team: send a worker back with feedback (it carries on with
+# everything it did), stop one, read where one is.
+tools="${BISU_TOOLS:-Bash,Read,Edit,Write,Glob,Grep,Task,WebFetch,WebSearch,NotebookEdit,SendMessage,TaskStop,TaskOutput}"
 extra=()
 [ -n "$BISU_EFFORT" ] && extra+=(--effort "$BISU_EFFORT")
 
@@ -63,7 +65,10 @@ if [ -f "$root/ui/cu/server.mjs" ] && command -v node >/dev/null 2>&1; then
 JSON
   mv -f "$mcp.$$.tmp" "$mcp"
   extra+=(--mcp-config "$mcp" --strict-mcp-config)
-  allowed="mcp__bisu__session_search,mcp__bisu__session_show"
+  # The calendar, web search and goals too, except deleting from the calendar, which asks.
+  allowed="mcp__bisu__session_search,mcp__bisu__session_show,mcp__bisu__web_search,mcp__bisu__calendar_list,mcp__bisu__calendar_add,mcp__bisu__calendar_change,mcp__bisu__reminders_list,mcp__bisu__reminder_add,mcp__bisu__reminder_change,mcp__bisu__goal_add,mcp__bisu__goal_list,mcp__bisu__goal_update"
+  # A goal session (ui/goals.mjs) may only look, add events and reminders, and write its own goal.
+  [ -n "$BISU_GOAL_ID" ] && allowed="mcp__bisu__session_search,mcp__bisu__session_show,mcp__bisu__web_search,mcp__bisu__calendar_list,mcp__bisu__calendar_add,mcp__bisu__reminders_list,mcp__bisu__reminder_add,mcp__bisu__reminder_change,mcp__bisu__goal_update"
   [ "${BISU_CU:-1}" != "0" ] && allowed+=",mcp__bisu__cu_look,mcp__bisu__cu_state,mcp__bisu__cu_decide,mcp__bisu__cu_click,mcp__bisu__cu_type,mcp__bisu__cu_key,mcp__bisu__cu_scroll,mcp__bisu__cu_wait,mcp__bisu__cu_screenshot,mcp__bisu__cu_ground"
   extra+=(--allowedTools "$allowed")
 fi
