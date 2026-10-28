@@ -466,6 +466,11 @@ input.switch:focus-visible{outline:none;box-shadow:var(--glow)}
 .ccFoot button{border:0;background:none;box-shadow:none;padding:5px 10px;font-size:12.5px;font-weight:600;color:var(--muted)}
 .ccFoot button:hover:not(:disabled){transform:none;color:var(--ink);background:var(--chip)}
 #panelStart.onboarding .ccStatus,#panelStart.onboarding .cc,#panelStart.onboarding .ccFoot{display:none}
+/* keeping the Mac awake: a mode, and its time when it has one */
+.awakeRow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.awakeRow>span{display:inline-flex;gap:8px;align-items:center}
+#alMinCustom{width:5.5em}
+.mem .awk{margin-top:6px;font-size:12.5px}
 </style>
 </head>
 <body>
@@ -516,7 +521,7 @@ input.switch:focus-visible{outline:none;box-shadow:var(--glow)}
    <div class="cc" id="ccSwitches" hidden>
     <label class="ccRow" id="ccSelRow"><span>선택한 텍스트 읽기</span><input type="checkbox" class="switch" id="ccSel"></label>
     <label class="ccRow"><span>먼저 찾아오기</span><input type="checkbox" class="switch" id="ccSug"></label>
-    <label class="ccRow"><span>맥 깨어 있게 <span class="hn">전원 연결 중</span></span><input type="checkbox" class="switch" id="ccAwake"></label>
+    <label class="ccRow"><span>맥 깨어 있게 <span class="hn" id="ccAwakeNote"></span></span><input type="checkbox" class="switch" id="ccAwake"></label>
    </div>
    <div id="recent"></div>
    <div class="ccFoot" id="ccFoot" hidden><button type="button" id="ccFull">전체 창</button><button type="button" id="ccSettings">설정</button><button type="button" id="ccQuit">종료</button></div>
@@ -678,7 +683,12 @@ input.switch:focus-visible{outline:none;box-shadow:var(--glow)}
  <section id="alertSec">
   <h2>알림 · 깨어 있기</h2>
   <div class="kv">
-   <div class="k">맥 깨어 있게</div><div class="checks"><label class="sw"><input type="checkbox" id="alAwake"> 전원이 연결되어 있으면 잠들지 않게</label><span class="note" id="alPower" style="margin:0"></span></div>
+   <div class="k">맥 깨어 있게</div><div class="checks">
+    <div class="awakeRow"><select id="alMode"><option value="tasks">작업이 끝날 때까지 (추천)</option><option value="timer">시간 지정</option><option value="always">계속 켜 둠</option><option value="off">끄기</option></select>
+     <span id="alTimerBox" hidden><select id="alMin"><option value="30">30분</option><option value="60" selected>1시간</option><option value="120">2시간</option><option value="240">4시간</option><option value="custom">직접 입력</option></select>
+      <input type="number" id="alMinCustom" min="1" max="1440" placeholder="분" hidden> <button type="button" id="alTimerGo">시작</button></span>
+     <span id="alMaxBox" hidden><span class="note" style="display:inline;margin:0">최대</span> <select id="alMax"><option value="2">2시간</option><option value="4">4시간</option><option value="8">8시간</option><option value="12">12시간</option></select></span></div>
+    <span class="note" id="alPower" style="margin:0"></span></div>
    <div class="k">일정 전 알림</div><div><select id="alBefore"><option value="0">끄기</option><option value="5">5분 전</option><option value="10">10분 전</option><option value="15">15분 전</option><option value="30">30분 전</option></select> <span class="note" id="alAccess" style="display:inline;margin:0"></span></div>
    <div class="k">맥 알림</div><div class="checks">
     <div id="alPerm">…</div>
@@ -1465,8 +1475,20 @@ $('goalForm').addEventListener('submit',async e=>{e.preventDefault();const t=$('
 let alSnap=null;
 const AL_B={alBApprovals:'approvals',alBReplies:'replies',alBCards:'cards',alBEvents:'events'};
 async function loadAlerts(){renderPerm();try{alSnap=await api('/api/alerts');renderAlerts()}catch(e){$('alNote').textContent=e.message}}
-function renderAlerts(){const a=alSnap;if(!a)return;$('alAwake').checked=a.awake;
- $('alPower').textContent=!a.awake?'':a.power==='battery'?'지금은 배터리라 평소처럼 잠들어요':a.keepingAwake&&a.power==='ac'?'지금 전원 연결됨 · 잠들지 않아요':'';
+// One line for what keeping awake is doing right now, shared by the connect screen and the panel.
+const hm2=ms=>{const m=Math.ceil(ms/60e3);return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`};
+function awakeText(a){if(!a)return '';const bat=a.power==='battery'&&a.holding?' · 지금은 배터리라 잠들 수 있어요':'';
+ if(a.awakeMode==='off')return a.holding==='job'?'깨어 있음 · 예약 작업이 끝나면 꺼짐':'꺼짐';
+ if(a.awakeMode==='always')return '계속 깨어 있음'+bat;
+ if(a.awakeMode==='timer')return `깨어 있음 · ${hm2(a.remainingMs)} 남음`+bat;
+ if(a.capped)return `최대 ${a.awakeMaxH}시간이 지나 쉬는 중 · 작업이 다 끝나면 다시 지켜요`;
+ return a.holding?`깨어 있음 · 작업 ${a.work.length}개 끝나면 꺼짐`+bat:'작업이 생기면 깨어 있어요'}
+let alPick=null; // 「시간 지정」 chosen but not started yet
+function renderAlerts(){const a=alSnap;if(!a)return;
+ $('alMode').value=alPick||a.awakeMode;
+ $('alTimerBox').hidden=$('alMode').value!=='timer';$('alMaxBox').hidden=a.awakeMode!=='tasks';$('alMax').value=String(a.awakeMaxH);
+ $('alMinCustom').hidden=$('alMin').value!=='custom';
+ $('alPower').textContent=awakeText(a);
  $('alBefore').value=String(a.before);
  $('alAccess').textContent=a.before&&a.access===false?'캘린더 접근을 허용해야 알려 줄 수 있어요':'';
  for(const [id,k] of Object.entries(AL_B))$(id).checked=a.banners[k]}
@@ -1480,7 +1502,14 @@ async function renderPerm(){const box=$('alPerm'),btn=$('alPermBtn');
 $('alPermBtn').onclick=async()=>{if($('alPermBtn').dataset.st==='denied'){askSettings('맥 알림','bisu 알림이 꺼져 있어요. 시스템 설정에서 켜야 떠요. 설정하러 가시겠어요?','notifications',renderPerm);return}
  try{await HOST.requestNotifications()}catch{}renderPerm()};
 const alSave=async b=>{$('alNote').textContent='';try{alSnap=await post('/api/alerts',b);renderAlerts()}catch(e){$('alNote').textContent=e.message}};
-$('alAwake').addEventListener('change',()=>alSave({awake:$('alAwake').checked}));
+// Choosing 「시간 지정」 waits for a duration; the others take effect at once.
+$('alMode').addEventListener('change',()=>{const v=$('alMode').value;alPick=v==='timer'?'timer':null;if(v==='timer'){renderAlerts();return}alSave({awakeMode:v})});
+$('alMin').addEventListener('change',()=>{$('alMinCustom').hidden=$('alMin').value!=='custom';if($('alMin').value==='custom')$('alMinCustom').focus()});
+$('alTimerGo').onclick=()=>{const v=$('alMin').value==='custom'?Number($('alMinCustom').value):Number($('alMin').value);
+ if(!(v>=1&&v<=1440)){$('alNote').textContent='1분에서 1440분(하루) 사이로 정해 주세요.';return}alPick=null;alSave({awakeMode:'timer',minutes:v})};
+$('alMax').addEventListener('change',()=>alSave({awakeMaxH:Number($('alMax').value)}));
+// The remaining time ticks down while the screen or the panel shows it.
+setInterval(()=>{if(alSnap?.awakeMode!=='timer'&&!alSnap?.holding)return;if(viewOn('connect')||PANEL)api('/api/alerts').then(a=>{alSnap=a;renderAlerts();renderCC()}).catch(()=>{})},30e3);
 $('alBefore').addEventListener('change',()=>alSave({before:Number($('alBefore').value)}));
 for(const [id,k] of Object.entries(AL_B))$(id).addEventListener('change',()=>alSave({banners:{[k]:$(id).checked}}));
 $('alTest').onclick=async()=>{$('alNote').textContent='';try{await post('/api/alerts/test');$('alNote').textContent=HOST?.notifications?'보냈어요. 몇 초 안에 떠요.':'보냈어요. 맥 알림은 bisu 앱에서만 떠요.'}catch(e){$('alNote').textContent=e.message}};
@@ -1531,7 +1560,10 @@ function renderJobs(){const s=jobsSnap;if(!s)return;const el=$('jobList');
  el.innerHTML=s.jobs.map(j=>`<div class="mem" data-slug="${esc(j.slug)}"><div class="h"><b>${esc(j.name)}</b><span class="chip">${esc(j.schedule)}${j.once?' · 한 번':''}</span><span class="chip">${j.tools}</span>${j.enabled?'':'<span class="chip">꺼짐</span>'}
    <span class="sp"></span>${j.needsApproval?`<button class="primary" data-a="approve">승인</button>`:`<button data-a="run" ${j.error||s.running?'disabled':''}>${j.running?'실행 중…':'지금 실행'}</button>`}<button data-a="${j.enabled?'disable':'enable'}">${j.enabled?'끄기':'켜기'}</button><button class="danger" data-a="delete">삭제</button></div>
    ${j.needsApproval?`<div class="b note warnbox">이 작업은 ${j.tools==='full'?'명령 실행까지':'파일 수정까지'} 할 수 있어서, 이 내용 그대로일 때만 돌아요. 확인하고 승인해 주세요. 파일이 바뀌면 다시 승인해야 해요.<pre>${esc(j.prompt)}</pre></div>`:''}
+   <label class="sw awk"><input type="checkbox" data-awake ${j.awake?'checked':''}> 실행 중엔 맥 깨어 있게</label>
    <div class="b note" style="margin-top:4px">${j.error?`<span class="err">${esc(j.error)}</span>`:j.needsApproval?'승인 전에는 돌지 않아요':`다음: ${j.nextAt?whenShort(j.nextAt):'없음'}`} · ${esc(short(j.cwd))}${j.lastRun?` · 마지막 ${ago(j.lastRun)}: ${j.lastError?`<span class="err">실패 — ${esc(j.lastError)}</span>`:esc(j.lastResult||'ok')}`:''}</div></div>`).join('');
+ for(const c of el.querySelectorAll('[data-awake]'))c.onchange=async()=>{const slug=c.closest('[data-slug]').dataset.slug;
+  try{jobsSnap=await post(`/api/jobs/${encodeURIComponent(slug)}`,{action:c.checked?'awake':'asleep'});renderJobs()}catch(e){c.checked=!c.checked;$('jobNote').textContent=e.message}};
  for(const b of el.querySelectorAll('button[data-a]'))b.onclick=async()=>{const slug=b.closest('[data-slug]').dataset.slug,a=b.dataset.a;
   if(a==='delete'&&!confirm(`"${slug}" 작업 파일을 지울까요?`))return;
   b.disabled=true;$('jobNote').textContent='';
@@ -1604,7 +1636,7 @@ function heroes(){renderCC();const set=(id,h)=>{const el=$(id);if(el&&h!=null)el
  if(runCache.length||viewOn('history')){const n=runCache.filter(r=>!r.kind||r.kind==='chat').length;set('historySum',n?`최근 60일 대화 <b>${n}</b>개`:'아직 나눈 대화가 없어요')}
  if(mem)set('memorySum',`기억 <b>${mem.entries.length}</b>개 · ${mem.used.toLocaleString()} / ${mem.budget.toLocaleString()}자 전달${mem.cut?.length?` · <span class="w">${mem.cut.length}개는 제목만</span>`:''}`);
  if(tgSnap||calSnap||alSnap){const cal=calSnap&&!calSnap.missing&&!calSnap.error?(calSnap.events==='full'&&calSnap.reminders==='full'?'캘린더 허용됨':'<span class="w">캘린더 허용 필요</span>'):null;
-  set('connectSum',[tgSnap?(tgSnap.paired?'텔레그램 <b>연결됨</b>':'텔레그램 연결 안 됨'):null,cal,alSnap?(alSnap.awake?'맥 깨어 있게 켜짐':'맥 깨어 있게 꺼짐'):null].filter(Boolean).join(' · '))}
+  set('connectSum',[tgSnap?(tgSnap.paired?'텔레그램 <b>연결됨</b>':'텔레그램 연결 안 됨'):null,cal,alSnap?'맥 깨어 있게 '+({tasks:'작업 중에만',timer:'시간 지정',always:'계속',off:'꺼짐'}[alSnap.awakeMode]||''):null].filter(Boolean).join(' · '))}
  if(prefs?.engine){const native=prefs.engine==='native',today=native?natSnap?.spend?.today:acctSnap?.key?.usage_daily;
   set('settingsSum',`엔진 <b>${native?'bisu 자체 · GLM':'Claude Code'}</b>${today!=null?` · 오늘 ${usd(today)}`:''}`)}}
 // Every renderer refreshes the top lines when it is done.
@@ -1640,13 +1672,19 @@ async function renderCC(){if(!PANEL)return;
  if(!HOST){$('ccSwitches').hidden=$('ccFoot').hidden=true;return}
  $('ccSwitches').hidden=$('ccFoot').hidden=false;
  try{$('ccSel').checked=await HOST.selectionEnabled()}catch{}
- if(sug)$('ccSug').checked=!!sug.enabled;if(alSnap)$('ccAwake').checked=!!alSnap.awake}
+ if(sug)$('ccSug').checked=!!sug.enabled;if(alSnap){$('ccAwake').checked=alSnap.awakeMode!=='off';$('ccAwakeNote').textContent=alSnap.awakeMode==='off'&&alSnap.holding!=='job'?'':awakeText(alSnap)}
+ const t=alSnap&&alSnap.holding?awakeText(alSnap).split(' · ').slice(0,2).join(' · '):null;if(t)$('ccStatus').innerHTML+=` · ${esc(t)}`}
 $('ccSel').onchange=async()=>{const on=$('ccSel').checked;
  if(on&&HOST?.accessibility){let ok=true;try{ok=(await HOST.accessibility()).trusted}catch{}
   if(!ok){$('ccSel').checked=false;askSettings('손쉬운 사용 권한','선택한 글을 읽으려면 손쉬운 사용 권한이 필요해요. 설정하러 가시겠어요?','accessibility',renderCC);return}}
  try{$('ccSel').checked=await HOST.setSelectionEnabled(on)}catch{}};
 $('ccSug').onchange=async()=>{try{sug=await post('/api/proactive',{enabled:$('ccSug').checked});renderSug()}catch{$('ccSug').checked=!$('ccSug').checked}};
-$('ccAwake').onchange=async()=>{try{alSnap=await post('/api/alerts',{awake:$('ccAwake').checked})}catch{$('ccAwake').checked=!$('ccAwake').checked}};
+// The switch opens a small menu of ways rather than flipping: off is one of them.
+const AWAKE_MENU=[{label:'작업이 끝날 때까지',hint:'추천',b:{awakeMode:'tasks'}},{label:'30분',b:{awakeMode:'timer',minutes:30}},{label:'1시간',b:{awakeMode:'timer',minutes:60}},
+ {label:'2시간',b:{awakeMode:'timer',minutes:120}},{label:'4시간',b:{awakeMode:'timer',minutes:240}},{label:'계속 켜 둠',b:{awakeMode:'always'}},{label:'끄기',b:{awakeMode:'off'}}];
+$('ccAwake').addEventListener('click',e=>{e.preventDefault();const a=alSnap||{};
+ const sel=AWAKE_MENU.findIndex(x=>x.b.awakeMode===a.awakeMode&&(a.awakeMode!=='timer'));
+ menu.open($('ccAwake'),AWAKE_MENU.map(x=>({label:x.label,hint:x.hint||'',b:x.b})),{selected:sel,pick:async it=>{try{alSnap=await post('/api/alerts',it.b);renderCC()}catch{}}})});
 $('ccFull').onclick=()=>HOST?.openFull?.();
 $('ccSettings').onclick=()=>HOST?.openFull?.('settings');
 $('ccQuit').onclick=()=>{if(confirm('bisu를 끌까요? 끄면 텔레그램과 예약 작업에도 답하지 못해요.'))HOST?.quit?.()};
