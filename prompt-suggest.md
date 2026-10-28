@@ -35,6 +35,7 @@ Only JSON, with nothing before or after it:
 
 - 0 or 1 suggestion. Two only when they are about different projects.
 - Korean, the same voice as a short answer: no preamble, no "~해 보시겠어요?" padding.
+- Everyday words, said the way you would tell a friend who is not a developer: "README에 적힌 설치 주소가 비어 있어서, 그대로 따라 하면 설치가 안 돼요", not "README 설치 명령이 빈 자리표시자". No jargon (자리표시자, 플레이스홀더, 리팩터, 엔드포인트) unless they used it themselves; name the file, and say what goes wrong for someone because of it.
 - `title` and `body` are for the person to decide with; `action` is the request they would send if they
   say yes — concrete ("README에 설치 절차를 추가해줘"), not ("README를 개선해줘").
 - `cwd` is where that work belongs, and it must be a real folder you saw in the context. Leave it out

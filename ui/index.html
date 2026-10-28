@@ -5,8 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>bisu</title>
 <style>
-:root{--bg:#f7f7f5;--card:#fff;--ink:#1b1b1a;--muted:#6b6b66;--line:#e6e5e0;--accent:#2f6f4f;--accent-ink:#fff;--accent-soft:#e7f1eb;--warn:#a1520f;--warn-soft:#fbf0e4;--bad:#b3261e;--chip:#efeee9;--me:#e9eef7}
-@media (prefers-color-scheme:dark){:root{--bg:#141413;--card:#1d1d1b;--ink:#ecebe6;--muted:#9a998f;--line:#2e2d2a;--accent:#6fbf8f;--accent-ink:#0f1a13;--accent-soft:#1f2c24;--warn:#e0a060;--warn-soft:#2e2418;--bad:#f2867d;--chip:#2a2926;--me:#232a36}}
+/* Warm ivory and deep charcoal around bisu's own glossy jade, with a blush of pink for the cute bits. */
+:root{--bg:#f6f3ec;--bg2:#efeadf;--card:#fffdf8;--ink:#1d1b16;--muted:#716b60;--line:#e6dfd1;--accent:#2b8a5f;--accent-ink:#fff;--accent-soft:#e2f1e8;--g1:#5cc496;--g2:#2b8a5f;--blush:#e88aa0;--blush-soft:#fbe5ea;--blush-ink:#b0485f;--warn:#b0611c;--warn-soft:#fbefe1;--bad:#c0362c;--chip:#f0eadf;--me:#e3f1e9;
+ --r:12px;--rc:18px;--sh:0 1px 2px rgba(40,32,10,.05),0 12px 30px -18px rgba(40,50,30,.32);--hi:inset 0 1px 0 rgba(255,255,255,.75);--chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%23716b60' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+@media (prefers-color-scheme:dark){:root{--bg:#121311;--bg2:#161814;--card:#1c1e1b;--ink:#f1eee6;--muted:#a29e93;--line:#2c2f2a;--accent:#6fd3a0;--accent-ink:#06150d;--accent-soft:#1c2c23;--g1:#86e3b3;--g2:#3fa676;--blush:#f2a2b3;--blush-soft:#36222a;--blush-ink:#f6b6c3;--warn:#e8a35f;--warn-soft:#2d2318;--bad:#f2867d;--chip:#242720;--me:#1f2f26;
+ --sh:0 1px 2px rgba(0,0,0,.35),0 16px 36px -20px rgba(0,0,0,.8);--hi:inset 0 1px 0 rgba(255,255,255,.06);--chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%23a29e93' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%}
@@ -22,12 +25,14 @@ nav button.on{background:var(--chip);color:var(--ink);font-weight:600}
 .view{flex:1;min-height:0;display:none}.view.on{display:flex}
 .page{flex:1;overflow:auto}.page>div{max-width:1080px;margin:0 auto;padding:20px 16px 48px}
 h2{font-size:12px;letter-spacing:.02em;color:var(--muted);margin:0 0 12px;font-weight:600}
-section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
-button{font:inherit;padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+section{background:var(--card);border:1px solid var(--line);border-radius:var(--rc);padding:18px;margin-bottom:16px}
+button{font:inherit;font-size:13px;padding:6px 12px;border-radius:var(--r);border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
 button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
 button.danger{color:var(--bad)}
 button:disabled{opacity:.5;cursor:default}
-input[type=text],textarea{width:100%;font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+input[type=number]{font:inherit;font-size:13px;width:4.2em;padding:5px 6px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink)}
+input[type=text],textarea{width:100%;font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink)}
+select{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink)}
 input.mono{font-size:13px}
 input:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
 .note{font-size:12px;color:var(--muted);margin:10px 0 0}
@@ -69,7 +74,7 @@ aside{width:260px;border-right:1px solid var(--line);display:flex;flex-direction
 .tool .n{font-weight:600}.tool .a{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
 .tool .st{font-size:11px;color:var(--muted)}.tool .st.e{color:var(--bad)}
 .tool pre{margin:0;padding:8px 10px;border-top:1px solid var(--line);max-height:280px;overflow:auto;white-space:pre-wrap;word-break:break-word}
-.ask{border:1px solid var(--warn);background:var(--warn-soft);border-radius:8px;padding:10px 12px}
+.ask{border:1px solid var(--warn);background:var(--warn-soft);border-radius:var(--rc);padding:12px 14px}
 .ask .q{font-weight:600;margin-bottom:6px}
 .ask pre{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px;margin:0 0 8px;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word}
 .ask .btns{display:flex;gap:8px;flex-wrap:wrap}
@@ -111,23 +116,22 @@ td .p{color:var(--muted);font-size:12px;display:-webkit-box;-webkit-line-clamp:2
 .chip{display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:11px;background:var(--chip);border-radius:4px;padding:1px 6px;margin:1px 2px 1px 0;white-space:nowrap}
 /* what bisu brings without being asked */
 #sug{flex:none;padding:0 12px 10px}
-.sugcard{border:1px solid var(--accent);background:var(--accent-soft);border-radius:10px;padding:10px 12px}
-.sugTop{display:flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.02em;color:var(--accent);font-weight:600}
+.sugcard,.onboard{border:1px solid var(--line);background:var(--card);border-radius:var(--rc);padding:12px 14px;color:var(--ink)}
+.sugTop{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--accent);font-weight:600}
 .sugTop .x{margin-left:auto;border:0;background:none;padding:0 3px;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;text-transform:none;font-weight:400}
-.sugTitle{font-weight:600;margin-top:3px}
+.sugTitle{font-size:14px;font-weight:600;margin-top:4px}
 .sugBody{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.45;max-height:5.2em;overflow:auto}
-.sugBtns{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
-.sugBtns button{padding:4px 11px;font-size:12px}
-body.panel .sugcard{padding:9px 10px}
+.sugBtns{display:flex;gap:8px;margin-top:10px;align-items:center;min-width:0}
+.sugAct{font-size:12px;color:var(--muted);margin-top:8px;padding:7px 10px;border-radius:10px;background:var(--bg);line-height:1.45}.sugAct b{color:var(--accent);font-weight:700}
+.sugWhere{margin-left:auto;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 body.panel .sugBody{max-height:4.4em}body.panel .sugBody.job{max-height:11em}
 .sugBody.job{white-space:pre-wrap;word-break:break-word;color:var(--ink);max-height:12em}.sugBody.job.err{color:var(--bad)}
 /* proactive controls in Settings */
 .sw{display:flex;align-items:center;gap:8px;font-size:13px}
 #sugForm .kv{margin-top:10px}
 #sugForm input[type=number]{width:64px}
-#sugForm select{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
 #sugPast{margin-top:6px}
-.warnbox{border:1px solid var(--warn);background:var(--warn-soft);border-radius:8px;padding:8px 10px;margin-top:6px;color:var(--ink)}.warnbox pre{white-space:pre-wrap;margin:6px 0 0;font-size:12px}
+.warnbox{border:1px solid var(--warn);background:var(--warn-soft);border-radius:var(--r);padding:8px 10px;margin-top:6px;color:var(--ink)}.warnbox pre{white-space:pre-wrap;margin:6px 0 0;font-size:12px}
 /* memory */
 .mem{border-top:1px solid var(--line);padding:12px 0}
 .mem:first-child{border-top:0;padding-top:0}
@@ -163,8 +167,9 @@ body.panel .res,body.panel .sys{font-size:11.5px}
 /* The panel hides the folder sidebar, so it needs its own way to start a chat — otherwise a chat
    closed or lost (the engine is restarted with the shell) leaves the panel with nothing to click. */
 #panelStart{display:none}
-body.panel #panelStart:not([hidden]){display:flex;flex:1;justify-content:center;align-items:flex-start;padding:16px 14px}
+body.panel #panelStart:not([hidden]){display:flex;flex:1;min-height:0;overflow:auto;justify-content:center;align-items:flex-start;padding:16px 14px}
 #panelStart .startWrap{width:100%;max-width:340px;display:flex;flex-direction:column;gap:10px;margin-top:12vh}
+body.panel:has(#sug:not([hidden])) #panelStart .startWrap{margin-top:2vh}
 #panelStart .startTitle{margin:0;text-align:center;font-weight:600}
 #panelStart .note{margin:0;text-align:center;font-size:12px;line-height:1.45}
 #panelStart .row{display:flex;gap:6px}
@@ -173,8 +178,9 @@ details.note summary{cursor:pointer;width:max-content}details.note p{margin:6px 
 .cuLog{max-height:260px;overflow:auto;font-size:11.5px;line-height:1.5;white-space:pre-wrap;margin:6px 0 0}
 #panelStart input{flex:1;min-width:0}
 #panelStart .err{margin:0;font-size:12px;min-height:0}
-.ctxbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 12px;border-top:1px solid var(--line);background:var(--accent-soft);font-size:12px;color:var(--muted)}
-.ctxbar b{color:var(--ink);font-weight:600}
+.ctxbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;max-width:820px;margin:0 auto 8px;font-size:12px;color:var(--muted)}
+body.panel .ctxbar{max-width:none}
+.ctxbar .c{padding:2px 9px;border-radius:999px;background:var(--chip);color:var(--ink)}
 .ctxbar .x{margin-left:auto;border:0;background:none;padding:0 4px;color:var(--muted);cursor:pointer;font-size:14px;line-height:1}
 /* a permission is not a context chip: it asks for a decision and can be put away for good */
 .axbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;border-top:1px solid var(--line);background:var(--warn-soft);font-size:12px;color:var(--ink)}
@@ -222,10 +228,8 @@ button{white-space:nowrap}.compose .row button{flex:none}
 .hello{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:13vh;color:var(--muted);text-align:center;font-size:13.5px}
 .hello .bisu{width:84px;height:84px;margin-bottom:6px}
 .hello b{color:var(--ink);font-size:17px;font-weight:650}
-#panelStart .bisu{width:72px;height:72px;align-self:center;margin-bottom:4px}
+#panelStart .startWrap>.bisu{width:72px;height:72px;align-self:center;margin-bottom:4px}
 .m.user{background:var(--accent-soft);border-radius:18px 18px 5px 18px;padding:8px 14px}
-.ask{border-radius:14px;padding:12px 14px}.ask .q{font-size:14.5px}
-.ask .btns button{border-radius:999px;padding:6px 14px}
 /* the machinery, one layer down: a turn's tool calls fold into one line */
 .m.actw{align-self:flex-start;max-width:100%}
 .act{font-size:12.5px;color:var(--muted)}
@@ -247,22 +251,124 @@ body.meta .act .actM{display:inline}body.meta .res{display:block}
 #recent .ri{display:flex;gap:8px;align-items:baseline;padding:7px 10px;border-radius:10px;cursor:pointer;border:1px solid transparent}
 #recent .ri:hover{background:var(--chip)}#recent .ri .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #recent .ri .w{font-size:11.5px;color:var(--muted);flex:none}#recent .ri .dot{align-self:center}
-.onboard{border:1px solid var(--line);background:var(--card);border-radius:16px;padding:14px 16px;text-align:left;display:flex;flex-direction:column;gap:10px;width:100%;max-width:420px;color:var(--ink)}
-.onboard .ot{font-weight:650}.onboard .os{font-size:12.5px;color:var(--muted);margin-top:-6px}
+.onboard{text-align:left;display:flex;flex-direction:column;gap:10px;width:100%;max-width:420px}
+.onboard .sugBody{margin-top:-6px}
 .onboard label.f{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--muted)}
 .onboard .seg{display:flex;gap:6px;flex-wrap:wrap}.onboard .seg label{display:flex;gap:5px;align-items:center;font-size:13px;color:var(--ink);padding:5px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer}
 .onboard .seg label:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
-.onboard select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
-.onboard .ob{display:flex;gap:8px;align-items:center}.onboard .ob .note{margin:0}
+.onboard .seg input{position:absolute;opacity:0;pointer-events:none}.onboard .seg label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:1px}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
+.onboard .sugBtns{margin-top:2px}.onboard .sugBtns .note{margin:0}
 .hello .onboard{margin-top:12px}
 /* While the first-run card is up, the panel shows only bisu and the card. */
 #panelStart.onboarding .startTitle,#panelStart.onboarding .note,#panelStart.onboarding .row,#panelStart.onboarding #startNew,#panelStart.onboarding #recent{display:none}
 #panelStart.onboarding .startWrap{margin-top:5vh}
+body.onboarding #sug,body.onboarding #compose{display:none}
 .kindchip{font-size:11px;padding:1px 7px;border-radius:999px;background:var(--chip);color:var(--muted);margin-left:6px;white-space:nowrap}
-.sugcard{border-radius:14px}
 @media (max-width:760px){
  #chatView{flex-direction:column}aside{width:auto;max-height:38vh;border-right:0;border-bottom:1px solid var(--line)}
  .role,.kv{grid-template-columns:1fr}header{flex-wrap:wrap;gap:8px}}
+/* the page's own dropdown: <select> and inputs with a list open this instead of macOS's menu */
+select.native{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;padding:0;border:0}
+.selbtn{display:inline-block;min-width:9em;max-width:100%;text-align:left;font-family:inherit;font-size:14px;font-weight:400;padding:9px 34px 9px 12px;border-radius:var(--r);border:1px solid var(--line);background:var(--bg) var(--chev) no-repeat right 12px center/12px;color:var(--ink);box-shadow:inset 0 1px 2px rgba(0,0,0,.04);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.selbtn:hover:not(:disabled){transform:none;border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.selbtn[aria-expanded=true],.selbtn:focus-visible{border-color:var(--accent);box-shadow:var(--glow)}
+.onboard .selbtn{width:100%}
+.menu{position:fixed;z-index:60;max-height:min(320px,55vh);max-width:min(560px,calc(100vw - 16px));overflow:auto;padding:5px;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 20px 44px -18px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.08);animation:menuIn .12s ease-out}
+.menu.up{animation-name:menuUp}
+@keyframes menuIn{from{transform:translateY(-4px)}to{transform:none}}
+@keyframes menuUp{from{transform:translateY(4px)}to{transform:none}}
+@media (prefers-reduced-motion:reduce){.menu{animation:none}}
+.mi{display:flex;align-items:center;gap:8px;padding:7px 12px 7px 8px;border-radius:10px;font-size:13.5px;cursor:pointer;white-space:nowrap;color:var(--ink)}
+.mi .ck{width:14px;flex:none;text-align:center;color:var(--accent);font-weight:800;font-family:var(--display)}
+.mi .lb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.mi .hn{font-size:11.5px;color:var(--muted);flex:none}
+.mi.on{background:var(--accent-soft)}
+.mi.sel .lb{font-weight:650}
+/* ==== the look: a little kitsch, carefully made ====
+   One set of shapes for everything: pill buttons with bisu's gloss, 12px fields, 18px cards on a soft
+   shadow, rounded type for anything that is a name or a label, and a jade glow for focus. */
+:root{--display:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;--glow:0 0 0 3px color-mix(in srgb,var(--accent) 24%,transparent)}
+body{background:var(--bg);-webkit-font-smoothing:antialiased}
+::selection{background:color-mix(in srgb,var(--accent) 28%,transparent)}
+::-webkit-scrollbar{width:11px;height:11px}::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--muted) 32%,transparent);border-radius:999px;border:3px solid transparent;background-clip:padding-box}
+h1,h2,button,.tag,.sugTitle,#panelStart .startTitle,.hello b,.chathead .t,.ci .t,.tile .v,.onboard .seg label{font-family:var(--display)}
+h2{font-size:12.5px;font-weight:700;color:var(--muted);letter-spacing:.01em;margin-bottom:14px}
+/* controls */
+button{font-size:13px;font-weight:600;padding:7px 15px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);box-shadow:var(--hi),0 1px 2px rgba(0,0,0,.05);transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease,background .12s ease}
+button:hover:not(:disabled){border-color:color-mix(in srgb,var(--accent) 45%,var(--line));transform:translateY(-1px)}
+button:active:not(:disabled){transform:translateY(0)}
+button:focus-visible{outline:none;box-shadow:var(--glow)}
+button.primary{background:linear-gradient(180deg,var(--g1),var(--g2));border-color:transparent;color:var(--accent-ink);font-weight:700;box-shadow:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.08),0 8px 18px -10px color-mix(in srgb,var(--g2) 85%,transparent)}
+button.primary:hover:not(:disabled){border-color:transparent;filter:brightness(1.04)}
+button.danger{color:var(--bad)}
+input::placeholder,textarea::placeholder{color:color-mix(in srgb,var(--muted) 78%,transparent)}
+select{-webkit-appearance:none;appearance:none;padding-right:34px;background-image:var(--chev);background-repeat:no-repeat;background-position:right 12px center;background-size:12px;cursor:pointer}
+input[type=number],#sugForm input[type=number]{width:4.8em;padding:7px 9px;font-size:13.5px}
+input.mono{font-size:13px}
+/* cards */
+section,.sugcard,.onboard{background:var(--card);border:1px solid var(--line);border-radius:var(--rc);box-shadow:var(--sh)}
+section{padding:20px 22px;margin-bottom:18px}
+.sugcard,.onboard{padding:14px 16px}
+.ask{border-radius:var(--rc);padding:14px 16px;box-shadow:var(--sh)}
+.ask.done{box-shadow:none;border-radius:14px}
+.tile{border-radius:14px;background:var(--bg);border-color:var(--line)}
+.tool{border-radius:12px}
+.m.text pre,.ask pre,#memDigest,.warnbox,#memCands{border-radius:12px}
+.task{border-radius:12px}
+.chip{border-radius:6px}
+/* card headers: a sticker, then whatever else */
+.sugTop{display:flex;align-items:center;gap:6px;min-height:22px}
+.tag{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:11.5px;font-weight:700;line-height:1.35;white-space:nowrap}
+.tag .bisu{width:17px;height:17px;margin-left:-5px}
+.tag.blush{background:var(--blush-soft);color:var(--blush-ink)}
+.tag.bad{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.sugTop .more{font-size:11.5px;color:var(--muted);font-weight:600}
+.sugTop .x{margin-left:auto;width:24px;height:24px;padding:0;border-radius:999px;border:0;background:none;box-shadow:none;color:var(--muted);font-size:12px;line-height:24px;text-align:center}
+.sugTop .x:hover{background:var(--chip);transform:none;color:var(--ink)}
+.sugTitle{font-size:15.5px;font-weight:700;letter-spacing:-.01em;margin-top:9px;line-height:1.35}
+.sugBody{font-size:13px;line-height:1.5;margin-top:4px}
+.sugBtns{margin-top:12px}
+.onboard{gap:12px}
+.onboard .sugBody{margin-top:-8px}
+.onboard label.f{font-size:12.5px;gap:6px}
+.onboard .seg label{padding:6px 13px;font-size:13px;font-weight:600;background:var(--bg);transition:background .12s ease,border-color .12s ease}
+.onboard .seg label:has(input:checked){background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+/* the window's header: the views as one pill */
+header{background:var(--card)}
+h1.brand{font-size:19px;font-weight:800;letter-spacing:-.02em}
+nav{background:var(--chip);padding:3px;border-radius:999px;gap:2px}
+nav button{border:0;background:none;box-shadow:none;padding:6px 15px;font-weight:600;color:var(--muted)}
+nav button:hover:not(:disabled){transform:none;color:var(--ink)}
+nav button.on{background:var(--card);color:var(--ink);box-shadow:var(--hi),0 2px 6px -2px rgba(0,0,0,.18)}
+/* the chat list */
+aside{background:var(--bg2)}
+#chatList{padding:6px 0}
+.ci{margin:2px 8px;padding:10px 12px;border:1px solid transparent;border-radius:14px}
+.ci:hover{background:color-mix(in srgb,var(--card) 60%,transparent)}
+.ci.on{background:var(--card);border-color:var(--line);box-shadow:var(--sh)}
+/* a conversation */
+.chathead{background:color-mix(in srgb,var(--card) 70%,transparent)}
+.m.user{background:linear-gradient(180deg,var(--me),color-mix(in srgb,var(--me) 60%,var(--accent-soft)));border-radius:20px 20px 6px 20px;padding:9px 15px;box-shadow:var(--hi)}
+.act>summary{border:1px solid var(--line);background:var(--card)}
+/* the composer floats: one rounded field with its send button inside */
+.compose{background:transparent;border-top:0;padding:10px 16px 16px}
+.compose .row{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:6px 6px 6px 16px;box-shadow:var(--sh);align-items:flex-end;transition:border-color .12s ease,box-shadow .12s ease}
+.compose .row:focus-within{border-color:var(--accent);box-shadow:var(--glow),var(--sh)}
+.compose textarea,.compose textarea:focus{border:0;background:transparent;box-shadow:none;padding:9px 0;min-height:38px}
+.compose .row button{align-self:flex-end}
+body.panel .compose{padding:6px 10px 16px}
+.ctxbar .c{border:1px solid var(--line);background:var(--card);padding:2px 10px}
+.axbar{margin:0 12px 8px;border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);border-radius:14px}
+/* where a chat starts: bisu with a soft glow and a sparkle */
+#panelStart .startTitle{font-size:18px;font-weight:800;letter-spacing:-.01em}
+#panelStart .note{font-size:12.5px}
+.hello b{font-size:19px;font-weight:800;letter-spacing:-.01em}
+#panelStart .startWrap>.bisu,.hello>.bisu{isolation:isolate}
+#panelStart .startWrap>.bisu::before,.hello>.bisu::before{content:'';position:absolute;inset:-30%;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent) 24%,transparent),transparent 75%);z-index:-1}
+#panelStart .startWrap>.bisu::after,.hello>.bisu::after{content:'✦';position:absolute;right:4%;top:6%;font-size:14px;line-height:1;color:var(--blush);transform:rotate(14deg)}
+#recent .ri{border-radius:12px}
 </style>
 </head>
 <body>
@@ -480,6 +586,65 @@ const ROLE_INFO={
  BISU_CODE_MODEL:['대형 퍼블리싱·리팩토링 담당','페이지 전체나 컴포넌트 여러 개, 여러 파일에 걸친 리팩토링.']};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// ---- dropdowns ----
+// macOS draws a <select>'s list and an input's suggestions itself (system blue, its own font), which
+// no stylesheet reaches. Every select and every input with a list therefore opens this menu instead;
+// the select stays underneath, so .value, its options and its change event work as before.
+const menu=(()=>{let el=null,owner=null,items=[],active=-1,onPick=null;
+ function close(){if(!el)return;el.remove();el=null;owner?.setAttribute('aria-expanded','false');owner=null}
+ function mark(i){active=i;[...el.children].forEach((c,k)=>c.classList.toggle('on',k===i));el.children[i]?.scrollIntoView({block:'nearest'})}
+ // Under the field, or above it when the field sits too low for the list to fit.
+ function place(){const r=owner.getBoundingClientRect(),h=el.offsetHeight,below=innerHeight-r.bottom-8,up=below<h&&r.top-8>below;
+  el.style.minWidth=r.width+'px';el.style.left=Math.max(8,Math.min(r.left,innerWidth-el.offsetWidth-8))+'px';
+  el.style.top=(up?Math.max(8,r.top-h-6):r.bottom+6)+'px';if(!up)el.style.maxHeight=Math.max(120,below-6)+'px';el.classList.toggle('up',up)}
+ function open(anchor,list,{selected=-1,pick}={}){close();if(!list.length)return;owner=anchor;items=list;onPick=pick;
+  el=document.createElement('div');el.className='menu';el.setAttribute('role','listbox');
+  el.innerHTML=list.map((it,i)=>`<div class="mi${i===selected?' sel':''}" role="option" aria-selected="${i===selected}"><span class="ck">${i===selected?'✓':''}</span><span class="lb">${esc(it.label)}</span>${it.hint?`<span class="hn">${esc(it.hint)}</span>`:''}</div>`).join('');
+  document.body.appendChild(el);anchor.setAttribute('aria-expanded','true');
+  [...el.children].forEach((c,i)=>{c.onmousedown=e=>e.preventDefault();c.onmousemove=()=>{if(active!==i)mark(i)};c.onclick=()=>{const f=onPick;close();f?.(items[i])}});
+  place();mark(Math.max(0,selected))}
+ function key(e){if(!el)return false;
+  if(e.key==='ArrowDown'){mark(Math.min(items.length-1,active+1));e.preventDefault();return true}
+  if(e.key==='ArrowUp'){mark(Math.max(0,active-1));e.preventDefault();return true}
+  if(e.key==='Enter'&&active>=0){const f=onPick,it=items[active];close();f?.(it);e.preventDefault();return true}
+  if(e.key==='Escape'){close();e.preventDefault();return true}
+  if(e.key==='Tab')close();
+  return false}
+ addEventListener('mousedown',e=>{if(el&&!el.contains(e.target)&&!owner?.contains(e.target))close()},true);
+ addEventListener('scroll',e=>{if(el&&!el.contains(e.target))close()},true);
+ addEventListener('resize',close);addEventListener('blur',close);
+ return {open,close,key,owner:()=>owner}})();
+function fancySelect(sel){if(sel.dataset.fancy)return;sel.dataset.fancy='1';
+ const b=document.createElement('button');b.type='button';b.className='selbtn';
+ b.setAttribute('role','combobox');b.setAttribute('aria-haspopup','listbox');b.setAttribute('aria-expanded','false');
+ sel.after(b);sel.classList.add('native');sel.tabIndex=-1;sel.setAttribute('aria-hidden','true');
+ const refresh=()=>{const o=sel.options[sel.selectedIndex];b.textContent=o?o.text:'';b.disabled=sel.disabled};
+ // A value set from code (renderSugSettings and the like) fires no event, so the setters say so.
+ for(const k of ['value','selectedIndex']){const d=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,k);
+  Object.defineProperty(sel,k,{configurable:true,get(){return d.get.call(this)},set(v){d.set.call(this,v);refresh()}})}
+ new MutationObserver(refresh).observe(sel,{childList:true,subtree:true,attributes:true});
+ sel.addEventListener('change',refresh);
+ const show=()=>menu.open(b,[...sel.options].map(o=>({label:o.text,value:o.value})),{selected:sel.selectedIndex,pick:it=>{
+  if(sel.value!==it.value){sel.value=it.value;sel.dispatchEvent(new Event('input',{bubbles:true}));sel.dispatchEvent(new Event('change',{bubbles:true}))}b.focus()}});
+ b.onclick=()=>menu.owner()===b?menu.close():show();
+ b.onkeydown=e=>{if(menu.owner()===b&&menu.key(e))return;if(['ArrowDown','ArrowUp',' ','Enter'].includes(e.key)){e.preventDefault();show()}};
+ refresh()}
+// An input with a <datalist>: its suggestions, filtered by what is typed, in the same menu.
+function fancyList(input){const id=input.getAttribute('list');if(!id||input.dataset.fancy)return;input.dataset.fancy='1';
+ input.removeAttribute('list');input.setAttribute('autocomplete','off');input.setAttribute('aria-expanded','false');
+ const show=()=>{const dl=document.getElementById(id);if(!dl)return;const q=input.value.trim().toLowerCase();
+  const all=[...dl.options].map(o=>({label:o.value,value:o.value,hint:o.text&&o.text!==o.value?o.text:''}));
+  const list=(q?all.filter(o=>o.value!==input.value&&(o.label+' '+o.hint).toLowerCase().includes(q)):all).slice(0,60);
+  if(!list.length){if(menu.owner()===input)menu.close();return}
+  menu.open(input,list,{pick:it=>{input.value=it.value;input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));input.focus()}})};
+ input.addEventListener('focus',show);
+ input.addEventListener('input',e=>{if(e.isTrusted)show()});
+ // Ahead of the field's own Enter handler, so picking from the list does not also start a chat.
+ input.addEventListener('keydown',e=>{if(menu.owner()===input&&menu.key(e)){e.stopImmediatePropagation();return}if(e.key==='ArrowDown')show()},true);
+ input.addEventListener('blur',()=>setTimeout(()=>{if(menu.owner()===input)menu.close()},150))}
+const fancyAll=root=>{for(const x of root.querySelectorAll?.('select')||[])fancySelect(x);for(const x of root.querySelectorAll?.('input[list]')||[])fancyList(x)};
+fancyAll(document);
+new MutationObserver(ms=>{for(const m of ms)for(const n of m.addedNodes)if(n.nodeType===1){if(n.matches('select'))fancySelect(n);else if(n.matches('input[list]'))fancyList(n);else fancyAll(n)}}).observe(document.body,{childList:true,subtree:true});
 const stripCtx=s=>{const i=String(s??'').indexOf(CTX_OPEN);return i<0?String(s??''):String(s??'').slice(0,i).trimEnd()};
 const usd=(v,d=2)=>v==null||isNaN(v)?'—':'$'+Number(v).toFixed(v>0&&v<0.01?4:d);
 const per1M=v=>v?'$'+(v*1e6).toFixed(v*1e6<1?3:2):'free';
@@ -545,7 +710,7 @@ let chats=[],cur=null,es=null,live=null,toolEls={};
 let ctx=null,ctxBar=null,consumedAt=0,sent=0;
 function ensureCtxBar(){if(ctxBar)return ctxBar;
  ctxBar=document.createElement('div');ctxBar.className='ctxbar';ctxBar.hidden=true;
- const c=$('compose');c.parentNode.insertBefore(ctxBar,c);return ctxBar}
+ const c=$('compose');c.insertBefore(ctxBar,c.querySelector('.row'));return ctxBar}
 function setCtx(c){
  if(!c||c.at<=consumedAt||!(c.app||c.selection||c.clipboard)){ctx=null}
  else ctx=c;
@@ -553,11 +718,11 @@ function setCtx(c){
  const bar=ensureCtxBar();
  if(!ctx){bar.hidden=true;bar.innerHTML='';return}
  const bits=[];
- if(ctx.app)bits.push(`<b>${esc(ctx.app)}</b>`);
- if(ctx.selection)bits.push(`선택 ${ctx.selection.length}자`);
+ if(ctx.app)bits.push(`${esc(ctx.app)} 창`);
+ if(ctx.selection)bits.push(`선택한 글 ${ctx.selection.length}자`);
  if(ctx.clipboard)bits.push(`클립보드 ${ctx.clipboard.length}자`);
  bar.hidden=false;
- bar.innerHTML=`<span>문맥</span>`+bits.map(b=>`<span>${b}</span>`).join('<span>·</span>')+`<button class="x" title="이번 메시지에 붙이지 않음">✕</button>`;
+ bar.innerHTML=`<span>함께 보낼 것</span>`+bits.map(b=>`<span class="c">${b}</span>`).join('')+`<button class="x" title="이번 메시지에는 붙이지 않기">✕</button>`;
  bar.querySelector('.x').onclick=()=>{consumedAt=Date.now();setCtx(null);HOST?.consume?.()};
 }
 // Appended after the message so the chat title stays the person's own words; the page strips it
@@ -711,7 +876,7 @@ function renderTasks(){const box=$('tasks');if(!box)return;
  else if(!tasks.length&&mood.text.includes('말 걸어도 돼요'))setMood('idle','듣고 있어요');
  box.innerHTML=tasks.map(t=>`<div class="task"><span class="spin"></span><b>${esc(t.type==='local_agent'?agentName(t.agent):'명령')}</b><span class="d">${esc(t.description)}${t.step?' · '+esc(t.step):''}</span><span class="e" data-t="${t.started}">${elapsed(t.started)}</span></div>`).join('')}
 setInterval(()=>{for(const el of document.querySelectorAll('.task .e'))el.textContent=elapsed(Number(el.dataset.t))},1000);
-function chatUI(){const c=cur;$('chatHead').hidden=!c;$('compose').hidden=false;
+function chatUI(){const c=cur;$('chatHead').hidden=!c;$('compose').hidden=false;if(c)document.body.classList.remove('onboarding');
  if(PANEL){$('panelStart').hidden=!!c;$('msgs').hidden=!c;if(!c)fillStartCwd()}
  if(!c){if(!wrap().children.length){wrap().innerHTML=helloHTML();mountBisu(wrap())}mountBisu();renderRecent();renderOnboard();return}
  $('chatTitle').textContent=c.title||'새 대화';$('chatSub').textContent=place(c.cwd);$('chatSub').title=short(c.cwd);
@@ -763,18 +928,20 @@ function renderRecent(){const el=$('recent');if(!el)return;if(!PANEL||cur){el.in
 function renderOnboard(){
  const old=document.querySelector('.onboard');
  $('panelStart').classList.toggle('onboarding',!prefs.onboarded&&!cur&&PANEL);
+ document.body.classList.toggle('onboarding',!prefs.onboarded&&!cur);
  if(prefs.onboarded||cur){old?.remove();return}
  if(old)return;
  const host=PANEL?document.querySelector('#panelStart .startWrap'):wrap().querySelector('.hello');if(!host)return;
  const card=document.createElement('div');card.className='onboard';
- card.innerHTML=`<div class="ot">처음 왔어요 · 세 가지만 정해요</div><div class="os">나중에 기억 탭과 설정에서 언제든 바꿀 수 있어요.</div>
+ card.innerHTML=`<div><div class="sugTop"><span class="tag blush">처음 왔어요 ✦</span></div><div class="sugTitle">세 가지만 정해요</div></div><div class="sugBody">나중에 기억 탭과 설정에서 언제든 바꿀 수 있어요.</div>
   <label class="f">뭐라고 부를까요?<input type="text" id="obName" placeholder="예: 대장, 사장님" autocomplete="off"></label>
   <div class="f" style="font-size:12.5px;color:var(--muted)">말투<div class="seg" style="margin-top:5px">
    <label><input type="radio" name="obTone" value="follow" checked>내 말투 따라</label><label><input type="radio" name="obTone" value="casual">반말</label><label><input type="radio" name="obTone" value="polite">존댓말</label></div></div>
   <label class="f">먼저 찾아오기<select id="obEvery"><option value="24" selected>하루 한 번</option><option value="8">하루 세 번</option><option value="off">찾아오지 않기</option></select></label>
-  <div class="ob"><button class="primary" id="obGo">좋아요</button><button id="obSkip">나중에</button><span class="note err" id="obErr"></span></div>`;
+  <div class="sugBtns"><button class="primary" id="obGo">좋아요</button><button id="obSkip">나중에</button><span class="note err" id="obErr"></span></div>`;
  if(PANEL)host.querySelector('.bisu').after(card);else host.appendChild(card);
- const done=async()=>{prefs=await post('/api/prefs',{onboarded:true}).catch(()=>({...prefs,onboarded:true}));card.remove();$('panelStart').classList.remove('onboarding');fillStartCwd();renderRecent()};
+ mountBisu(card);
+ const done=async()=>{prefs=await post('/api/prefs',{onboarded:true}).catch(()=>({...prefs,onboarded:true}));card.remove();$('panelStart').classList.remove('onboarding');document.body.classList.remove('onboarding');fillStartCwd();renderRecent()};
  card.querySelector('#obSkip').onclick=done;
  card.querySelector('#obGo').onclick=async()=>{const b=card.querySelector('#obGo');b.disabled=true;
   try{const name=card.querySelector('#obName').value.trim(),tone=card.querySelector('input[name=obTone]:checked').value,every=card.querySelector('#obEvery').value;
@@ -945,21 +1112,22 @@ function renderSug(){
  if(!list.length){
   // Between asking for one and it arriving there is nothing to show yet, and an empty panel looks
   // like nothing happened.
-  if(sug?.running){el.hidden=false;el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="bisu" data-state="thinking"></span>bisu</div><div class="sugBody" style="margin-top:4px">뭐가 있을지 보고 있어요…</div></div>`;mountBisu(el)}
+  if(sug?.running){el.hidden=false;el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag"><span class="bisu" data-state="thinking"></span>bisu</span></div><div class="sugBody" style="margin-top:4px">뭐가 있을지 보고 있어요…</div></div>`;mountBisu(el)}
   else{el.hidden=true;el.innerHTML=''}
   HOST?.suggest?.(0);return}
- const it=list[0],extra=list.length>1?` <span class="note" style="margin:0;text-transform:none;letter-spacing:0">+${list.length-1}</span>`:'';
+ const it=list[0],extra=list.length>1?`<span class="more">+${list.length-1}</span>`:'';
  el.hidden=false;
  // A scheduled job's answer is the same card with other words: nothing to agree to, only to read,
  // and "이어서 대화" picks up the run that wrote it.
- if(it.kind==='job')el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="bisu" data-state="${it.error?'error':'done'}"></span>${it.job==='briefing'?'아침 브리핑':'예약 작업'} ${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
+ if(it.kind==='job')el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag${it.error?' bad':''}"><span class="bisu" data-state="${it.error?'error':'done'}"></span>${it.job==='briefing'?'아침 브리핑':'예약 작업'}</span>${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
   <div class="sugTitle">${esc(it.title)}</div>
   ${it.body?`<div class="sugBody job${it.error?' err':''}">${esc(it.body)}</div>`:''}
-  <div class="sugBtns">${it.sessionId?`<button class="primary" data-a="do">이어서 대화</button>`:''}<button data-a="later">확인</button><span class="note" style="margin:0;align-self:center">${ago(it.at)}${it.cwd?' · '+esc(short(it.cwd)):''}</span></div></div>`;
- else el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="bisu" data-state="waiting"></span>bisu가 하나 찾았어요 ${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
+  <div class="sugBtns">${it.sessionId?`<button class="primary" data-a="do">이어서 대화</button>`:''}<button data-a="later">확인</button><span class="sugWhere" title="${esc(short(it.cwd||''))}">${ago(it.at)}${it.cwd?' · '+esc(place(it.cwd)):''}</span></div></div>`;
+ else el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag"><span class="bisu" data-state="waiting"></span>bisu가 하나 찾았어요</span>${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
   <div class="sugTitle">${esc(it.title)}</div>
   ${it.body?`<div class="sugBody">${esc(it.body)}</div>`:''}
-  <div class="sugBtns"><button class="primary" data-a="do">해볼게</button><button data-a="later">나중에</button>${it.cwd?`<span class="note mono" style="margin:0;align-self:center">${esc(short(it.cwd))}</span>`:''}</div></div>`;
+  ${it.action?`<div class="sugAct"><b>해볼게</b>를 누르면 이렇게 부탁해요 · ${esc(it.action)}</div>`:''}
+  <div class="sugBtns"><button class="primary" data-a="do">해볼게</button><button data-a="later">나중에</button>${it.cwd?`<span class="sugWhere" title="${esc(short(it.cwd))}">${esc(place(it.cwd))}</span>`:''}</div></div>`;
  mountBisu(el);
  const go=el.querySelector('[data-a=do]');if(go)go.onclick=()=>suggestAnswer(it.id,'accept');
  el.querySelector('[data-a=later]').onclick=()=>suggestAnswer(it.id,'dismiss');

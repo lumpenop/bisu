@@ -17,22 +17,28 @@ function roundedRectSDF(x, y, cx, cy, hw, hh, r) {
   const qx = Math.abs(x - cx) - (hw - r), qy = Math.abs(y - cy) - (hh - r);
   return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
 }
-function inTriangle(px, py, a, b, c) {
-  const d = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
-  const u = ((b[1] - c[1]) * (px - c[0]) + (c[0] - b[0]) * (py - c[1])) / d;
-  const v = ((c[1] - a[1]) * (px - c[0]) + (a[0] - c[0]) * (py - c[1])) / d;
-  return u >= 0 && v >= 0 && u + v <= 1;
-}
-// coverage of the speech bubble (stroke + tail + three dots) at a point on the 18-unit grid
-function bubble(px, py, weight = 1) {
-  const d = roundedRectSDF(px, py, 9, 8.1, 6.9, 5.6, 3.1);
-  let a = 1 - Math.min(1, Math.max(0, (Math.abs(d) - 1.35 * weight / 2) / 0.5 + 0.5));
-  if (inTriangle(px, py, [5.0, 12.6], [8.6, 12.6], [5.9, 16.2])) a = 1;
-  for (const dx of [6.35, 9, 11.65]) {
-    const dd = Math.hypot(px - dx, py - 8.1) - 0.9 * weight;
-    a = Math.max(a, 1 - Math.min(1, Math.max(0, dd / 0.5 + 0.5)));
+// Signed distance to a triangle (negative inside).
+function triangleSDF(px, py, [ax, ay], [bx, by], [cx, cy]) {
+  const e = [[bx - ax, by - ay], [cx - bx, cy - by], [ax - cx, ay - cy]], v = [[px - ax, py - ay], [px - bx, py - by], [px - cx, py - cy]];
+  const sgn = Math.sign(e[0][0] * e[2][1] - e[0][1] * e[2][0]);
+  let dd = Infinity, side = Infinity;
+  for (let i = 0; i < 3; i++) {
+    const t = Math.min(1, Math.max(0, (v[i][0] * e[i][0] + v[i][1] * e[i][1]) / (e[i][0] ** 2 + e[i][1] ** 2)));
+    const qx = v[i][0] - e[i][0] * t, qy = v[i][1] - e[i][1] * t;
+    dd = Math.min(dd, qx * qx + qy * qy);
+    side = Math.min(side, sgn * (v[i][0] * e[i][1] - v[i][1] * e[i][0]));
   }
-  return a;
+  return -Math.sqrt(dd) * Math.sign(side);
+}
+// A smooth union, so the tail grows out of the bubble instead of being stuck on.
+const smin = (a, b, k) => { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k / 4 };
+// The bubble and its tail as one shape: distance to its edge on the 18-unit grid.
+const bubbleSDF = (px, py) => smin(roundedRectSDF(px, py, 9, 8.1, 6.9, 5.6, 3.1), triangleSDF(px, py, [4.7, 11.9], [8.2, 12.9], [4.3, 15.9]), 1.7);
+const cover = d => 1 - Math.min(1, Math.max(0, d / 0.5 + 0.5));
+const dots = (px, py, weight = 1) => Math.max(...[6.35, 9, 11.65].map(dx => cover(Math.hypot(px - dx, py - 8.1) - 0.9 * weight)));
+// The menu bar glyph: the one outline, tail included, and the three dots.
+function bubble(px, py, weight = 1) {
+  return Math.max(cover(Math.abs(bubbleSDF(px, py)) - 1.35 * weight / 2), dots(px, py, weight));
 }
 
 function render(size, pixel) {
@@ -90,14 +96,28 @@ for (const [name, size] of [['trayTemplate.png', 18], ['trayTemplate@2x.png', 36
   fs.writeFileSync(path.join(ASSETS, name), png(size, rgba));
 }
 
-// app icon: white glyph on a green rounded square, per Apple's 1024 grid with margins
-const GREEN = [47, 111, 79], WHITE = [255, 255, 255];
+// app icon: bisu's glossy jade on a rounded square, a solid ivory bubble with jade dots, per Apple's
+// 1024 grid with margins. The same colours as the page (ui/index.html): --g1/--g2, --card, --accent.
+const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+const JADE_TOP = [108, 204, 154], JADE_BOTTOM = [36, 122, 84], IVORY = [255, 253, 248], IVORY_LOW = [234, 245, 238], DOT = [43, 138, 95];
+// Hard edges here: the 8x supersampling in render() is the antialiasing, so a 1024 icon stays as crisp
+// as a 16 one (a soft edge measured on the grid would be 13 pixels wide at 512).
+const inside = d => d <= 0 ? 1 : 0;
 const appPixel = (px, py) => {
-  if (px < 1.2 || px > 16.8 || py < 1.2 || py > 16.8) return [0, 0, 0, 0];
-  const bg = 1 - Math.min(1, Math.max(0, (roundedRectSDF(px, py, 9, 9, 7.7, 7.7, 3.4)) / 0.35 + 0.5));
+  if (!inside(roundedRectSDF(px, py, 9, 9, 7.7, 7.7, 3.4))) return [0, 0, 0, 0];
+  const bg = 1;
+  let c = mix(JADE_TOP, JADE_BOTTOM, Math.min(1, Math.max(0, (py - 1.3) / 15.4)));
+  // the jelly's shine: a soft light across the top
+  const shine = Math.max(0, 1 - Math.hypot((px - 9) / 7.2, (py - 2.6) / 3.2));
+  c = mix(c, [255, 255, 255], 0.22 * shine * shine);
   const s = 0.86, ox = 9 - 9 * s, oy = 9 - 8.4 * s;         // glyph, slightly larger inside the tile
-  const ink = bubble((px - ox) / s, (py - oy) / s, 1.15);
-  const c = [GREEN[0] + (WHITE[0] - GREEN[0]) * ink, GREEN[1] + (WHITE[1] - GREEN[1]) * ink, GREEN[2] + (WHITE[2] - GREEN[2]) * ink];
+  const gx = (px - ox) / s, gy = (py - oy) / s;
+  // a soft shadow under the bubble, then the bubble, then its dots
+  const shadow = Math.max(0, 1 - Math.max(0, bubbleSDF(gx, gy - 0.45) + 0.2) / 1.1);
+  c = mix(c, [14, 60, 38], 0.32 * shadow * shadow);
+  const body = inside(bubbleSDF(gx, gy));
+  c = mix(c, mix(IVORY, IVORY_LOW, Math.min(1, Math.max(0, (gy - 2.5) / 13))), body);
+  c = mix(c, DOT, Math.max(...[6.35, 9, 11.65].map(dx => inside(Math.hypot(gx - dx, gy - 8.1) - 0.95))) * body);
   return [c[0], c[1], c[2], bg];
 };
 
