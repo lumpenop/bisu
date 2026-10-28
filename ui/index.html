@@ -393,16 +393,98 @@ body.panel .compose{padding:6px 10px 16px}
 #panelStart .startWrap>.bisu::before,.hello>.bisu::before{content:'';position:absolute;inset:-30%;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent) 24%,transparent),transparent 75%);z-index:-1}
 #panelStart .startWrap>.bisu::after,.hello>.bisu::after{content:'✦';position:absolute;right:4%;top:6%;font-size:14px;line-height:1;color:var(--blush);transform:rotate(14deg)}
 #recent .ri{border-radius:12px}
+/* ==== the window's shape: a sidebar, then one screen with one purpose ====
+   Same look as above; only the arrangement. Each screen opens with one hero card (its number or state and
+   at most one primary button), then plain group boxes. Long explanations sit behind ⓘ. */
+:root{color-scheme:light dark}
+.shell{flex:1;display:flex;min-height:0}
+.views{flex:1;display:flex;min-width:0;min-height:0}
+nav.side{width:186px;flex:none;display:flex;flex-direction:column;gap:2px;padding:14px 10px 12px;background:var(--bg2);border-radius:0;border-right:1px solid var(--line);-webkit-app-region:drag}
+body.desktop:not(.panel) nav.side{padding-top:46px}
+.side>*{-webkit-app-region:no-drag}
+.side .brand{display:flex;align-items:center;gap:8px;padding:2px 8px 14px;font-family:var(--display);font-size:17px;font-weight:800;letter-spacing:-.02em}
+.side .brand .bisu{width:24px;height:24px}
+.side button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:none;box-shadow:none;padding:7px 10px;border-radius:12px;font-size:13.5px;font-weight:600;color:var(--muted)}
+.side button svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.side button:hover:not(:disabled){transform:none;background:color-mix(in srgb,var(--card) 55%,transparent);color:var(--ink)}
+.side button.on{background:var(--card);color:var(--ink);box-shadow:var(--hi),0 1px 3px rgba(0,0,0,.08)}
+.side button.on svg{color:var(--accent)}
+.side .grow{flex:1}
+.side .badge{margin:0 8px;align-self:flex-start}
+body.panel .side{display:none}
+#chatView aside{width:248px}
+/* a screen */
+.page>div{max-width:820px;padding:26px 28px 56px}
+.hero{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:var(--rc);box-shadow:var(--sh);padding:18px 22px;margin-bottom:22px}
+.hero .hx{flex:1;min-width:180px}
+.hero .ht{font-family:var(--display);font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0;line-height:1.2}
+.hero .hs{margin:4px 0 0;font-size:13.5px;color:var(--muted)}
+.hero .hs b{color:var(--ink);font-weight:700}
+.hero form{display:flex;gap:8px;flex:1.3;min-width:240px;margin:0}.hero form input{flex:1;min-width:0}
+.page section{box-shadow:none;background:color-mix(in srgb,var(--card) 70%,var(--bg));padding:16px 18px;margin-bottom:14px}
+.page section h2{display:flex;align-items:center;gap:6px}
+button.info{width:19px;height:19px;padding:0;border-radius:999px;font-size:10.5px;line-height:19px;font-weight:800;color:var(--muted);background:var(--chip);border:0;box-shadow:none;text-align:center;font-style:italic}
+button.info:hover:not(:disabled){transform:none;color:var(--ink)}
+button.info[aria-expanded=true]{background:var(--accent-soft);color:var(--accent)}
+.helpText{margin:-6px 0 12px;padding:10px 12px;border-radius:12px;background:var(--chip);font-size:12.5px;line-height:1.55;color:var(--muted)}
+.helpText>*{margin:0 0 6px}.helpText>:last-child{margin:0}
+details.adv{margin-top:6px}
+details.adv>summary{cursor:pointer;font-family:var(--display);font-size:12.5px;font-weight:700;color:var(--muted);padding:8px 4px 10px;list-style:none}
+details.adv>summary::-webkit-details-marker{display:none}
+details.adv>summary::before{content:'›';display:inline-block;width:12px;transition:transform .12s ease}
+details.adv[open]>summary::before{transform:rotate(90deg)}
+/* long lists: day groups that fold; the open group's title stays on top while it scrolls */
+#historyView .table{overflow:visible}
+tbody.grp tr.gh th{position:sticky;top:0;z-index:2;padding:0;border-top:0;background:color-mix(in srgb,var(--card) 70%,var(--bg))}
+tbody.grp tr.gh button{width:100%;display:flex;gap:8px;align-items:center;border:0;border-bottom:1px solid var(--line);border-radius:0;background:none;box-shadow:none;padding:9px 6px;font-size:12.5px;color:var(--muted);text-align:left}
+tbody.grp tr.gh button:hover:not(:disabled){transform:none;color:var(--ink)}
+tbody.grp tr.gh button::before{content:'›';display:inline-block;width:10px;transition:transform .12s ease}
+tbody.grp:not(.shut) tr.gh button::before{transform:rotate(90deg)}
+tbody.grp tr.gh .c{margin-left:auto;font-weight:600;font-variant-numeric:tabular-nums}
+tbody.grp.shut tr:not(.gh){display:none}
+/* asking before System Settings */
+dialog#permDlg{border:1px solid var(--line);border-radius:var(--rc);background:var(--card);color:var(--ink);box-shadow:var(--sh),0 24px 60px -20px rgba(0,0,0,.35);padding:20px 22px;max-width:360px}
+dialog#permDlg::backdrop{background:rgba(0,0,0,.28)}
+#permDlg form{margin:0}
+#permDlg .dt{font-family:var(--display);font-weight:800;font-size:16px;margin:0 0 6px}
+#permDlg .note{margin:0;font-size:13px;line-height:1.55}
+#permDlg .actions{justify-content:flex-end;margin-top:16px}
+@media (max-width:760px){.side{width:auto;flex-direction:row;overflow-x:auto;padding:8px;border-right:0;border-bottom:1px solid var(--line)}.shell{flex-direction:column}.side .brand,.side .grow,.side .badge{display:none}.side button{width:auto;white-space:nowrap}}
+/* the panel's start: laid out like Control Center — state, the one thing to do, switches, then open · settings · quit */
+#panelStart .ccStatus{margin:-4px 0 0;text-align:center;font-size:12.5px;color:var(--muted)}
+#panelStart .ccStatus b{color:var(--ink);font-weight:650}
+.cc{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:2px 12px;margin-top:4px}
+.ccRow{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:13px;cursor:pointer}
+.ccRow+.ccRow{border-top:1px solid var(--line)}
+.ccRow>span{flex:1}.ccRow .hn{font-size:11.5px;color:var(--muted);margin-left:4px}
+#panelStart input.switch,input.switch{-webkit-appearance:none;appearance:none;flex:none;width:34px;padding:0;height:20px;border-radius:999px;background:var(--chip);border:1px solid var(--line);position:relative;cursor:pointer;flex:none;margin:0;transition:background .15s ease}
+input.switch::after{content:'';position:absolute;top:1px;left:1px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s ease}
+#panelStart input.switch:checked,input.switch:checked{background:linear-gradient(180deg,var(--g1),var(--g2));border-color:transparent}
+#panelStart input.switch:checked::after,input.switch:checked::after{transform:translateX(14px)}
+input.switch:focus-visible{outline:none;box-shadow:var(--glow)}
+.ccFoot{display:flex;justify-content:center;gap:4px;margin-top:8px}
+.ccFoot button{border:0;background:none;box-shadow:none;padding:5px 10px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.ccFoot button:hover:not(:disabled){transform:none;color:var(--ink);background:var(--chip)}
+#panelStart.onboarding .ccStatus,#panelStart.onboarding .cc,#panelStart.onboarding .ccFoot{display:none}
 </style>
 </head>
 <body>
 <div class="dragbar" aria-hidden="true"></div>
-<header>
- <h1 class="brand"><span class="bisu live"></span>bisu</h1>
- <nav><button data-view="chat" class="on">대화</button><button data-view="goals">목표</button><button data-view="history">기록</button><button data-view="memory">기억</button><button data-view="settings">설정</button></nav>
- <span id="key" class="badge">key …</span>
-</header>
 
+<div class="shell">
+<nav class="side" id="side" aria-label="화면">
+ <div class="brand"><span class="bisu live"></span><b>bisu</b></div>
+ <button data-view="chat" class="on"><svg viewBox="0 0 20 20"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14h-6.5L6 16.8V14H4a1.5 1.5 0 0 1-1.5-1.5V6A1.5 1.5 0 0 1 4 4.5z"/></svg>대화</button>
+ <button data-view="goals"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="3.5"/><circle cx="10" cy="10" r=".6"/></svg>목표</button>
+ <button data-view="jobs"><svg viewBox="0 0 20 20"><circle cx="10" cy="10.5" r="6.5"/><path d="M10 7v3.7l2.4 1.6M7.5 2.8h5"/></svg>예약 작업</button>
+ <button data-view="history"><svg viewBox="0 0 20 20"><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6M3.3 3.6v2.6h2.6M10 6.8V10l2.2 1.6"/></svg>기록</button>
+ <button data-view="memory"><svg viewBox="0 0 20 20"><path d="M6 3.5h8A1.5 1.5 0 0 1 15.5 5v12L10 13.8 4.5 17V5A1.5 1.5 0 0 1 6 3.5z"/></svg>기억</button>
+ <button data-view="connect"><svg viewBox="0 0 20 20"><path d="M8.5 11.5l3-3M7.2 9.3 5.6 10.9a2.8 2.8 0 0 0 4 4l1.6-1.6M12.8 10.7l1.6-1.6a2.8 2.8 0 0 0-4-4L8.8 6.7"/></svg>연결</button>
+ <button data-view="settings"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4"/></svg>설정</button>
+ <span class="grow"></span>
+ <span id="key" class="badge">key …</span>
+</nav>
+<main class="views">
 <div class="view on" id="chatView">
  <aside>
   <div class="newchat">
@@ -423,14 +505,21 @@ body.panel .compose{padding:6px 10px 16px}
   <div id="panelStart" hidden><div class="startWrap">
    <span class="bisu live"></span>
    <p class="startTitle">뭐 도와줄까요?</p>
-   <p class="note">아래에 바로 말하면 돼요. 파일 일은 이 폴더에서 해요. <span class="promise">파일을 고치거나 명령을 실행하기 전엔 꼭 물어볼게요.</span></p>
+   <p class="ccStatus" id="ccStatus">듣고 있어요</p>
+   <p class="note"><span class="promise">파일을 고치거나 명령을 실행하기 전엔 꼭 물어볼게요.</span></p>
    <div class="row"><span class="lbl">폴더</span>
     <input type="text" id="startCwd" class="mono" list="cwdList" spellcheck="false" autocomplete="off" placeholder="~/Desktop/project">
     <button id="startPick" hidden>고르기…</button>
    </div>
    <button id="startNew" hidden>시작하기</button>
    <p class="err" id="startErr" hidden></p>
+   <div class="cc" id="ccSwitches" hidden>
+    <label class="ccRow" id="ccSelRow"><span>선택한 텍스트 읽기</span><input type="checkbox" class="switch" id="ccSel"></label>
+    <label class="ccRow"><span>먼저 찾아오기</span><input type="checkbox" class="switch" id="ccSug"></label>
+    <label class="ccRow"><span>맥 깨어 있게 <span class="hn">전원 연결 중</span></span><input type="checkbox" class="switch" id="ccAwake"></label>
+   </div>
    <div id="recent"></div>
+   <div class="ccFoot" id="ccFoot" hidden><button type="button" id="ccFull">전체 창</button><button type="button" id="ccSettings">설정</button><button type="button" id="ccQuit">종료</button></div>
   </div></div>
   <div id="msgs"><div class="wrap"></div></div>
   <div id="sug" hidden></div>
@@ -442,9 +531,9 @@ body.panel .compose{padding:6px 10px 16px}
 </div>
 
 <div class="view" id="historyView"><div class="page"><div>
- <section>
-  <h2>지난 대화 찾기</h2>
-  <form id="searchForm" class="row"><input type="text" id="searchQ" placeholder="그때 했던 말 몇 단어, 예: 결제 테스트" autocomplete="off"><button class="primary">찾기</button></form>
+ <div class="hero" id="historyHero"><div class="hx"><h1 class="ht">기록</h1><p class="hs" id="historySum">…</p></div><form id="searchForm" class="row"><input type="text" id="searchQ" placeholder="그때 했던 말 몇 단어, 예: 결제 테스트" autocomplete="off"><button class="primary">찾기</button></form></div>
+ <section id="searchSec" hidden>
+  <h2>찾은 대화</h2>
   <div id="searchOut"></div>
   <p class="note" id="searchNote">나와 bisu가 주고받은 말에서 찾아요. bisu도 대화 중에 같은 방법으로 지난 일을 찾아봐요.</p>
  </section>
@@ -457,6 +546,7 @@ body.panel .compose{padding:6px 10px 16px}
 </div></div></div>
 
 <div class="view" id="goalsView"><div class="page"><div>
+ <div class="hero" id="goalsHero"><div class="hx"><h1 class="ht">목표</h1><p class="hs" id="goalsSum">…</p></div></div>
  <section>
   <h2>목표</h2>
   <p class="note">며칠이나 몇 주 걸리는 일을 맡기면 bisu가 몇 시간마다 조금씩 진행해요. 계획을 세우고, 찾아보고, 일정과 미리 알림을 넣고, 결정이 필요하면 물어봐요. 파일을 고치거나 명령을 실행하거나 무언가를 보내고 사지는 않아요. 조용한 시간에는 쉬어요. 대화에서 "이번 달 안에 …" 하고 말해도 돼요.</p>
@@ -479,12 +569,13 @@ body.panel .compose{padding:6px 10px 16px}
 </div></div></div>
 
 <div class="view" id="memoryView"><div class="page"><div>
+ <div class="hero" id="memoryHero"><div class="hx"><h1 class="ht">기억</h1><p class="hs" id="memorySum">…</p></div><button class="primary" id="memNew">기억 추가</button></div>
  <section>
   <h2>bisu가 기억하는 것</h2>
   <div class="kv" id="memInfo"><div class="k">폴더</div><div class="mono">…</div></div>
   <p class="note">새 대화는 어느 폴더에서 시작하든 이 기억을 갖고 시작해요. 대화 중에 "기억해 둬"라고 하거나 bisu가 기억할 만하다고 판단하면 스스로 저장하는데, 저장도 다른 파일 쓰기처럼 먼저 물어봐요. 여기서 추가·수정·삭제한 건 다음 대화부터 적용돼요.</p>
  </section>
- <section>
+ <section id="memFormSec" hidden>
   <h2 id="memFormTitle">기억 추가</h2>
   <form id="memForm">
    <div class="row">
@@ -493,7 +584,7 @@ body.panel .compose{padding:6px 10px 16px}
     <textarea id="memBody" rows="3" placeholder="기억할 내용. 예: 답은 항상 한국어로, 결과부터 1–3문장."></textarea>
    </div>
    <div id="memCands" hidden></div>
-   <div class="actions"><button class="primary" id="memSave">저장</button><button type="button" id="memCancel" hidden>취소</button><span class="note" id="memNote" style="margin:0"></span></div>
+   <div class="actions"><button class="primary" id="memSave">저장</button><button type="button" id="memCancel">닫기</button><span class="note" id="memNote" style="margin:0"></span></div>
   </form>
  </section>
  <section>
@@ -507,24 +598,29 @@ body.panel .compose{padding:6px 10px 16px}
  </section>
 </div></div></div>
 
-<div class="view" id="settingsView"><div class="page"><div>
- <section>
-  <h2>엔진</h2>
-  <div class="seg" id="engineSeg" style="display:flex;gap:6px;flex-wrap:wrap">
-   <label class="sw" style="border:1px solid var(--line);border-radius:999px;padding:5px 12px"><input type="radio" name="engine" value="native"> bisu 자체 엔진 · GLM <span class="chip">베타</span></label>
-   <label class="sw" style="border:1px solid var(--line);border-radius:999px;padding:5px 12px"><input type="radio" name="engine" value="claude"> Claude Code · OpenRouter</label>
-  </div>
-  <p class="note" id="engineNote">새 대화부터 적용돼요. 이미 열린 대화는 시작할 때 엔진 그대로예요.</p>
-  <div id="approveRow" style="margin-top:12px"><div class="note" style="margin:0 0 6px">확인 방식 (자체 엔진)</div>
-   <label class="sw"><input type="radio" name="approve" value="risky"> 위험해 보이는 것만 묻기 — 폴더 안의 수정과 명령은 판단 모델이 안전하다고 본 것만 바로 해요. 삭제·전송·설치는 항상 물어요</label>
-   <label class="sw" style="margin-top:4px"><input type="radio" name="approve" value="always"> 매번 묻기</label></div>
+<div class="view" id="jobsView"><div class="page"><div>
+ <div class="hero" id="jobsHero"><div class="hx"><h1 class="ht">예약 작업</h1><p class="hs" id="jobsSum">…</p></div><button class="primary" id="sugRun">지금 제안 받기</button></div>
+ <section id="jobSec">
+  <h2>예약 작업</h2>
+  <div id="jobList"><p class="note">loading…</p></div>
+  <p class="note err" id="jobNote"></p>
+  <p class="note">대화에서 "매일 아침 8시에 어제 커밋 요약해 줘"처럼 말하면 bisu가 예약해 두고, 그 시간에 혼자 해서 결과를 패널 카드로 남겨요. 그때 떠올리기만 하면 되는 일("3시에 알려줘")은 예약 작업이 아니라 미리 알림으로 넣어요.</p>
+  <details class="note"><summary>직접 만들기</summary><p>예약 작업은 <code>~/.config/bisu/jobs/</code>의 파일 하나예요. 맨 위에 <code>schedule: 0 8 * * 1-5</code>(cron, 이 맥의 시간) 또는 <code>at: 2026-10-28 09:00</code>, <code>cwd: /폴더</code>, <code>tools: read</code>(기본 · <code>edit</code>는 그 폴더의 파일 수정 · <code>full</code>은 명령 실행까지)를 쓰고, 그 아래에 그때 보낼 요청을 써요.</p></details>
  </section>
- <section>
-  <h2>보기</h2>
-  <label class="sw"><input type="checkbox" id="metaOn"> 작업 세부 보기 — 도구 호출, 단계, 비용, 모델 이름을 대화와 기록에 그대로 보여줘요 (개발자용)</label>
-  <p class="note">끄면 bisu가 하는 일은 대화마다 한 줄로 접혀 있고, 눌러야 펼쳐져요.</p>
+ <section id="briefSec">
+  <h2>아침 브리핑</h2>
+  <form id="briefForm">
+   <label class="sw"><input type="checkbox" id="briefOn"> 켜기</label>
+   <div class="kv">
+    <div class="k">시각</div><div><select id="briefHour"><option value="5">오전 5시</option><option value="6">오전 6시</option><option value="7">오전 7시</option><option value="8">오전 8시</option><option value="9">오전 9시</option><option value="10">오전 10시</option><option value="11">오전 11시</option></select></div>
+    <div class="k">캘린더</div><div id="briefAccess">…</div>
+    <div class="k">다음</div><div id="briefNext">…</div>
+   </div>
+  </form>
+  <div class="actions"><button id="briefRun">지금 받아 보기</button><span class="note" id="briefNote" style="margin:0"></span></div>
+  <p class="note">매일 이 시각에 오늘 일정과 기한이 된 할 일을 패널 카드로 남겨요. 캘린더를 그대로 옮겨 적는 거라 모델을 쓰지 않고 돈도 들지 않아요. 그 뒤 네 시간 안에 맥이 깨어나지 않으면 그날은 건너뛰어요.</p>
  </section>
- <section>
+ <section id="sugSec">
   <h2>먼저 찾아오기</h2>
   <form id="sugForm">
    <label class="sw"><input type="checkbox" id="sugOn"> 켜기</label>
@@ -537,25 +633,14 @@ body.panel .compose{padding:6px 10px 16px}
     <div class="k">다음</div><div id="sugNext">…</div>
    </div>
   </form>
-  <div class="actions"><button id="sugRun">지금 제안 받기</button><span class="note" id="sugNote" style="margin:0"></span></div>
+  <div class="actions"><span class="note" id="sugNote" style="margin:0"></span></div>
   <p class="note">bisu가 가끔 스스로 최근 작업을 훑어보고, 지금 말할 만한 걸 하나 남겨요. 읽기만 하는 별도 실행이라 아무것도 바꾸지 못하고, 고르면 그때 폴더에서 진짜 대화가 시작돼요. 마음에 안 든 제안은 “나중에”로 지우면 다시 꺼내지 않아요.</p>
   <div id="sugPast"></div>
  </section>
- <section id="alertSec">
-  <h2>알림 · 깨어 있기</h2>
-  <div class="kv">
-   <div class="k">맥 깨어 있게</div><div class="checks"><label class="sw"><input type="checkbox" id="alAwake"> 전원이 연결되어 있으면 잠들지 않게</label><span class="note" id="alPower" style="margin:0"></span></div>
-   <div class="k">일정 전 알림</div><div><select id="alBefore"><option value="0">끄기</option><option value="5">5분 전</option><option value="10">10분 전</option><option value="15">15분 전</option><option value="30">30분 전</option></select> <span class="note" id="alAccess" style="display:inline;margin:0"></span></div>
-   <div class="k">맥 알림</div><div class="checks">
-    <div id="alPerm">…</div>
-    <label class="sw"><input type="checkbox" id="alBApprovals"> 확인이 필요할 때</label>
-    <label class="sw"><input type="checkbox" id="alBReplies"> bisu가 답했을 때 (bisu 창이 닫혀 있을 때만)</label>
-    <label class="sw"><input type="checkbox" id="alBCards"> 제안 · 예약 작업 · 아침 브리핑</label>
-    <label class="sw"><input type="checkbox" id="alBEvents"> 일정 전 알림</label></div>
-  </div>
-  <div class="actions"><button class="primary" id="alPermBtn" hidden>알림 허용하기</button><button id="alTest">테스트 알림 보내기</button><span class="note" id="alNote" style="margin:0"></span></div>
-  <p class="note">맥이 잠들면 bisu도 멈춰요. 전원이 연결되어 있는 동안은 잠들지 않게 해서, 자리를 비워도 텔레그램과 예약 작업에 답할 수 있어요. 화면은 평소처럼 꺼지고, 뚜껑을 닫으면 잠들어요. 알림을 누르면 그 대화가 열려요.</p>
- </section>
+</div></div></div>
+
+<div class="view" id="connectView"><div class="page"><div>
+ <div class="hero" id="connectHero"><div class="hx"><h1 class="ht">연결</h1><p class="hs" id="connectSum">…</p></div></div>
  <section id="tgSec">
   <h2>텔레그램</h2>
   <div class="tgState" id="tgState">…</div>
@@ -584,25 +669,63 @@ body.panel .compose{padding:6px 10px 16px}
   <p class="note err" id="tgErr"></p>
   <p class="note">텔레그램에서 보낸 말은 bisu의 대화 하나로 이어지고, 마지막 답이 돌아와요. <code>/new</code>는 새 대화, <code>/stop</code>은 멈추기예요. 맥이 켜져 있고 bisu가 실행 중일 때만 답해요.</p>
  </section>
- <section id="briefSec">
-  <h2>아침 브리핑</h2>
-  <form id="briefForm">
-   <label class="sw"><input type="checkbox" id="briefOn"> 켜기</label>
-   <div class="kv">
-    <div class="k">시각</div><div><select id="briefHour"><option value="5">오전 5시</option><option value="6">오전 6시</option><option value="7">오전 7시</option><option value="8">오전 8시</option><option value="9">오전 9시</option><option value="10">오전 10시</option><option value="11">오전 11시</option></select></div>
-    <div class="k">캘린더</div><div id="briefAccess">…</div>
-    <div class="k">다음</div><div id="briefNext">…</div>
-   </div>
-  </form>
-  <div class="actions"><button id="briefRun">지금 받아 보기</button><span class="note" id="briefNote" style="margin:0"></span></div>
-  <p class="note">매일 이 시각에 오늘 일정과 기한이 된 할 일을 패널 카드로 남겨요. 캘린더를 그대로 옮겨 적는 거라 모델을 쓰지 않고 돈도 들지 않아요. 그 뒤 네 시간 안에 맥이 깨어나지 않으면 그날은 건너뛰어요.</p>
+ <section id="calSec">
+  <h2>캘린더 · 미리 알림</h2>
+  <div class="kv" id="calInfo"><div class="k">상태</div><div>…</div></div>
+  <div class="actions"><button id="calAsk" hidden>접근 허용 요청</button><span class="note" id="calNote" style="margin:0"></span></div>
+  <p class="note">자체 엔진이 일정과 할 일을 보고, 넣고, 옮길 때 써요. 지우기는 항상 먼저 물어요. 미리 알림에 넣은 시간 알림은 아이폰에도 와요.</p>
  </section>
- <section>
-  <h2>예약 작업</h2>
-  <div id="jobList"><p class="note">loading…</p></div>
-  <p class="note err" id="jobNote"></p>
-  <p class="note">대화에서 "매일 아침 8시에 어제 커밋 요약해 줘"처럼 말하면 bisu가 예약해 두고, 그 시간에 혼자 해서 결과를 패널 카드로 남겨요. 그때 떠올리기만 하면 되는 일("3시에 알려줘")은 예약 작업이 아니라 미리 알림으로 넣어요.</p>
-  <details class="note"><summary>직접 만들기</summary><p>예약 작업은 <code>~/.config/bisu/jobs/</code>의 파일 하나예요. 맨 위에 <code>schedule: 0 8 * * 1-5</code>(cron, 이 맥의 시간) 또는 <code>at: 2026-10-28 09:00</code>, <code>cwd: /폴더</code>, <code>tools: read</code>(기본 · <code>edit</code>는 그 폴더의 파일 수정 · <code>full</code>은 명령 실행까지)를 쓰고, 그 아래에 그때 보낼 요청을 써요.</p></details>
+ <section id="alertSec">
+  <h2>알림 · 깨어 있기</h2>
+  <div class="kv">
+   <div class="k">맥 깨어 있게</div><div class="checks"><label class="sw"><input type="checkbox" id="alAwake"> 전원이 연결되어 있으면 잠들지 않게</label><span class="note" id="alPower" style="margin:0"></span></div>
+   <div class="k">일정 전 알림</div><div><select id="alBefore"><option value="0">끄기</option><option value="5">5분 전</option><option value="10">10분 전</option><option value="15">15분 전</option><option value="30">30분 전</option></select> <span class="note" id="alAccess" style="display:inline;margin:0"></span></div>
+   <div class="k">맥 알림</div><div class="checks">
+    <div id="alPerm">…</div>
+    <label class="sw"><input type="checkbox" id="alBApprovals"> 확인이 필요할 때</label>
+    <label class="sw"><input type="checkbox" id="alBReplies"> bisu가 답했을 때 (bisu 창이 닫혀 있을 때만)</label>
+    <label class="sw"><input type="checkbox" id="alBCards"> 제안 · 예약 작업 · 아침 브리핑</label>
+    <label class="sw"><input type="checkbox" id="alBEvents"> 일정 전 알림</label></div>
+  </div>
+  <div class="actions"><button class="primary" id="alPermBtn" hidden>알림 허용하기</button><button id="alTest">테스트 알림 보내기</button><span class="note" id="alNote" style="margin:0"></span></div>
+  <p class="note">맥이 잠들면 bisu도 멈춰요. 전원이 연결되어 있는 동안은 잠들지 않게 해서, 자리를 비워도 텔레그램과 예약 작업에 답할 수 있어요. 화면은 평소처럼 꺼지고, 뚜껑을 닫으면 잠들어요. 알림을 누르면 그 대화가 열려요.</p>
+ </section>
+</div></div></div>
+
+<div class="view" id="settingsView"><div class="page"><div>
+ <div class="hero" id="settingsHero"><div class="hx"><h1 class="ht">설정</h1><p class="hs" id="settingsSum">…</p></div></div>
+ <section id="engineSec">
+  <h2>엔진</h2>
+  <div class="seg" id="engineSeg" style="display:flex;gap:6px;flex-wrap:wrap">
+   <label class="sw" style="border:1px solid var(--line);border-radius:999px;padding:5px 12px"><input type="radio" name="engine" value="native"> bisu 자체 엔진 · GLM <span class="chip">베타</span></label>
+   <label class="sw" style="border:1px solid var(--line);border-radius:999px;padding:5px 12px"><input type="radio" name="engine" value="claude"> Claude Code · OpenRouter</label>
+  </div>
+  <p class="note" id="engineNote">새 대화부터 적용돼요. 이미 열린 대화는 시작할 때 엔진 그대로예요.</p>
+  <div id="approveRow" style="margin-top:12px"><div class="note" style="margin:0 0 6px">확인 방식 (자체 엔진)</div>
+   <label class="sw"><input type="radio" name="approve" value="risky"> 위험해 보이는 것만 묻기 — 폴더 안의 수정과 명령은 판단 모델이 안전하다고 본 것만 바로 해요. 삭제·전송·설치는 항상 물어요</label>
+   <label class="sw" style="margin-top:4px"><input type="radio" name="approve" value="always"> 매번 묻기</label></div>
+ </section>
+ <section id="orRoles">
+  <h2>역할별 모델</h2>
+  <form id="roles"></form>
+  <datalist id="modelList"></datalist>
+  <div class="actions"><button class="primary" id="save" disabled>저장</button><span class="note" id="saveNote" style="margin:0"></span></div>
+  <p class="note">저장한 모델은 새 대화와 새 <code>bisu</code> 실행부터 써요. 이미 열린 대화는 시작할 때 모델 그대로예요.</p>
+ </section>
+ <section id="nativeRoles" hidden>
+  <h2>역할별 모델 · 자체 엔진</h2>
+  <div class="kv" id="nativeModels"></div>
+  <p class="note">요청마다 판단 모델이 누가 받을지 골라요. 바꾸려면 셸에서 <code>BISU_NATIVE_MODEL</code>, <code>BISU_NATIVE_WORK_MODEL</code>을 정하고 bisu를 다시 여세요.</p>
+ </section>
+ <section id="orKey">
+  <h2>키</h2>
+  <div class="kv" id="keyInfo"><div class="k">상태</div><div>…</div></div>
+  <p class="note">bisu는 키를 직접 갖고 있지 않아요. 추가하거나 바꾸려면 Dec Browser → 설정 → 자격 증명에서 사이트 <code>https://openrouter.ai</code>로 OpenRouter 키를 저장하고 「앱 밖에서도 쓰기」를 켠 뒤 bisu를 다시 여세요.</p>
+ </section>
+ <section id="orSpend">
+  <h2>쓴 돈 · OpenRouter</h2>
+  <div class="tiles" id="tiles"><div class="tile"><div class="v">…</div><div class="l">불러오는 중</div></div></div>
+  <p class="note" id="spendNote">OpenRouter 계정의 실제 금액이에요. Claude Code가 보여주는 비용은 Claude 가격 기준이라 훨씬 높게 나와요.</p>
  </section>
  <section id="nativeSec" hidden>
   <h2>키와 쓴 돈 · 자체 엔진</h2>
@@ -610,17 +733,12 @@ body.panel .compose{padding:6px 10px 16px}
   <div class="tiles" id="nativeTiles" style="margin-top:12px"></div>
   <p class="note">bisu는 키를 직접 갖고 있지 않아요: 둘 다 Dec Browser → 설정 → 자격 증명에 저장하고 「앱 밖에서도 쓰기」를 켜요. 쓴 돈은 이 맥의 대화 기록을 Z.ai 가격으로 계산한 거예요 (판단 모델은 한 번에 약 $0.0001이라 빠져 있어요).</p>
  </section>
- <section id="nativeRoles" hidden>
-  <h2>역할별 모델 · 자체 엔진</h2>
-  <div class="kv" id="nativeModels"></div>
-  <p class="note">요청마다 판단 모델이 누가 받을지 골라요. 바꾸려면 셸에서 <code>BISU_NATIVE_MODEL</code>, <code>BISU_NATIVE_WORK_MODEL</code>을 정하고 bisu를 다시 여세요.</p>
+ <section id="viewSec">
+  <h2>보기</h2>
+  <label class="sw"><input type="checkbox" id="metaOn"> 작업 세부 보기 — 도구 호출, 단계, 비용, 모델 이름을 대화와 기록에 그대로 보여줘요 (개발자용)</label>
+  <p class="note">끄면 bisu가 하는 일은 대화마다 한 줄로 접혀 있고, 눌러야 펼쳐져요.</p>
  </section>
- <section id="calSec" hidden>
-  <h2>캘린더 · 미리 알림</h2>
-  <div class="kv" id="calInfo"><div class="k">상태</div><div>…</div></div>
-  <div class="actions"><button id="calAsk" hidden>접근 허용 요청</button><span class="note" id="calNote" style="margin:0"></span></div>
-  <p class="note">자체 엔진이 일정과 할 일을 보고, 넣고, 옮길 때 써요. 지우기는 항상 먼저 물어요. 미리 알림에 넣은 시간 알림은 아이폰에도 와요.</p>
- </section>
+ <details class="adv" id="advBox"><summary>고급 · 컴퓨터 조작 시험</summary>
  <section id="cuSec">
   <h2>컴퓨터 조작 시험</h2>
   <p class="note">bisu가 텍스트 편집기·Finder·메모·계산기·시스템 설정을 직접 조작해 12가지 일(줄을 추가해 저장, 이름 바꾸기, 메모 만들기, 계산기 열기 같은 것)을 하고, 파일과 답을 보고 채점해요. 시험하는 동안에는 마우스와 창을 bisu가 쓰니 자리를 비울 때 시작하세요. 만든 파일·메모·창은 끝나면 치우고, 휴지통 같은 되돌리기 어려운 동작은 실행하지 않아요.</p>
@@ -634,24 +752,12 @@ body.panel .compose{padding:6px 10px 16px}
   <div id="cuResult"></div>
   <details id="cuLogBox" class="note" hidden><summary>자세한 기록</summary><pre id="cuLog" class="cuLog"></pre></details>
  </section>
- <section id="orKey">
-  <h2>키</h2>
-  <div class="kv" id="keyInfo"><div class="k">상태</div><div>…</div></div>
-  <p class="note">bisu는 키를 직접 갖고 있지 않아요. 추가하거나 바꾸려면 Dec Browser → 설정 → 자격 증명에서 사이트 <code>https://openrouter.ai</code>로 OpenRouter 키를 저장하고 「앱 밖에서도 쓰기」를 켠 뒤 bisu를 다시 여세요.</p>
- </section>
- <section id="orSpend">
-  <h2>쓴 돈 · OpenRouter</h2>
-  <div class="tiles" id="tiles"><div class="tile"><div class="v">…</div><div class="l">불러오는 중</div></div></div>
-  <p class="note" id="spendNote">OpenRouter 계정의 실제 금액이에요. Claude Code가 보여주는 비용은 Claude 가격 기준이라 훨씬 높게 나와요.</p>
- </section>
- <section id="orRoles">
-  <h2>역할별 모델</h2>
-  <form id="roles"></form>
-  <datalist id="modelList"></datalist>
-  <div class="actions"><button class="primary" id="save" disabled>저장</button><span class="note" id="saveNote" style="margin:0"></span></div>
-  <p class="note">저장한 모델은 새 대화와 새 <code>bisu</code> 실행부터 써요. 이미 열린 대화는 시작할 때 모델 그대로예요.</p>
- </section>
+ </details>
 </div></div></div>
+
+</main>
+</div>
+<dialog id="permDlg"><form method="dialog"><p class="dt" id="permTitle"></p><p class="note" id="permText"></p><div class="actions"><button value="cancel">취소</button><button class="primary" value="ok" id="permOk">설정 열기</button></div></form></dialog>
 
 <script>
 const TOKEN='__BISU_TOKEN__';
@@ -772,9 +878,14 @@ let META=false,prefs={meta:false,onboarded:true};
 document.body.classList.toggle('meta',META);
 
 // ---- tabs ----
-function show(v){for(const b of document.querySelectorAll('nav button'))b.classList.toggle('on',b.dataset.view===v);for(const el of document.querySelectorAll('.view'))el.classList.toggle('on',el.id===v+'View');
- if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='goals')loadGoals();if(v==='settings'){loadAccount();loadRoles();if(prefs.engine==='native')loadNative();renderSugSettings();loadSuggestions();loadJobs();loadBrief();loadCu();loadTg();loadAlerts()}try{localStorage.setItem('bisu.view',v)}catch{}}
-for(const b of document.querySelectorAll('nav button'))b.onclick=()=>show(b.dataset.view);
+const viewOn=v=>$(v+'View')?.classList.contains('on');
+function show(v){if(!$(v+'View'))v='chat';for(const b of document.querySelectorAll('.side button[data-view]'))b.classList.toggle('on',b.dataset.view===v);for(const el of document.querySelectorAll('.view'))el.classList.toggle('on',el.id===v+'View');
+ if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='goals')loadGoals();
+ if(v==='jobs'){renderSugSettings();loadSuggestions();loadJobs();loadBrief()}
+ if(v==='connect'){loadTg();loadAlerts();loadCalendar()}
+ if(v==='settings'){loadAccount();loadRoles();if(prefs.engine==='native')loadNative();loadCu()}
+ heroes();try{localStorage.setItem('bisu.view',v)}catch{}}
+for(const b of document.querySelectorAll('.side button[data-view]'))b.onclick=()=>show(b.dataset.view);
 
 // ---- light markdown: fenced code, inline code, paragraphs ----
 const inline=t=>esc(t).replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>');
@@ -1070,8 +1181,9 @@ $('newHere').onclick=()=>{detach();cur=null;wrap().innerHTML='';try{localStorage
 
 // ---- settings ----
 let models=new Map(),roles={};
+let acctSnap=null,natSnap=null,briefSnap=null;
 async function loadAccount(){
- try{const a=await api('/api/account');const k=$('key');
+ try{const a=await api('/api/account');acctSnap=a;heroes();const k=$('key');
   if(prefs.engine!=='native'){k.textContent={'use-only':'key · use-only (Dec)',plain:'key · plain env',none:'no key'}[a.mode];k.className='badge '+(a.mode==='none'?'bad':'ok')}
   const rows=[['상태',{'use-only':'Dec으로 연결됨 (사용 전용: bisu는 일회용 토큰만 받고 키는 못 봐요)',plain:'셸의 OPENROUTER_API_KEY (평문)',none:'<span class="err">키가 없어요</span>'}[a.mode]]];
   if(a.key)rows.push(['OpenRouter 키',esc(a.key.label||'')],['한도',a.key.limit==null?'없음':`${usd(a.key.limit,0)} 중 ${usd(a.key.limit_remaining)} 남음`]);
@@ -1122,14 +1234,14 @@ function renderMemory(){
   row.querySelector('[data-a=pin]').onclick=async()=>{try{mem=await post('/api/memory',{id:e.id,pin:!e.pin});renderMemory()}catch(er){alert(er.message)}};
   row.querySelector('[data-a=edit]').onclick=()=>memForm(e);
   row.querySelector('[data-a=del]').onclick=async()=>{if(!confirm(`“${e.title}” 기억을 지울까요? bisu가 다시 보지 않아요.`))return;
-   try{mem=await api('/api/memory/'+encodeURIComponent(e.id),{method:'DELETE'});renderMemory();memForm(null)}catch(er){alert(er.message)}}}
+   try{mem=await api('/api/memory/'+encodeURIComponent(e.id),{method:'DELETE'});renderMemory();if(!$('memFormSec').hidden)memForm(null)}catch(er){alert(er.message)}}}
 }
-function memForm(e){memEdit=e?e.id:null;
+function memForm(e){memEdit=e?e.id:null;$('memFormSec').hidden=false;
  $('memFormTitle').textContent=e?'기억 고치기':'기억 추가';
  $('memTitle').value=e?e.title:'';$('memBody').value=e?e.text:'';
  $('memKey').value=e&&e.key?e.key:'';
  $('memCands').hidden=true;$('memCands').innerHTML='';memPending=null;
- $('memCancel').hidden=!e;$('memNote').textContent='';
+ $('memNote').textContent='';
  if(e)$('memBody').focus();else $('memTitle').focus()}
 
 // A near-duplicate is shown, never merged: in Korean a contradiction ("답변은 한국어로" / "답변은
@@ -1188,7 +1300,8 @@ async function writeMemory(b){
  }finally{$('memSave').disabled=false}
 }
 $('memForm').onsubmit=e=>{e.preventDefault();saveMemory()};
-$('memCancel').onclick=()=>memForm(null);
+$('memCancel').onclick=()=>{memForm(null);$('memFormSec').hidden=true};
+$('memNew').onclick=()=>{memForm(null);$('memFormSec').scrollIntoView({block:'nearest'})};
 
 // ---- what bisu brings without being asked ----
 // The engine runs the suggestion on its own schedule; this only shows whatever is waiting, and asking
@@ -1198,7 +1311,7 @@ let sug=null,sugAsked=new Set(),panelOpen=!PANEL;
 const waiting=()=>(sug?.items||[]).filter(i=>i.status==='new');
 const SUG_WHY={off:'먼저 찾아오기가 꺼져 있어요.',running:'이미 생각하는 중이에요.',waiting:'아직 안 본 제안이 있어요. 먼저 하나 정리해 주세요.',early:'아직 때가 아니에요.',quiet:'조용한 시간이에요.',nokey:'OpenRouter 키가 없어서 대신 찾아볼 수 없어요.'};
 const ago=ts=>{const m=Math.round((Date.now()-ts)/60e3);return m<1?'방금':m<60?`${m}분 전`:m<1440?`${Math.round(m/60)}시간 전`:`${Math.round(m/1440)}일 전`};
-async function loadSuggestions(){try{sug=await api('/api/proactive');renderSug();if($('settingsView').classList.contains('on'))renderSugSettings()}catch{}}
+async function loadSuggestions(){try{sug=await api('/api/proactive');renderSug();if(viewOn('jobs'))renderSugSettings()}catch{}}
 function renderSug(){
  const el=$('sug');if(!el)return;
  const list=waiting();
@@ -1274,7 +1387,7 @@ $('sugForm').onsubmit=e=>{e.preventDefault();saveSugSettings()};
 // ---- morning briefing ----
 const BRIEF_SKIP={access:'캘린더 접근이 아직 허용되지 않았어요.',running:'만드는 중이에요.'};
 async function loadBrief(){try{renderBrief(await api('/api/briefing'))}catch(e){$('briefNote').textContent=e.message}}
-function renderBrief(b){$('briefOn').checked=b.enabled;$('briefHour').value=String(b.hour);
+function renderBrief(b){briefSnap=b;$('briefOn').checked=b.enabled;$('briefHour').value=String(b.hour);
  const a=b.access||{};
  $('briefAccess').innerHTML=a.events&&a.reminders?'일정 · 미리 알림 볼 수 있음':a.events||a.reminders?`${a.events?'일정':'미리 알림'}만 볼 수 있음`:`<span class="w">${a.error&&/not installed/.test(a.error)?'캘린더 도우미가 아직 설치되지 않았어요':'아직 허용되지 않았어요 — 자체 엔진 설정의 「접근 허용 요청」이나 시스템 설정에서 bisu를 켜 주세요'}</span>`;
  $('briefNext').textContent=b.enabled?`${whenShort(b.nextAt)}${b.lastError?` · 마지막 시도 실패: ${b.lastError}`:''}`:'꺼져 있음'}
@@ -1303,7 +1416,7 @@ function renderTg(){const t=tgSnap;if(!t)return;
  $('tgErr').textContent=t.lastError?`텔레그램: ${t.lastError}`:'';
  // Until it is paired, the page waits for the person to press 「시작」 on their phone.
  const waiting=t.token&&!t.paired;
- if(waiting&&!tgPoll)tgPoll=setInterval(()=>{if(!$('settingsView').classList.contains('on')){clearInterval(tgPoll);tgPoll=null;return}loadTg()},3000);
+ if(waiting&&!tgPoll)tgPoll=setInterval(()=>{if(!viewOn('connect')){clearInterval(tgPoll);tgPoll=null;return}loadTg()},3000);
  if(!waiting&&tgPoll){clearInterval(tgPoll);tgPoll=null}}
 const tgDo=async(p,b={})=>{$('tgErr').textContent='';try{tgSnap=await post(p,b);renderTg()}catch(e){$('tgErr').textContent=e.message}};
 const openOut=what=>post('/api/open',{what}).catch(e=>{$('tgErr').textContent=e.message});
@@ -1364,7 +1477,8 @@ async function renderPerm(){const box=$('alPerm'),btn=$('alPermBtn');
  const on=st==='authorized'||st==='provisional';
  box.innerHTML=on?'<span class="tag">허용됨</span>':st==='denied'?'<span class="tag blush">꺼져 있어요</span> 시스템 설정에서 bisu 알림을 켜 주세요.':'<span class="tag blush">아직 허락 안 받음</span>';
  btn.hidden=on;btn.textContent=st==='denied'?'시스템 설정 열기':'알림 허용하기';btn.dataset.st=st}
-$('alPermBtn').onclick=async()=>{if($('alPermBtn').dataset.st==='denied')HOST.openNotificationSettings?.();else{try{await HOST.requestNotifications()}catch{}}renderPerm()};
+$('alPermBtn').onclick=async()=>{if($('alPermBtn').dataset.st==='denied'){askSettings('맥 알림','bisu 알림이 꺼져 있어요. 시스템 설정에서 켜야 떠요. 설정하러 가시겠어요?','notifications',renderPerm);return}
+ try{await HOST.requestNotifications()}catch{}renderPerm()};
 const alSave=async b=>{$('alNote').textContent='';try{alSnap=await post('/api/alerts',b);renderAlerts()}catch(e){$('alNote').textContent=e.message}};
 $('alAwake').addEventListener('change',()=>alSave({awake:$('alAwake').checked}));
 $('alBefore').addEventListener('change',()=>alSave({before:Number($('alBefore').value)}));
@@ -1401,9 +1515,12 @@ function renderCu(){const s=cuSnap;if(!s)return;
  if(!busy&&cuPoll){clearInterval(cuPoll);cuPoll=null}}
 async function cuStart(mode){$('cuNote').textContent='';
  try{cuSnap=await post('/api/cubench',{mode,repeat:Number($('cuRepeat').value),models:$('cuModels').value,delaySec:30});renderCu()}catch(e){$('cuNote').textContent=e.message}}
-$('cuCheck').onclick=()=>cuStart('check');
+// The test drives other apps, which macOS allows only with Accessibility. Asked at the press, not after a failed run.
+async function cuNeedsAx(then){if(!HOST?.accessibility)return then();let ok=true;try{ok=(await HOST.accessibility()).trusted}catch{}
+ if(ok)return then();askSettings('손쉬운 사용 권한','컴퓨터 조작 시험은 bisu가 다른 앱을 눌러 보는 거라 손쉬운 사용 권한이 필요해요. 설정하러 가시겠어요?','accessibility',loadCu)}
+$('cuCheck').onclick=()=>cuNeedsAx(()=>cuStart('check'));
 $('cuDry').onclick=()=>cuStart('dry');
-$('cuRun').onclick=()=>{if(confirm('30초 뒤에 시험을 시작해요. 끝날 때까지 마우스와 창을 bisu가 쓰니, 그동안은 맥을 쓰지 말아 주세요. 중간에 멈추려면 이 화면의 「멈추기」를 누르면 돼요.'))cuStart('run')};
+$('cuRun').onclick=()=>cuNeedsAx(()=>{if(confirm('30초 뒤에 시험을 시작해요. 끝날 때까지 마우스와 창을 bisu가 쓰니, 그동안은 맥을 쓰지 말아 주세요. 중간에 멈추려면 이 화면의 「멈추기」를 누르면 돼요.'))cuStart('run')});
 $('cuStop').onclick=async()=>{try{cuSnap=await post('/api/cubench/stop');renderCu()}catch(e){$('cuNote').textContent=e.message}};
 // ---- scheduled jobs ----
 let jobsSnap=null;
@@ -1430,7 +1547,7 @@ $('sugRun').onclick=async()=>{
 
 // ---- history ----
 let runCache=[];
-$('searchForm').onsubmit=async e=>{e.preventDefault();const q=$('searchQ').value.trim();const out=$('searchOut');if(!q){out.innerHTML='';return}
+$('searchForm').onsubmit=async e=>{e.preventDefault();const q=$('searchQ').value.trim();const out=$('searchOut');$('searchSec').hidden=!q;if(!q){out.innerHTML='';return}
  out.innerHTML='<p class="note">찾는 중…</p>';
  try{const r=await api('/api/search?q='+encodeURIComponent(q));
   if(!r.sessions.length){out.innerHTML=`<p class="note">대화 ${r.total}개 중에 ${r.words.map(w=>'<b>'+esc(w)+'</b>').join(' ')}이 나온 곳이 없어요.${r.refreshError?' (색인 갱신 실패: '+esc(r.refreshError)+')':''}</p>`;return}
@@ -1440,10 +1557,25 @@ $('searchForm').onsubmit=async e=>{e.preventDefault();const q=$('searchQ').value
 // The matching words come back wrapped in ** from the index; everything else is escaped.
 const mark=s=>esc(s).replace(/\*\*(.+?)\*\*/g,'<mark>$1</mark>');
 $('showAuto').onchange=()=>renderRuns();
-async function loadRuns(){try{const {runs}=await api('/api/runs');runCache=runs;renderRuns();
+async function loadRuns(){try{const {runs}=await api('/api/runs');runCache=runs;renderRuns();heroes();
  }catch(e){$('runs').innerHTML=`<tr><td colspan="8" class="note err">${esc(e.message)}</td></tr>`}}
 const KIND={suggest:'먼저 찾아오기',job:'예약 작업'};
-function renderRuns(){const all=runCache,runs=$('showAuto').checked?all:all.filter(r=>!r.kind||r.kind==='chat');{
+// Sixty days is a long table: rows go into day groups that fold, newest open. The rows are built as before
+// and only moved, so the resume buttons keep their handlers.
+const runShut=new Set();
+function dayGroup(ts){if(!ts)return '날짜 없음';const d=new Date(ts),t=new Date();t.setHours(0,0,0,0);const days=Math.floor((t-new Date(d).setHours(0,0,0,0))/864e5);
+ return days<=0?'오늘':days===1?'어제':days<7?'이번 주':days<31?'이번 달':'그 전'}
+function groupRuns(runs){const body=$('runs');if(!runs.length)return;const rows=[...body.children],table=body.parentElement,groups=new Map();
+ runs.forEach((r,i)=>{const g=dayGroup(r.start);if(!groups.has(g))groups.set(g,[]);groups.get(g).push(rows[i])});
+ for(const old of table.querySelectorAll('tbody.grp'))old.remove();
+ let first=true;for(const [g,list] of groups){const tb=document.createElement('tbody');tb.className='grp';tb.dataset.g=g;
+  if(runShut.has(g)||(!first&&!runShut.has('open:'+g)&&g!=='어제'))tb.classList.add('shut');first=false;
+  tb.innerHTML=`<tr class="gh"><th colspan="8"><button type="button">${esc(g)}<span class="c">${list.length}</span></button></th></tr>`;
+  for(const row of list)tb.appendChild(row);
+  tb.querySelector('.gh button').onclick=()=>{const shut=tb.classList.toggle('shut');runShut.delete(shut?'open:'+g:g);runShut.add(shut?g:'open:'+g)};
+  table.appendChild(tb)}
+ body.hidden=true}
+function renderRuns(){$('runs').hidden=false;const all=runCache,runs=$('showAuto').checked?all:all.filter(r=>!r.kind||r.kind==='chat');{
  const dirs=[...new Set(runs.map(r=>r.cwd).filter(d=>d&&!/^\/(private\/)?(tmp|var)\//.test(d)))].slice(0,20);$('cwdList').innerHTML=dirs.map(d=>`<option value="${esc(short(d))}">`).join('');
  if(!$('cwd').value){let last='';try{last=localStorage.getItem('bisu.cwd')||''}catch{};$('cwd').value=last||short(dirs[0]||'')}
  fillStartCwd()
@@ -1456,10 +1588,71 @@ function renderRuns(){const all=runCache,runs=$('showAuto').checked?all:all.filt
    <td>${r.cwd?`<button data-resume="${esc(r.id)}">이어가기</button>`:''}</td></tr>`}).join('')
   :'<tr><td colspan="8" class="note">아직 bisu와 나눈 대화가 없어요.</td></tr>';
  for(const b of $('runs').querySelectorAll('[data-resume]'))b.onclick=()=>{const r=runCache.find(x=>x.id===b.dataset.resume);startChat({cwd:r.cwd,resume:r.id})}
+
+ groupRuns(runs)
  }}
 
+// ---- the screens' top line: one number or state each, from whatever has been loaded ----
+const HOURS={8:'하루 세 번',12:'하루 두 번',24:'하루 한 번',72:'3일마다',168:'일주일에 한 번'};
+function heroes(){renderCC();const set=(id,h)=>{const el=$(id);if(el&&h!=null)el.innerHTML=h};
+ if(goalsSnap){const g=goalsSnap.goals,act=g.filter(x=>x.status==='active').length,wait=g.filter(x=>x.status==='waiting').length;
+  set('goalsSum',g.length?`진행 중 <b>${act}</b>개${wait?` · <b>${wait}</b>개는 내 답을 기다려요`:''}${g.length-act-wait?` · 끝났거나 멈춘 것 ${g.length-act-wait}개`:''}`:'며칠 걸리는 일을 맡기면 bisu가 조금씩 진행해요')}
+ if(jobsSnap||briefSnap||sug){const n=jobsSnap?.jobs?.length,wait=jobsSnap?.jobs?.filter(j=>j.needsApproval).length;
+  set('jobsSum',[n==null?null:n?`예약 <b>${n}</b>개${wait?` · 승인 기다림 ${wait}개`:''}`:'예약한 작업 없음',
+   briefSnap?(briefSnap.enabled?`아침 브리핑 오전 ${briefSnap.hour}시`:'아침 브리핑 꺼짐'):null,
+   sug?(sug.enabled?`먼저 찾아오기 ${HOURS[sug.intervalHours]||sug.intervalHours+'시간마다'}`:'먼저 찾아오기 꺼짐'):null].filter(Boolean).join(' · '))}
+ if(runCache.length||viewOn('history')){const n=runCache.filter(r=>!r.kind||r.kind==='chat').length;set('historySum',n?`최근 60일 대화 <b>${n}</b>개`:'아직 나눈 대화가 없어요')}
+ if(mem)set('memorySum',`기억 <b>${mem.entries.length}</b>개 · ${mem.used.toLocaleString()} / ${mem.budget.toLocaleString()}자 전달${mem.cut?.length?` · <span class="w">${mem.cut.length}개는 제목만</span>`:''}`);
+ if(tgSnap||calSnap||alSnap){const cal=calSnap&&!calSnap.missing&&!calSnap.error?(calSnap.events==='full'&&calSnap.reminders==='full'?'캘린더 허용됨':'<span class="w">캘린더 허용 필요</span>'):null;
+  set('connectSum',[tgSnap?(tgSnap.paired?'텔레그램 <b>연결됨</b>':'텔레그램 연결 안 됨'):null,cal,alSnap?(alSnap.awake?'맥 깨어 있게 켜짐':'맥 깨어 있게 꺼짐'):null].filter(Boolean).join(' · '))}
+ if(prefs?.engine){const native=prefs.engine==='native',today=native?natSnap?.spend?.today:acctSnap?.key?.usage_daily;
+  set('settingsSum',`엔진 <b>${native?'bisu 자체 · GLM':'Claude Code'}</b>${today!=null?` · 오늘 ${usd(today)}`:''}`)}}
+// Every renderer refreshes the top lines when it is done.
+renderGoals=(f=>function(){const r=f.apply(this,arguments);heroes();return r})(renderGoals);
+renderJobs=(f=>function(){const r=f.apply(this,arguments);heroes();return r})(renderJobs);
+renderMemory=(f=>function(){const r=f.apply(this,arguments);heroes();return r})(renderMemory);
+renderTg=(f=>function(){const r=f.apply(this,arguments);heroes();return r})(renderTg);
+renderAlerts=(f=>function(){const r=f.apply(this,arguments);heroes();return r})(renderAlerts);
+renderSugSettings=(f=>function(){const r=f.apply(this,arguments);heroes();return r})(renderSugSettings);
+renderBrief=(f=>function(){const r=f.apply(this,arguments);heroes();return r})(renderBrief);
+renderSug=(f=>function(){const r=f.apply(this,arguments);heroes();return r})(renderSug);
+// ---- long explanations move behind ⓘ, so each group shows its controls and one line at most ----
+function helpify(){for(const sec of document.querySelectorAll('.page section')){const h=sec.querySelector(':scope>h2');if(!h||h.querySelector('.info'))continue;
+  const notes=[...sec.querySelectorAll(':scope>p.note:not([id]), :scope>details.note')].filter(p=>p.tagName==='DETAILS'||p.textContent.trim().length>40);if(!notes.length)continue;
+  const box=document.createElement('div');box.className='helpText';box.hidden=true;for(const n of notes){n.classList.remove('note');box.appendChild(n)}
+  h.after(box);const b=document.createElement('button');b.type='button';b.className='info';b.textContent='i';b.setAttribute('aria-label','설명');b.setAttribute('aria-expanded','false');
+  b.onclick=()=>{box.hidden=!box.hidden;b.setAttribute('aria-expanded',String(!box.hidden))};h.appendChild(b)}}
+// ---- a feature that needs a macOS permission asks at the press, then opens System Settings ----
+let permAfter=null;
+function askSettings(title,text,pane,after){const d=$('permDlg');$('permTitle').textContent=title;$('permText').textContent=text;
+ $('permOk').textContent=HOST?'설정 열기':'확인';permAfter=after||null;
+ d.onclose=()=>{if(d.returnValue!=='ok'||!HOST)return;
+  if(pane==='notifications')HOST.openNotificationSettings?.();else if(pane==='accessibility')HOST.grantAccessibility?.();else HOST.openPane?.(pane)};
+ if(!HOST)$('permText').textContent=text.replace(/ 설정하러 가시겠어요\?$/,'')+' 시스템 설정 → 개인정보 보호 및 보안에서 bisu를 켜 주세요.';
+ d.returnValue='';d.showModal()}
+// Back from System Settings: look again, so the screen shows what changed without a reload.
+const recheck=()=>{if(!permAfter)return;const f=permAfter;permAfter=null;setTimeout(f,300)};
+addEventListener('focus',recheck);HOST?.onShown?.(recheck);
+// ---- the panel's switches and footer (desktop only) ----
+async function renderCC(){if(!PANEL)return;
+ const today=prefs?.engine==='native'?natSnap?.spend?.today:acctSnap?.key?.usage_daily,waiting=sug?.list?.filter?.(x=>!x.read).length;
+ $('ccStatus').innerHTML=['듣고 있어요',today!=null?`오늘 <b>${usd(today)}</b>`:null].filter(Boolean).join(' · ');
+ if(!HOST){$('ccSwitches').hidden=$('ccFoot').hidden=true;return}
+ $('ccSwitches').hidden=$('ccFoot').hidden=false;
+ try{$('ccSel').checked=await HOST.selectionEnabled()}catch{}
+ if(sug)$('ccSug').checked=!!sug.enabled;if(alSnap)$('ccAwake').checked=!!alSnap.awake}
+$('ccSel').onchange=async()=>{const on=$('ccSel').checked;
+ if(on&&HOST?.accessibility){let ok=true;try{ok=(await HOST.accessibility()).trusted}catch{}
+  if(!ok){$('ccSel').checked=false;askSettings('손쉬운 사용 권한','선택한 글을 읽으려면 손쉬운 사용 권한이 필요해요. 설정하러 가시겠어요?','accessibility',renderCC);return}}
+ try{$('ccSel').checked=await HOST.setSelectionEnabled(on)}catch{}};
+$('ccSug').onchange=async()=>{try{sug=await post('/api/proactive',{enabled:$('ccSug').checked});renderSug()}catch{$('ccSug').checked=!$('ccSug').checked}};
+$('ccAwake').onchange=async()=>{try{alSnap=await post('/api/alerts',{awake:$('ccAwake').checked})}catch{$('ccAwake').checked=!$('ccAwake').checked}};
+$('ccFull').onclick=()=>HOST?.openFull?.();
+$('ccSettings').onclick=()=>HOST?.openFull?.('settings');
+$('ccQuit').onclick=()=>{if(confirm('bisu를 끌까요? 끄면 텔레그램과 예약 작업에도 답하지 못해요.'))HOST?.quit?.()};
+if(PANEL){api('/api/alerts').then(a=>{alSnap=a;renderCC()}).catch(()=>{});HOST?.onShown?.(renderCC)}
 // ---- boot ----
-mountBisu();setMood('idle','듣고 있어요');
+mountBisu();setMood('idle','듣고 있어요');helpify();
 $('metaOn').checked=META;
 $('metaOn').onchange=()=>{META=$('metaOn').checked;document.body.classList.toggle('meta',META);post('/api/prefs',{meta:META}).then(p=>{prefs=p}).catch(()=>{});
  for(const d of document.querySelectorAll('details.act'))d.open=META};
@@ -1469,16 +1662,17 @@ function renderEngine(){for(const r of document.querySelectorAll('input[name=eng
  $('approveRow').hidden=!native;
  // Each engine's own keys, spending and models; the other one's would only mislead.
  for(const id of ['orKey','orSpend','orRoles'])$(id).hidden=native;
- for(const id of ['nativeSec','nativeRoles','calSec'])$(id).hidden=!native;
- if(native&&$('settingsView').classList.contains('on'))loadNative();
+ for(const id of ['nativeSec','nativeRoles'])$(id).hidden=!native;
+ if(native&&viewOn('settings'))loadNative();
  for(const el of document.querySelectorAll('.promise'))el.textContent=askPromise();
  if(native){const k=$('key');k.textContent=prefs.glm?'key · Z.ai':'no Z.ai key';k.className='badge '+(prefs.glm?'ok':'bad')}else loadAccount();
  $('engineNote').textContent=prefs.engineForced?'셸에서 BISU_ENGINE으로 정해서 이번 실행은 이 엔진이에요. 여기서 고르려면 BISU_ENGINE 없이 다시 여세요.'
   :native&&!prefs.glm?'Z.ai 키가 없어요. Dec Browser → 설정 → 자격 증명에 사이트 https://api.z.ai로 저장하고 bisu를 다시 여세요.':'새 대화부터 적용돼요. 이미 열린 대화는 시작할 때 엔진 그대로예요.'}
 const KEY_KO={'use-only':'Dec으로 연결됨 (사용 전용: bisu는 일회용 토큰만 받고 키는 못 봐요)',plain:'셸의 키 (평문)',none:'<span class="err">키가 없어요</span>'};
+let calSnap=null;
 const CAL_KO={full:'허용됨',not_asked:'<span class="w">아직 안 물어봤어요</span>',denied:'<span class="err">거부됨</span>',restricted:'<span class="err">제한됨</span>',write_only:'<span class="w">추가만 허용 — 보려면 전체 접근이 필요해요</span>'};
 async function loadNative(){
- try{const n=await api('/api/native');
+ try{const n=await api('/api/native');natSnap=n;heroes();
   $('nativeKeys').innerHTML=[['Z.ai (GLM)',KEY_KO[n.glm]+(n.glm==='none'?' — 사이트 <code>https://api.z.ai</code>로 저장해요':'')],
    ['판단 (OpenAI Decisions)',KEY_KO[n.decisions]+(n.decisions==='none'?' — 없으면 판단 없이 GLM-5.3이 모든 요청을 받고, 바뀌는 일은 전부 물어요. 사이트 <code>https://api.openai.com</code>':'')]]
    .map(([x,y])=>`<div class="k">${x}</div><div>${y}</div>`).join('');
@@ -1487,14 +1681,17 @@ async function loadNative(){
    .map(([x,y])=>`<div class="k">${x}</div><div>${y}</div>`).join('');
   renderCal(n.calendar);
  }catch(e){$('nativeKeys').innerHTML=`<div class="k">오류</div><div class="err">${esc(e.message)}</div>`}}
-function renderCal(c={}){
+async function loadCalendar(){try{renderCal((await api('/api/native')).calendar||{})}catch(e){$('calInfo').innerHTML=`<div class="k">상태</div><div class="err">${esc(e.message)}</div>`}}
+function renderCal(c={}){calSnap=c;
  const ask=$('calAsk');
  if(c.missing||c.error){$('calInfo').innerHTML=`<div class="k">상태</div><div><span class="w">${c.missing?'캘린더 도우미가 아직 설치되지 않았어요 (mac/native/build.sh가 설치해요)':esc(c.error)}</span></div>`;ask.hidden=true;return}
  $('calInfo').innerHTML=[['캘린더',CAL_KO[c.events]||esc(c.events)],['미리 알림',CAL_KO[c.reminders]||esc(c.reminders)]].map(([x,y])=>`<div class="k">${x}</div><div>${y}</div>`).join('');
- const st=[c.events,c.reminders];
- ask.hidden=!st.some(s=>s==='not_asked'||s==='write_only');
- $('calNote').textContent=st.some(s=>s==='denied'||s==='restricted')?'시스템 설정 → 개인정보 보호 및 보안 → 캘린더, 미리 알림에서 bisu를 켜 주세요.':''}
-$('calAsk').onclick=async()=>{$('calAsk').disabled=true;$('calNote').textContent='macOS가 묻는 창에서 허용을 눌러 주세요…';
+ const st=[c.events,c.reminders],blocked=st.some(s=>s==='denied'||s==='restricted');
+ ask.hidden=!blocked&&!st.some(s=>s==='not_asked'||s==='write_only');
+ ask.textContent=blocked?'시스템 설정에서 허용…':'접근 허용 요청';ask.dataset.blocked=blocked?(c.events==='denied'||c.events==='restricted'?'calendars':'reminders'):'';
+ $('calNote').textContent='';heroes()}
+$('calAsk').onclick=async()=>{if($('calAsk').dataset.blocked){askSettings('캘린더 · 미리 알림',`bisu가 일정과 할 일을 보려면 시스템 설정에서 bisu를 켜야 해요. 설정하러 가시겠어요?`,$('calAsk').dataset.blocked,loadCalendar);return}
+ $('calAsk').disabled=true;$('calNote').textContent='macOS가 묻는 창에서 허용을 눌러 주세요…';
  try{renderCal(await post('/api/calendar/access',{}))}catch(e){$('calNote').textContent=e.message}finally{$('calAsk').disabled=false}};
 for(const r of document.querySelectorAll('input[name=approve]'))r.onchange=()=>post('/api/prefs',{approve:r.value}).then(p=>{prefs=p;renderEngine()}).catch(()=>{});
 for(const r of document.querySelectorAll('input[name=engine]'))r.onchange=()=>post('/api/prefs',{engine:r.value}).then(p=>{prefs=p;renderEngine()}).catch(e=>{$('engineNote').textContent=e.message});
@@ -1512,10 +1709,12 @@ Promise.all([refreshChats(),prefsReady]).then(()=>{let id=null,v='chat';try{id=l
  else if(!prefs.onboarded){}
  else if(id&&recentOne(chats.find(c=>c.id===id)))open(id);
  else if(PANEL&&recentOne(chats[0]))open(chats[0].id);
- show(PANEL?'chat':v);if(!cur)chatUI()});
+ show(PANEL?'chat':Q.get('view')||v);if(!cur)chatUI()});
+// The menu's 「설정…」 and the panel's 설정 open the full window on a screen; an open window just switches.
+HOST?.onView?.(v=>show(v));
 setInterval(refreshChats,5000);
 // Slower than the chat list: a suggestion appears about once a day, and the answer takes a minute.
-setInterval(()=>{loadSuggestions();if($('settingsView').classList.contains('on'))loadJobs()},12000);
+setInterval(()=>{loadSuggestions();if(viewOn('jobs'))loadJobs()},12000);
 </script>
 </body>
 </html>
