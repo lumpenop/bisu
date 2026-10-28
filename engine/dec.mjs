@@ -153,6 +153,7 @@ export async function task({goal, url, inputs = [], readOnly = false, budget, wa
 // drive()) is the page's visible text in ego's snapshot format plus dec's own candidates; the tab's whole text,
 // read through the endpoint, is what the loop searches for answers off screen.
 const esc = t => JSON.stringify(String(t ?? ''));
+const origin = u => { try { return new URL(u).origin } catch { return '' } };
 export function directDriver({readText = true, tab = null} = {}) {
   let tabId = tab, runId = null, lastReq = null, viewNow = null;
   // Stop at the person: a login handed to them, a step dec wants them to confirm, the tab taken over.
@@ -181,14 +182,17 @@ export function directDriver({readText = true, tab = null} = {}) {
     if (readText && lines.length === 20) { try { body = String((await api('POST', `/v1/tabs/${tabId}/content`, {limit: 12000})).text || '') } catch {} }
     // dec rates each action's risk itself: what is not "safe" is a step bisu holds for the person.
     const cands = (q.candidates || []).map((c, i) => ({index: i, decIndex: c.index, requestId: w.p.requestId, kind: c.kind, name: c.name || c.kind, label: c.name || '', risk: c.risk ?? 'safe'}));
-    viewNow = {snap: lines.map(t => `text ${esc(t)}`).join('\n'), url: q.url || q.origin || '', title: page.title || '', did, cands, body, y: 0, maxY: 0};
+    viewNow = {snap: lines.map(t => `text ${esc(t)}`).join('\n'), url: page.url || q.url || q.origin || '', title: page.title || '', did, cands, body, y: 0, maxY: 0};
     return viewNow;
   };
   const start = async (goal, ins = []) => {
-    const s = await api('POST', '/v1/runs', {tabId, goal: String(goal || 'bisu drives this tab').slice(0, 500), decider: 'agent', ...(ins.length ? {inputs: ins.slice(0, 8).map(([name, value]) => ({name, value}))} : {})});
+    // bisu counts its own steps; dec's run must not end first (its default is 12).
+    const s = await api('POST', '/v1/runs', {tabId, goal: String(goal || 'bisu drives this tab').slice(0, 500), decider: 'agent', budget: 40, ...(ins.length ? {inputs: ins.slice(0, 8).map(([name, value]) => ({name, value}))} : {})});
     runId = s.runId ?? s.id; lastReq = null;
   };
-  const loaded = async () => { for (let i = 0; i < 50; i++) { const t = tabsOf(await api('GET', '/v1/tabs')).find(x => x.id === tabId); if (t && t.loading === false) return true; await sleep(100) } return false };
+  // Loaded at the address asked for: a tab sent to another site still shows the old page for a moment, and a run
+  // started then is allowed for the old site only (AI_TASK_CONSENT_REQUIRED on the new one).
+  const loaded = async url => { for (let i = 0; i < 50; i++) { const t = tabsOf(await api('GET', '/v1/tabs')).find(x => x.id === tabId); if (t && t.loading === false && (!url || origin(t.url) === origin(url))) return true; await sleep(100) } return false };
   const stop = async () => { try { await api('POST', `/v1/runs/${runId}/stop`, {}) } catch {} for (let i = 0; i < 30; i++) { try { if ((await api('GET', `/v1/runs/${runId}`)).run.end) break } catch { break } await sleep(100) } };
   return {
     get id() { return runId },
@@ -198,10 +202,16 @@ export function directDriver({readText = true, tab = null} = {}) {
     readPage: async () => String((await api('POST', `/v1/tabs/${tabId}/content`, {limit: 20000})).text || ''),
     // One tab per conversation: the last task's tab goes to the new page; a new tab only when there is none.
     async open(url, ins = [], goal = '') {
+      // dec lets a run work only on the sites its tab was opened for: another site gets a tab of its own, and the
+      // last one is closed so they do not pile up.
       let moved = false;
-      if (tabId) try { await api('POST', `/v1/tabs/${tabId}/navigate`, {url, agent: 'bisu'}); moved = true } catch (e) { if (e.status !== 404) throw e }
+      if (tabId) {
+        const was = tabsOf(await api('GET', '/v1/tabs')).find(t => t.id === tabId);
+        if (was && origin(was.url) === origin(url)) { await api('POST', `/v1/tabs/${tabId}/navigate`, {url, agent: 'bisu'}); moved = true }
+        else if (was) await api('POST', `/v1/tabs/${tabId}/close`, {agent: 'bisu'}).catch(() => {});
+      }
       if (!moved) tabId = (await api('POST', '/v1/tabs', {url, background: true, agent: 'bisu'})).tab.id;
-      await loaded();
+      await loaded(url);
       await start(goal, ins);
       return look([`opened ${url}`]);
     },
