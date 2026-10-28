@@ -482,6 +482,37 @@ input.switch:focus-visible{outline:none;box-shadow:var(--glow)}
 .ccSide .cc{margin:0;background:color-mix(in srgb,var(--card) 70%,var(--bg))}
 .ccSide .ccRow{font-size:12.5px;padding:8px 0}
 .ccSide .ccRow .hn{display:block;margin:1px 0 0}
+/* bots: a group in the sidebar, the current one on top of the chat list, details in a dialog */
+nav.side .gl{font-family:var(--display);font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.02em;padding:8px 10px 3px}
+.botList{display:flex;flex-direction:column;gap:2px}
+.side .botList button .av,.botHead .av{width:20px;height:20px;border-radius:7px;flex:none;display:grid;place-items:center;font-size:11px;font-weight:800;color:var(--accent-ink);background:linear-gradient(180deg,var(--g1),var(--g2))}
+.side .botList button:not(.on) .av{filter:saturate(.35);opacity:.8}
+.side .botList button .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side .botNew{color:var(--muted);font-weight:600}
+.botHead{display:flex;align-items:center;gap:10px;width:auto;margin:10px 10px 0;padding:9px 12px;border-radius:14px;border:1px solid var(--line);background:color-mix(in srgb,var(--card) 70%,var(--bg));box-shadow:none;text-align:left}
+.botHead:hover:not(:disabled){transform:none;border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
+.botHead .av{width:28px;height:28px;border-radius:9px;font-size:13px}
+.botHead .bx{flex:1;min-width:0;display:flex;flex-direction:column}
+.botHead .bx b{font-family:var(--display);font-size:13.5px}
+.botHead .bx span{font-size:11.5px;color:var(--muted);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.botHead .chev{color:var(--muted)}
+body.panel .botHead{display:none}
+dialog#botDlg{border:1px solid var(--line);border-radius:var(--rc);background:var(--card);color:var(--ink);box-shadow:var(--sh),0 24px 60px -20px rgba(0,0,0,.35);padding:20px 22px;width:min(460px,92vw)}
+dialog#botDlg::backdrop{background:rgba(0,0,0,.28)}
+#botDlg form{margin:0;display:flex;flex-direction:column;gap:10px}
+#botDlg .dt{font-family:var(--display);font-weight:800;font-size:16px;margin:0}
+#botDlg label.f{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--muted);font-weight:600}
+#botDlg label.f input,#botDlg label.f textarea{color:var(--ink);font-weight:400}
+#botDlg .actions{display:flex;gap:8px;align-items:center;margin-top:4px}#botDlg .sp{flex:1}
+#panelStart .botPick{display:flex;gap:6px;align-items:center}
+#panelStart .botPick .lbl{font-size:12px;color:var(--muted)}
+#panelStart .botPick .selbtn{flex:1}
+/* the bot-making chat: a quick form above the conversation, and the preview card is the approval */
+.makerCard{background:color-mix(in srgb,var(--card) 70%,var(--bg));border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.makerCard .row{display:flex;gap:8px;flex-wrap:wrap}.makerCard .row input{flex:1;min-width:140px}
+.makerCard .t{font-family:var(--display);font-weight:700;font-size:13px}
+.ask .botPrev{display:grid;grid-template-columns:72px 1fr;gap:4px 10px;font-size:13px;margin:4px 0 10px}
+.ask .botPrev .k{color:var(--muted)}.ask .botPrev pre{grid-column:1/-1;margin:2px 0 0;font-family:inherit;font-size:13px;white-space:pre-wrap}
 </style>
 </head>
 <body>
@@ -490,6 +521,10 @@ input.switch:focus-visible{outline:none;box-shadow:var(--glow)}
 <div class="shell">
 <nav class="side" id="side" aria-label="화면">
  <div class="brand"><span class="bisu live"></span><b>bisu</b></div>
+ <div class="gl">봇</div>
+ <div id="botList" class="botList"></div>
+ <button type="button" id="botNew" class="botNew"><svg viewBox="0 0 20 20"><path d="M10 4.5v11M4.5 10h11"/></svg>봇 만들기</button>
+ <div class="gl">화면</div>
  <button data-view="chat" class="on"><svg viewBox="0 0 20 20"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14h-6.5L6 16.8V14H4a1.5 1.5 0 0 1-1.5-1.5V6A1.5 1.5 0 0 1 4 4.5z"/></svg>대화</button>
  <button data-view="goals"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="3.5"/><circle cx="10" cy="10" r=".6"/></svg>목표</button>
  <button data-view="jobs"><svg viewBox="0 0 20 20"><circle cx="10" cy="10.5" r="6.5"/><path d="M10 7v3.7l2.4 1.6M7.5 2.8h5"/></svg>예약 작업</button>
@@ -503,6 +538,7 @@ input.switch:focus-visible{outline:none;box-shadow:var(--glow)}
 <main class="views">
 <div class="view on" id="chatView">
  <aside>
+  <button type="button" class="botHead" id="botHead" title="봇 정보"><span class="av" id="botHeadAv">b</span><span class="bx"><b id="botHeadName">bisu</b><span id="botHeadJob"></span></span><span class="chev">›</span></button>
   <div class="newchat">
    <label for="cwd">어느 폴더에서 할까요?</label>
    <div class="row"><input type="text" id="cwd" class="mono" list="cwdList" spellcheck="false" autocomplete="off" placeholder="~/Desktop/project">
@@ -522,6 +558,7 @@ input.switch:focus-visible{outline:none;box-shadow:var(--glow)}
    <span class="bisu live"></span>
    <p class="startTitle">뭐 도와줄까요?</p>
    <p class="ccStatus" id="ccStatus">듣고 있어요</p>
+   <div class="botPick" id="botPickRow" hidden><span class="lbl">봇</span><select id="botPick"></select></div>
    <p class="note"><span class="promise">파일을 고치거나 명령을 실행하기 전엔 꼭 물어볼게요.</span></p>
    <div class="row"><span class="lbl">폴더</span>
     <input type="text" id="startCwd" class="mono" list="cwdList" spellcheck="false" autocomplete="off" placeholder="~/Desktop/project">
@@ -784,6 +821,16 @@ input.switch:focus-visible{outline:none;box-shadow:var(--glow)}
 
 </main>
 </div>
+<dialog id="botDlg"><form method="dialog" id="botForm">
+ <p class="dt" id="botDlgTitle">봇 정보</p>
+ <label class="f">이름<input type="text" id="bName" maxlength="40" autocomplete="off"></label>
+ <label class="f">맡은 일<input type="text" id="bJob" maxlength="200" autocomplete="off" placeholder="한 문장으로, 예: 매주 업계 뉴스를 찾아 요약해요"></label>
+ <label class="f">작업 폴더<input type="text" id="bCwd" class="mono" list="cwdList" spellcheck="false" autocomplete="off"></label>
+ <label class="f">말투<input type="text" id="bTone" maxlength="80" autocomplete="off" placeholder="예: 존댓말, 짧게"></label>
+ <label class="f">일하는 방식<textarea id="bIns" rows="5" placeholder="대화로 알려 준 방식을 여기서 고칠 수 있어요"></textarea></label>
+ <p class="note err" id="bErr"></p>
+ <div class="actions"><button type="button" class="danger" id="bDel">봇 지우기</button><span class="sp"></span><button value="cancel" type="button" id="bCancel">닫기</button><button class="primary" type="button" id="bSave">저장</button></div>
+</form></dialog>
 <dialog id="permDlg"><form method="dialog"><p class="dt" id="permTitle"></p><p class="note" id="permText"></p><div class="actions"><button value="cancel">취소</button><button class="primary" value="ok" id="permOk">설정 열기</button></div></form></dialog>
 
 <script>
@@ -1034,7 +1081,10 @@ function toolSummary(name,input={}){
  if(input.path&&!input.command&&!input.pattern)return short(input.path);
  if(input.command)return input.command;if(input.file_path)return short(input.file_path);if(input.pattern)return input.pattern+(input.path?'  in '+short(input.path):'');
  if(input.url)return input.url;if(input.description)return input.description;if(input.prompt)return input.prompt;return JSON.stringify(input)}
-function askBody(tool,input={}){
+const isBotTool=t=>/(^|__)bot_(create|update)$/.test(t||'');
+function botPreview(tool,input={}){const rows=[['이름',input.name],['맡은 일',input.job],['폴더',input.cwd||'~'],['말투',input.tone]].filter(([,v])=>v);
+ return `<div class="botPrev">${rows.map(([k,v])=>`<span class="k">${k}</span><span>${esc(v)}</span>`).join('')}${input.instructions?`<span class="k">일하는 방식</span><span></span><pre>${esc(input.instructions)}</pre>`:''}</div>`}
+function askBody(tool,input={}){if(isBotTool(tool))return botPreview(tool,input);
  // bisu's own engine names its tools differently and says path instead of file_path.
  if(tool==='run_command')tool='Bash';
  if(tool==='edit_file'){tool='Edit';input={...input,file_path:input.path}}
@@ -1059,7 +1109,7 @@ function actDone(meta){if(!act)return;const d=act.querySelector('details');d.cla
 function atBottom(){const m=$('msgs');return m.scrollHeight-m.scrollTop-m.clientHeight<80}
 function render(ev){
  switch(ev.kind){
-  case 'hello':wrap().innerHTML='';live=null;act=null;toolEls={};tasks=[];renderTasks();if(PANEL&&ev.chat?.sessionId)HOST?.session?.(ev.chat.sessionId,ev.chat.cwd);
+  case 'hello':wrap().innerHTML='';live=null;act=null;toolEls={};setTimeout(makerCard,0);tasks=[];renderTasks();if(PANEL&&ev.chat?.sessionId)HOST?.session?.(ev.chat.sessionId,ev.chat.cwd);
    if(ev.chat?.pending)setMood('waiting','확인이 필요해요');else if(ev.chat?.busy)setMood('thinking','생각하는 중…');else setMood('idle','듣고 있어요');break;
   case 'init':if(PANEL&&cur)HOST?.session?.(ev.sessionId,cur.cwd);break;
   case 'resumed':add(`지난 대화를 이어가요${ev.count?` · 지난 메시지 ${ev.count}개는 흐리게 보여요`:''}`,null,'sys');break;
@@ -1075,9 +1125,10 @@ function render(ev){
   case 'tool_result':{const el=toolEls[ev.id];if(!el)break;const st=el.querySelector('.st');st.textContent=ev.error?'오류':'완료';st.classList.toggle('e',ev.error);
    el.querySelector('details').insertAdjacentHTML('beforeend',`<pre>${esc(ev.text||'(no output)')}</pre>`)}break;
   case 'approval':live=null;{const what=String(ev.description||toolSummary(ev.tool,ev.input)||'').slice(0,90);const el=add(`<div class="ask" data-id="${esc(ev.request_id)}" data-what="${esc(what)}"><div class="q">${esc(askQ(ev.tool))}${ev.description?` <span class="note" style="font-weight:400">${esc(ev.description)}</span>`:''}</div>${askBody(ev.tool,ev.input)}
-   <div class="btns"><button class="primary" data-a="allow">허용</button><button data-a="always">이 대화에선 계속 허용</button><button class="danger" data-a="deny">안 돼요</button></div></div>`,null);
+   <div class="btns">${isBotTool(ev.tool)?`<button class="primary" data-a="allow">${/create$/.test(ev.tool)?'만들기':'바꾸기'}</button><button class="danger" data-a="deny">다시 할게요</button>`:`<button class="primary" data-a="allow">허용</button><button data-a="always">이 대화에선 계속 허용</button><button class="danger" data-a="deny">안 돼요</button>`}</div></div>`,null);
+   if(isBotTool(ev.tool))el.querySelector('.q').textContent=/create$/.test(ev.tool)?'이렇게 만들까요?':'이렇게 바꿀까요?';
    for(const b of el.querySelectorAll('button'))b.onclick=()=>answer(ev.request_id,b.dataset.a,el);setMood('waiting','확인이 필요해요')}break;
-  case 'approval_done':{const el=wrap().querySelector(`.ask[data-id="${CSS.escape(ev.request_id)}"]`);if(el){el.className='ask done';const w=el.dataset.what?` · ${esc(el.dataset.what)}`:'';el.innerHTML=ev.allow?`허용했어요${w}${ev.always?' · 이 대화에선 계속':''}`:ev.reason==='stopped'?'답하지 않았어요 (멈춤)':`거절했어요${w}`}
+  case 'approval_done':{if(ev.allow&&isBotTool(ev.tool))setTimeout(loadBots,1500);const el=wrap().querySelector(`.ask[data-id="${CSS.escape(ev.request_id)}"]`);if(el){el.className='ask done';const w=el.dataset.what?` · ${esc(el.dataset.what)}`:'';el.innerHTML=ev.allow?`허용했어요${w}${ev.always?' · 이 대화에선 계속':''}`:ev.reason==='stopped'?'답하지 않았어요 (멈춤)':`거절했어요${w}`}
    if(mood.state==='waiting'&&!wrap().querySelector('.ask:not(.done)'))setMood('thinking','이어서 하는 중…')}break;
   case 'auto_allowed':if(ev.judged){const row=document.createElement('div');row.className='m autoallow';row.textContent=`자동 허용 · ${stepName(ev.tool)} · ${ev.reason}`;actBlock().querySelector('.actL').appendChild(row)}break;
   case 'judgment':if(ev.judge==='route')add(`판단 · ${esc(ROUTE_KO[ev.route]||ev.route)} ${Math.round((ev.confidence||0)*100)}%${ev.hard!=null?` · 어려움 ${Math.round(ev.hard*100)}%`:''}`,null,'res');
@@ -1112,7 +1163,7 @@ function chatUI(){const c=cur;$('chatHead').hidden=!c;$('compose').hidden=false;
  if(!c){if(!wrap().children.length){wrap().innerHTML=helloHTML();mountBisu(wrap())}mountBisu();renderRecent();renderOnboard();return}
  $('chatTitle').textContent=c.title||'새 대화';$('chatSub').textContent=place(c.cwd);$('chatSub').title=short(c.cwd);
  $('stop').hidden=!c.busy;$('input').placeholder=c.busy?(PANEL?'답하는 중 — 보내도 돼요':'답하는 중이에요 — 지금 보내도 이어서 읽어요'):(PANEL?'bisu에게 말하기':'bisu에게 말하기  (Enter 보내기 · Shift+Enter 줄바꿈)');renderList()}
-function renderList(){$('chatList').innerHTML=chats.map(c=>`<div class="ci${cur&&c.id===cur.id?' on':''}" data-id="${c.id}"><div class="t">${esc(c.title||'새 대화')}</div><div class="s" title="${esc(short(c.cwd))}"><span class="dot${c.pending?' wait':c.busy||c.tasks?' busy':''}"></span>${esc(place(c.cwd))}</div></div>`).join('')||'<p class="note" style="padding:0 12px">아직 대화가 없어요.</p>';
+function renderList(){$('chatList').innerHTML=myChats().map(c=>`<div class="ci${cur&&c.id===cur.id?' on':''}" data-id="${c.id}"><div class="t">${esc(c.title||'새 대화')}</div><div class="s" title="${esc(short(c.cwd))}"><span class="dot${c.pending?' wait':c.busy||c.tasks?' busy':''}"></span>${esc(place(c.cwd))}</div></div>`).join('')||'<p class="note" style="padding:0 12px">아직 대화가 없어요.</p>';
  for(const el of $('chatList').querySelectorAll('.ci'))el.onclick=()=>open(el.dataset.id)}
 async function refreshChats(){try{const r=await api('/api/chats');chats=r.chats;
  if(cur){const c=chats.find(x=>x.id===cur.id);
@@ -1137,11 +1188,11 @@ async function answer(request_id,a,el){for(const b of el.querySelectorAll('butto
 async function sendMsg(){const raw=$('input').value.trim();if(!raw)return;
  // No chat yet: this message starts one, in the folder chosen on the start card or in the sidebar.
  if(!cur){const box=PANEL?$('startCwd'):$('cwd'),cwd=box.value.trim();try{localStorage.setItem('bisu.cwd',cwd)}catch{}
-  const b=$('sendBtn');b.disabled=true;try{const {chat}=await post('/api/chats',{cwd});chats.unshift(chat);show('chat');open(chat.id)}
+  const b=$('sendBtn');b.disabled=true;try{const {chat}=await post('/api/chats',{cwd,bot:curBot});chats.unshift(chat);show('chat');open(chat.id)}
   catch(e){const er=$('startErr');if(PANEL&&er){er.textContent=e.message;er.hidden=false}else alert(e.message);return}finally{b.disabled=false}}
  const t=withContext(raw);$('input').value='';grow();
  try{await post(`/api/chats/${cur.id}/send`,{text:t})}catch(e){$('input').value=raw;add(`<span class="err">${esc(e.message)}</span>`,null,'sys')}}
-async function startChat(body,errEl){if(errEl){errEl.hidden=true;errEl.textContent=''}try{const {chat}=await post('/api/chats',body);chats.unshift(chat);show('chat');open(chat.id)}
+async function startChat(body,errEl){if(errEl){errEl.hidden=true;errEl.textContent=''}try{const {chat}=await post('/api/chats',{bot:curBot,...body});chats.unshift(chat);show('chat');open(chat.id)}
  catch(e){if(errEl){errEl.textContent=e.message;errEl.hidden=false}else alert(e.message)}}
 $('newChat').onclick=()=>{const cwd=$('cwd').value.trim();try{localStorage.setItem('bisu.cwd',cwd)}catch{};startChat({cwd})};
 $('cwd').onkeydown=e=>{if(e.key==='Enter')$('newChat').click()};
@@ -1151,7 +1202,7 @@ const FRESH_MS=6*3600e3;
 const fresh=c=>Date.now()-(c.lastAt||c.created||0)<FRESH_MS;
 // The panel's way back to an earlier conversation: its start card lists the recent ones.
 function renderRecent(){const el=$('recent');if(!el)return;if(!PANEL||cur){el.innerHTML='';return}
- const list=chats.slice(0,6);
+ const list=myChats().slice(0,6);
  el.innerHTML=list.length?`<div class="rh">지난 대화</div>`+list.map(c=>`<div class="ri" data-id="${esc(c.id)}"><span class="dot${c.pending?' wait':c.busy||c.tasks?' busy':''}"></span><span class="t">${esc(c.title||'새 대화')}</span><span class="w">${c.lastAt||c.created?ago(c.lastAt||c.created):''}</span></div>`).join(''):'';
  for(const r of el.querySelectorAll('.ri'))r.onclick=()=>open(r.dataset.id)}
 
@@ -1186,7 +1237,7 @@ function renderOnboard(){
 // chat is open — including right after the engine restarts, which is when it matters most.
 function fillStartCwd(){const i=$('startCwd');if(!i||i.value)return;
  let last='';try{last=localStorage.getItem('bisu.cwd')||''}catch{}
- i.value=last||short(chats[0]?.cwd||$('cwd').value||'')}
+ i.value=last||short(myChats()[0]?.cwd||curBotInfo()?.cwd||$('cwd').value||'')}
 function startFromPanel(){const cwd=$('startCwd').value.trim();try{localStorage.setItem('bisu.cwd',cwd)}catch{}
  startChat({cwd},$('startErr'))}
 $('startNew').onclick=startFromPanel;
@@ -1242,7 +1293,7 @@ $('save').onclick=async e=>{e.preventDefault();const body={};for(const i of $('r
 // The files in ~/.config/bisu/memory, which launch.zsh folds into every new run's system prompt.
 // Editing here is the same thing as editing the markdown, so the two never disagree.
 let mem=null,memEdit=null;
-async function loadMemory(){try{mem=await api('/api/memory');renderMemory()}catch(e){$('memList').innerHTML=`<p class="note err">${esc(e.message)}</p>`}}
+async function loadMemory(){try{mem=await api('/api/memory'+mb());renderMemory()}catch(e){$('memList').innerHTML=`<p class="note err">${esc(e.message)}</p>`}}
 const whenText=ts=>new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+new Date(ts).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
 function renderMemory(){
  const m=mem;if(!m)return;
@@ -1258,10 +1309,10 @@ function renderMemory(){
  $('memDigest').textContent=m.digest||'(비어 있어요 — 아직 전달되는 게 없어요)';
  for(const row of $('memList').querySelectorAll('.mem')){
   const e=m.entries.find(x=>x.id===row.dataset.id);if(!e)continue;
-  row.querySelector('[data-a=pin]').onclick=async()=>{try{mem=await post('/api/memory',{id:e.id,pin:!e.pin});renderMemory()}catch(er){alert(er.message)}};
+  row.querySelector('[data-a=pin]').onclick=async()=>{try{mem=await post('/api/memory'+mb(),{id:e.id,pin:!e.pin});renderMemory()}catch(er){alert(er.message)}};
   row.querySelector('[data-a=edit]').onclick=()=>memForm(e);
   row.querySelector('[data-a=del]').onclick=async()=>{if(!confirm(`“${e.title}” 기억을 지울까요? bisu가 다시 보지 않아요.`))return;
-   try{mem=await api('/api/memory/'+encodeURIComponent(e.id),{method:'DELETE'});renderMemory();if(!$('memFormSec').hidden)memForm(null)}catch(er){alert(er.message)}}}
+   try{mem=await api('/api/memory/'+encodeURIComponent(e.id)+mb(),{method:'DELETE'});renderMemory();if(!$('memFormSec').hidden)memForm(null)}catch(er){alert(er.message)}}}
 }
 function memForm(e){memEdit=e?e.id:null;$('memFormSec').hidden=false;
  $('memFormTitle').textContent=e?'기억 고치기':'기억 추가';
@@ -1304,7 +1355,7 @@ async function saveMemory(){
   // Editing a memory already names the file to write, so asking again would only interrupt: a
   // duplicate elsewhere is a cleanup the page shows in the list, not a reason to block the save.
   if(!memEdit){
-   const {candidates}=await post('/api/memory/check',b);
+   const {candidates}=await post('/api/memory/check'+mb(),b);
    if(candidates.length){memPending=b;$('memNote').textContent='';renderCands(candidates);return}
   }
   await writeMemory(b);
@@ -1314,7 +1365,7 @@ async function saveMemory(){
 async function writeMemory(b){
  $('memSave').disabled=true;
  try{
-  mem=await post('/api/memory',b);
+  mem=await post('/api/memory'+mb(),b);
   const merged=mem.updatedInPlace;
   memPending=null;$('memCands').hidden=true;$('memCands').innerHTML='';
   memForm(null);renderMemory();
@@ -1572,7 +1623,7 @@ $('cuStop').onclick=async()=>{try{cuSnap=await post('/api/cubench/stop');renderC
 let jobsSnap=null;
 const whenShort=ts=>ts?new Date(ts).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
 async function loadJobs(){try{jobsSnap=await api('/api/jobs');renderJobs()}catch(e){$('jobList').innerHTML=`<p class="note err">${esc(e.message)}</p>`}}
-function renderJobs(){const s=jobsSnap;if(!s)return;const el=$('jobList');
+function renderJobs(){const s0=jobsSnap;if(!s0)return;const s={...s0,jobs:s0.jobs.filter(j=>(j.bot||'bisu')===curBot)};const el=$('jobList');
  if(!s.jobs.length){el.innerHTML='<p class="note">아직 예약한 작업이 없어요.</p>';return}
  el.innerHTML=s.jobs.map(j=>`<div class="mem" data-slug="${esc(j.slug)}"><div class="h"><b>${esc(j.name)}</b><span class="chip">${esc(j.schedule)}${j.once?' · 한 번':''}</span><span class="chip">${j.tools}</span>${j.enabled?'':'<span class="chip">꺼짐</span>'}
    <span class="sp"></span>${j.needsApproval?`<button class="primary" data-a="approve">승인</button>`:`<button data-a="run" ${j.error||s.running?'disabled':''}>${j.running?'실행 중…':'지금 실행'}</button>`}<button data-a="${j.enabled?'disable':'enable'}">${j.enabled?'끄기':'켜기'}</button><button class="danger" data-a="delete">삭제</button></div>
@@ -1646,7 +1697,7 @@ const HOURS={8:'하루 세 번',12:'하루 두 번',24:'하루 한 번',72:'3일
 function heroes(){renderCC();const set=(id,h)=>{const el=$(id);if(el&&h!=null)el.innerHTML=h};
  if(goalsSnap){const g=goalsSnap.goals,act=g.filter(x=>x.status==='active').length,wait=g.filter(x=>x.status==='waiting').length;
   set('goalsSum',g.length?`진행 중 <b>${act}</b>개${wait?` · <b>${wait}</b>개는 내 답을 기다려요`:''}${g.length-act-wait?` · 끝났거나 멈춘 것 ${g.length-act-wait}개`:''}`:'며칠 걸리는 일을 맡기면 bisu가 조금씩 진행해요')}
- if(jobsSnap||briefSnap||sug){const n=jobsSnap?.jobs?.length,wait=jobsSnap?.jobs?.filter(j=>j.needsApproval).length;
+ if(jobsSnap||briefSnap||sug){const mine=jobsSnap?.jobs?.filter(j=>(j.bot||'bisu')===curBot),n=mine?.length,wait=mine?.filter(j=>j.needsApproval).length;
   set('jobsSum',[n==null?null:n?`예약 <b>${n}</b>개${wait?` · 승인 기다림 ${wait}개`:''}`:'예약한 작업 없음',
    briefSnap?(briefSnap.enabled?`아침 브리핑 오전 ${briefSnap.hour}시`:'아침 브리핑 꺼짐'):null,
    sug?(sug.enabled?`먼저 찾아오기 ${HOURS[sug.intervalHours]||sug.intervalHours+'시간마다'}`:'먼저 찾아오기 꺼짐'):null].filter(Boolean).join(' · '))}
@@ -1688,7 +1739,7 @@ addEventListener('focus',recheck);HOST?.onShown?.(recheck);
 // one shows in the other on its next look: on focus, on show, and every few seconds while visible.
 async function renderCC(){if(PANEL&&cur&&!$('panelStart').offsetParent)return;
  const today=prefs?.engine==='native'?natSnap?.spend?.today:acctSnap?.key?.usage_daily,waiting=sug?.list?.filter?.(x=>!x.read).length;
- $('ccStatus').innerHTML=['듣고 있어요',today!=null?`오늘 <b>${usd(today)}</b>`:null].filter(Boolean).join(' · ');
+ $('ccStatus').innerHTML=[bots.length>1?`<b>${esc(curBotInfo()?.name||'bisu')}</b>`:null,'듣고 있어요',today!=null?`오늘 <b>${usd(today)}</b>`:null].filter(Boolean).join(' · ');
  $('ccSwitches').hidden=false;$('ccFoot').hidden=!HOST||!PANEL;$('ccSelRow').hidden=!HOST;
  if(HOST)try{$('ccSel').checked=await HOST.selectionEnabled()}catch{}
  if(sug)$('ccSug').checked=!!sug.enabled;if(alSnap){$('ccAwake').checked=alSnap.awakeMode!=='off';$('ccAwakeNote').textContent=alSnap.awakeMode==='off'&&alSnap.holding!=='job'?'':awakeText(alSnap)}
@@ -1718,6 +1769,49 @@ async function loadPanelPlace(){if(!HOST?.panelPlace){$('panelSec').hidden=true;
 $('iconOpens').addEventListener('change',async()=>{try{$('iconOpens').value=await HOST.iconOpens($('iconOpens').value)}catch{}});
 $('panelPlace').addEventListener('change',async()=>{try{const r=await HOST.panelPlace($('panelPlace').value);$('panelPlace').value=r.place}catch{}});
 $('panelReset').onclick=async()=>{try{const r=await HOST.panelPlace('',true);$('panelPlace').value=r.place;$('panelReset').textContent='초기화했어요 ✓';setTimeout(()=>{$('panelReset').textContent='위치 초기화'},1600)}catch{}};
+// ---- bots (ui/bots.mjs): the list, the current one, its details, and making one ----
+let bots=[],curBot='bisu';try{curBot=localStorage.getItem('bisu.bot')||'bisu'}catch{}
+const curBotInfo=()=>bots.find(b=>b.id===curBot);
+// A bot's conversations; the bot-making chat shows only while it is the open one.
+const myChats=()=>chats.filter(c=>c.maker?cur?.id===c.id:(c.bot||'bisu')===curBot);
+const mb=()=>'?bot='+encodeURIComponent(curBot);
+const initial=n=>String(n||'b').trim().slice(0,1).toUpperCase();
+async function loadBots(){try{const r=await api('/api/bots');bots=r.bots;if(!curBotInfo())curBot='bisu';renderBots()}catch{}}
+function renderBots(){const el=$('botList');
+ el.innerHTML=bots.map(b=>`<button type="button" data-bot="${esc(b.id)}" class="${b.id===curBot?'on':''}" title="${esc(b.job||'')}"><span class="av">${esc(initial(b.name))}</span><span class="nm">${esc(b.name)}</span></button>`).join('');
+ for(const b of el.querySelectorAll('[data-bot]'))b.onclick=()=>b.dataset.bot===curBot?openBot():setBot(b.dataset.bot);
+ const me=curBotInfo()||{name:'bisu',job:''};$('botHeadName').textContent=me.name;$('botHeadJob').textContent=me.job||'';$('botHeadAv').textContent=initial(me.name);
+ const pick=$('botPick');pick.innerHTML=bots.map(b=>`<option value="${esc(b.id)}">${esc(b.name)}</option>`).join('');pick.value=curBot;$('botPickRow').hidden=!PANEL||bots.length<2;
+ for(const [hero,name] of [['memoryHero','기억'],['jobsHero','예약 작업']]){const h=$(hero)?.querySelector('.ht');if(h)h.textContent=name+(bots.length>1?` · ${me.name}`:'')}
+ renderCC()}
+function setBot(id){if(id===curBot)return;curBot=id;try{localStorage.setItem('bisu.bot',id)}catch{}
+ // A conversation belongs to one bot: switching leaves it, and the list shows the new bot's.
+ if(cur&&!cur.maker&&(cur.bot||'bisu')!==id){detach();cur=null;wrap().innerHTML='';chatUI()}
+ renderBots();renderList();renderRecent();fillStartCwdFor();
+ if(viewOn('memory'))loadMemory();if(viewOn('jobs'))renderJobs();heroes()}
+function fillStartCwdFor(){const b=curBotInfo();if(b&&!cur){for(const id of ['cwd','startCwd'])if($(id))$(id).value=short(b.cwd)}}
+$('botPick').addEventListener('change',()=>setBot($('botPick').value));
+$('botHead').onclick=()=>openBot();
+function openBot(){const b=curBotInfo();if(!b)return;$('botDlgTitle').textContent=b.default?'기본 봇 · '+b.name:b.name;
+ $('bName').value=b.name;$('bJob').value=b.job||'';$('bCwd').value=short(b.cwd);$('bTone').value=b.tone||'';$('bIns').value=b.instructions||'';$('bErr').textContent='';
+ $('bDel').hidden=!!b.default;$('botDlg').showModal()}
+$('bCancel').onclick=()=>$('botDlg').close();
+$('bSave').onclick=async()=>{$('bErr').textContent='';
+ try{const r=await post('/api/bots/'+encodeURIComponent(curBot),{name:$('bName').value,job:$('bJob').value,cwd:$('bCwd').value||'~',tone:$('bTone').value,instructions:$('bIns').value});bots=r.bots;renderBots();$('botDlg').close()}
+ catch(e){$('bErr').textContent=e.message}};
+$('bDel').onclick=async()=>{const b=curBotInfo();if(!b||b.default||!confirm(`“${b.name}” 봇을 지울까요? 대화와 예약 작업은 기본 봇으로 옮겨지고, 기억 폴더는 남겨 둬요.`))return;
+ try{const r=await post('/api/bots/'+encodeURIComponent(b.id),{action:'delete'});bots=r.bots;$('botDlg').close();setBot('bisu')}catch(e){$('bErr').textContent=e.message}};
+// Making a bot is a conversation: bisu asks up to four things, then shows the preview card. The quick form
+// on top of that conversation makes one from a name and a job right away.
+$('botNew').onclick=async()=>{try{const {chat}=await post('/api/chats',{maker:true});chats.unshift(chat);show('chat');open(chat.id);
+ setTimeout(()=>post(`/api/chats/${chat.id}/send`,{text:'새 봇을 만들고 싶어요.'}).catch(()=>{}),400)}catch(e){alert(e.message)}};
+function makerCard(){let el=$('makerCard');if(!cur?.maker){el?.remove();return}
+ if(el)return;el=document.createElement('div');el.id='makerCard';el.className='makerCard m';
+ el.innerHTML=`<span class="t">빠르게 만들기</span><div class="row"><input type="text" id="mkName" placeholder="봇 이름" maxlength="40" autocomplete="off"><input type="text" id="mkJob" placeholder="맡을 일 한 줄" maxlength="200" autocomplete="off"><button class="primary" type="button" id="mkGo">만들기</button></div><span class="note" style="margin:0" id="mkNote">아니면 아래에서 bisu의 질문에 답하면 같이 만들어요.</span>`;
+ wrap().prepend(el);
+ el.querySelector('#mkGo').onclick=async()=>{const name=$('mkName').value.trim(),job=$('mkJob').value.trim();if(!name){$('mkName').focus();return}
+  try{const r=await post('/api/bots',{name,job});bots=r.bots;$('mkNote').textContent=`“${r.bot.name}” 봇을 만들었어요. 왼쪽에서 골라 대화해 보세요.`;renderBots()}catch(e){$('mkNote').textContent=e.message}}}
+setInterval(loadBots,20000);
 // ---- boot ----
 mountBisu();setMood('idle','듣고 있어요');helpify();
 $('metaOn').checked=META;
@@ -1764,7 +1858,7 @@ for(const r of document.querySelectorAll('input[name=approve]'))r.onchange=()=>p
 for(const r of document.querySelectorAll('input[name=engine]'))r.onchange=()=>post('/api/prefs',{engine:r.value}).then(p=>{prefs=p;renderEngine()}).catch(e=>{$('engineNote').textContent=e.message});
 const prefsReady=api('/api/prefs').then(p=>{prefs=p;META=!!p.meta;document.body.classList.toggle('meta',META);$('metaOn').checked=META;renderEngine();if(!cur)chatUI()}).catch(()=>{});
 if(PANEL){ensureCtxBar();HOST?.onContext?.(c=>{if(!sent)setCtx(c)});HOST?.context?.().then(c=>{if(!sent)setCtx(c)}).catch(()=>{})}
-loadAccount();loadRuns();loadSuggestions();
+loadAccount();loadRuns();loadSuggestions();loadBots();
 // Which conversation to show on opening. A chat the shell asked for opens as asked. Otherwise the
 // last one is picked up only if it is recent: a panel that opens on a conversation from days ago
 // (whatever bisu believed back then included) is not "what can I do for you". The first run always
@@ -1775,7 +1869,7 @@ Promise.all([refreshChats(),prefsReady]).then(()=>{let id=null,v='chat';try{id=l
  if(forced&&chats.some(c=>c.id===forced))open(forced);
  else if(!prefs.onboarded){}
  else if(id&&recentOne(chats.find(c=>c.id===id)))open(id);
- else if(PANEL&&recentOne(chats[0]))open(chats[0].id);
+ else if(PANEL&&recentOne(myChats()[0]))open(myChats()[0].id);
  show(PANEL?'chat':Q.get('view')||v);if(!cur)chatUI()});
 // The menu's 「설정…」 and the panel's 설정 open the full window on a screen; an open window just switches.
 HOST?.onView?.(v=>show(v));
