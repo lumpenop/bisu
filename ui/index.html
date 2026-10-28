@@ -475,6 +475,13 @@ input.switch:focus-visible{outline:none;box-shadow:var(--glow)}
 .awakeRow>span{display:inline-flex;gap:8px;align-items:center}
 #alMinCustom{width:5.5em}
 .mem .awk{margin-top:6px;font-size:12.5px}
+/* the same controls under the chat list in the full window: a plain group box, not a second card */
+.ccSide{flex:none;padding:10px 10px 12px;border-top:1px solid var(--line)}
+.ccSide .ccStatus{margin:0 4px 8px;font-size:12px;color:var(--muted)}
+.ccSide .ccStatus b{color:var(--ink);font-weight:650}
+.ccSide .cc{margin:0;background:color-mix(in srgb,var(--card) 70%,var(--bg))}
+.ccSide .ccRow{font-size:12.5px;padding:8px 0}
+.ccSide .ccRow .hn{display:block;margin:1px 0 0}
 </style>
 </head>
 <body>
@@ -754,7 +761,8 @@ input.switch:focus-visible{outline:none;box-shadow:var(--glow)}
  </section>
  <section id="panelSec" hidden>
   <h2>패널</h2>
-  <div class="kv"><div class="k">열리는 곳</div><div class="awakeRow"><select id="panelPlace"><option value="menubar">메뉴바 아이콘 아래</option><option value="free">마지막으로 옮긴 곳</option></select><button type="button" id="panelReset">위치 초기화</button></div></div>
+  <div class="kv"><div class="k">열리는 곳</div><div class="awakeRow"><select id="panelPlace"><option value="menubar">메뉴바 아이콘 아래</option><option value="free">마지막으로 옮긴 곳</option></select><button type="button" id="panelReset">위치 초기화</button></div>
+   <div class="k">전체 창이 열려 있을 때</div><div><select id="iconOpens"><option value="panel">아이콘을 누르면 패널</option><option value="full">아이콘을 누르면 전체 창</option></select></div></div>
   <p class="note">패널 위쪽(얼굴이나 대화 제목)을 끌면 아무 데나 옮길 수 있고, 디스플레이마다 따로 기억해요. 옮기면 「마지막으로 옮긴 곳」으로 바뀌고, 화면 밖으로 나간 위치는 화면 안으로 당겨서 열어요.</p>
  </section>
  <details class="adv" id="advBox"><summary>고급 · 컴퓨터 조작 시험</summary>
@@ -1675,12 +1683,14 @@ function askSettings(title,text,pane,after){const d=$('permDlg');$('permTitle').
 const recheck=()=>{if(!permAfter)return;const f=permAfter;permAfter=null;setTimeout(f,300)};
 addEventListener('focus',recheck);HOST?.onShown?.(recheck);
 // ---- the panel's switches and footer (desktop only) ----
-async function renderCC(){if(!PANEL)return;
+// The same controls live in two places: the panel's start, and under the chat list in the full window
+// (moved there at boot). Both read the engine (alerts, suggestions) and the shell (selection), so a change in
+// one shows in the other on its next look: on focus, on show, and every few seconds while visible.
+async function renderCC(){if(PANEL&&cur&&!$('panelStart').offsetParent)return;
  const today=prefs?.engine==='native'?natSnap?.spend?.today:acctSnap?.key?.usage_daily,waiting=sug?.list?.filter?.(x=>!x.read).length;
  $('ccStatus').innerHTML=['듣고 있어요',today!=null?`오늘 <b>${usd(today)}</b>`:null].filter(Boolean).join(' · ');
- if(!HOST){$('ccSwitches').hidden=$('ccFoot').hidden=true;return}
- $('ccSwitches').hidden=$('ccFoot').hidden=false;
- try{$('ccSel').checked=await HOST.selectionEnabled()}catch{}
+ $('ccSwitches').hidden=false;$('ccFoot').hidden=!HOST||!PANEL;$('ccSelRow').hidden=!HOST;
+ if(HOST)try{$('ccSel').checked=await HOST.selectionEnabled()}catch{}
  if(sug)$('ccSug').checked=!!sug.enabled;if(alSnap){$('ccAwake').checked=alSnap.awakeMode!=='off';$('ccAwakeNote').textContent=alSnap.awakeMode==='off'&&alSnap.holding!=='job'?'':awakeText(alSnap)}
  const t=alSnap&&alSnap.holding?awakeText(alSnap).split(' · ').slice(0,2).join(' · '):null;if(t)$('ccStatus').innerHTML+=` · ${esc(t)}`}
 $('ccSel').onchange=async()=>{const on=$('ccSel').checked;
@@ -1697,10 +1707,15 @@ $('ccAwake').addEventListener('click',e=>{e.preventDefault();const a=alSnap||{};
 $('ccFull').onclick=()=>HOST?.openFull?.();
 $('ccSettings').onclick=()=>HOST?.openFull?.('settings');
 $('ccQuit').onclick=()=>{if(confirm('bisu를 끌까요? 끄면 텔레그램과 예약 작업에도 답하지 못해요.'))HOST?.quit?.()};
-if(PANEL){api('/api/alerts').then(a=>{alSnap=a;renderCC()}).catch(()=>{});HOST?.onShown?.(renderCC)}
+if(!PANEL){const box=document.createElement('div');box.className='ccSide';box.setAttribute('aria-label','제어');box.append($('ccStatus'),$('ccSwitches'));$('chatView').querySelector('aside').appendChild(box)}
+const ccRefresh=()=>Promise.all([api('/api/alerts').then(a=>{alSnap=a}),api('/api/proactive').then(p=>{sug=p})]).then(()=>{renderCC();if(viewOn('connect'))renderAlerts()}).catch(()=>{});
+ccRefresh();HOST?.onShown?.(ccRefresh);addEventListener('focus',ccRefresh);
+setInterval(()=>{if(document.visibilityState==='visible'&&(PANEL||viewOn('chat')))ccRefresh()},5000);
 // ---- where the panel opens (the shell keeps it) ----
 async function loadPanelPlace(){if(!HOST?.panelPlace){$('panelSec').hidden=true;return}$('panelSec').hidden=false;
- try{const r=await HOST.panelPlace();$('panelPlace').value=r.place}catch{}}
+ try{const r=await HOST.panelPlace();$('panelPlace').value=r.place}catch{}
+ try{$('iconOpens').value=HOST.iconOpens?await HOST.iconOpens():'panel'}catch{}}
+$('iconOpens').addEventListener('change',async()=>{try{$('iconOpens').value=await HOST.iconOpens($('iconOpens').value)}catch{}});
 $('panelPlace').addEventListener('change',async()=>{try{const r=await HOST.panelPlace($('panelPlace').value);$('panelPlace').value=r.place}catch{}});
 $('panelReset').onclick=async()=>{try{const r=await HOST.panelPlace('',true);$('panelPlace').value=r.place;$('panelReset').textContent='초기화했어요 ✓';setTimeout(()=>{$('panelReset').textContent='위치 초기화'},1600)}catch{}};
 // ---- boot ----
