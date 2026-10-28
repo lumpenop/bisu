@@ -89,6 +89,8 @@ aside{width:260px;border-right:1px solid var(--line);display:flex;flex-direction
 .task{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);background:var(--chip);border-radius:6px;padding:5px 10px}
 .task b{color:var(--ink);font-weight:600;white-space:nowrap}.task .d{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.task .e{font-variant-numeric:tabular-nums}
 .task .spin{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.2s ease-in-out infinite;flex:none}
+.task.ask .spin{background:var(--blush,#e8a0a0);animation:none}
+.task .tx{flex:none;border:0;background:none;color:var(--muted);padding:0 2px;font-size:11px;line-height:1;cursor:pointer;box-shadow:none;min-height:0}.task .tx:hover{color:var(--ink)}
 @keyframes pulse{50%{opacity:.25}}
 .m.user.queued{opacity:.6}.m.user .q{display:block;font-size:11px;color:var(--muted);margin-top:2px}
 .empty{color:var(--muted);text-align:center;margin-top:18vh}
@@ -931,7 +933,10 @@ function renderTasks(){const box=$('tasks');if(!box)return;
  // Work handed off keeps going after bisu's turn: say so, and that talking is fine meanwhile.
  if(tasks.length&&cur&&!cur.busy&&mood.state!=='waiting')setMood('working',`${agentName(tasks[0].agent)}이 일하는 중 · 말 걸어도 돼요`);
  else if(!tasks.length&&mood.text.includes('말 걸어도 돼요'))setMood('idle','듣고 있어요');
- box.innerHTML=tasks.map(t=>`<div class="task"><span class="spin"></span><b>${esc(t.type==='local_agent'?agentName(t.agent):'명령')}</b><span class="d">${esc(t.description)}${t.step?' · '+esc(t.step):''}</span><span class="e" data-t="${t.started}">${elapsed(t.started)}</span></div>`).join('')}
+ // A worker that stopped to ask shows as asking; bisu answers it, or asks the person first.
+ box.innerHTML=tasks.map(t=>{const asking=/^질문: /.test(t.step||'');
+  return `<div class="task${asking?' ask':''}"><span class="spin"></span><b>${esc(t.type==='local_agent'?agentName(t.agent):'명령')}</b><span class="d">${esc(t.description)}${t.step?' · '+esc(t.step):''}</span><span class="e" data-t="${t.started}">${elapsed(t.started)}</span>${t.stoppable?`<button class="tx" data-stop="${esc(t.id)}" title="이 담당만 멈추기">✕</button>`:''}</div>`}).join('')}
+$('tasks')?.addEventListener('click',e=>{const b=e.target.closest('[data-stop]');if(!b||!cur)return;b.disabled=true;post(`/api/chats/${cur.id}/stoptask`,{task_id:b.dataset.stop}).catch(()=>{b.disabled=false})});
 setInterval(()=>{for(const el of document.querySelectorAll('.task .e'))el.textContent=elapsed(Number(el.dataset.t))},1000);
 function chatUI(){const c=cur;$('chatHead').hidden=!c;$('compose').hidden=false;if(c)document.body.classList.remove('onboarding');
  if(PANEL){$('panelStart').hidden=!!c;$('msgs').hidden=!c;if(!c)fillStartCwd()}

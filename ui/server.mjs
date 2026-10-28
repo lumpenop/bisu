@@ -297,7 +297,7 @@ const send=(c,obj)=>{c.proc?.stdin.write(JSON.stringify(obj)+'\n')};
 // while they run, so the person can keep talking; Claude Code wakes the assistant again when one finishes.
 function pushTasks(c){push(c,{kind:'tasks',tasks:[...c.tasks.values()]})}
 function tasksEvent(c,j){
- if(j.subtype==='task_started'){c.tasks.set(j.task_id,{id:j.task_id,type:j.task_type,agent:j.subagent_type||null,description:j.description||'',started:Date.now()});pushTasks(c)}
+ if(j.subtype==='task_started'){c.tasks.set(j.task_id,{id:j.task_id,type:j.task_type,agent:j.subagent_type||null,description:j.description||'',started:Date.now(),stoppable:!!c.native&&j.task_type==='local_agent'});pushTasks(c)}
  else if(j.subtype==='task_progress'){const t=c.tasks.get(j.task_id);if(t){t.step=j.description||'';pushTasks(c)}}
  else if(j.subtype==='task_notification'||(j.subtype==='task_updated'&&/completed|failed|killed|stopped/.test(j.patch?.status||''))){
   const t=c.tasks.get(j.task_id);if(!t)return;c.tasks.delete(j.task_id);if(t.type==='local_agent')push(c,{kind:'task_done',agent:t.agent,description:t.description,status:j.status||j.patch?.status});pushTasks(c)}
@@ -313,7 +313,7 @@ function replayed(c,content){
  return true}
 function handle(c,j){
  const parent=j.parent_tool_use_id||null;
- if(j.type==='system'&&j.subtype==='init'){c.sessionId=j.session_id;saveChats();clearTimeout(c.stall);push(c,{kind:'init',sessionId:j.session_id,model:j.model,cwd:j.cwd});return}
+ if(j.type==='system'&&j.subtype==='init'){c.sessionId=j.session_id;c.native=!!j.bisu_native;saveChats();clearTimeout(c.stall);push(c,{kind:'init',sessionId:j.session_id,model:j.model,cwd:j.cwd});return}
  if(j.type==='system'&&/^task_|^background_tasks_changed$/.test(j.subtype||'')){tasksEvent(c,j);return}
  // bisu's own engine: what the judge decided, and actions it cleared without asking.
  if(j.type==='system'&&j.subtype==='auto_allowed'){push(c,{kind:'auto_allowed',tool:j.tool_name,input:j.input,reason:j.reason||'',judged:true});return}
@@ -494,6 +494,9 @@ const server=http.createServer(async(req,res)=>{
   if(c&&m==='POST'&&cm[2]==='/send'){const {text}=await body(req);if(typeof text!=='string'||!text.trim())return json(res,400,{error:'empty'});say(c,text.trim());return json(res,200,{ok:true})}
   if(c&&m==='POST'&&cm[2]==='/approve'){decide(c,await body(req));return json(res,200,{ok:true})}
   if(c&&m==='POST'&&cm[2]==='/stop'){stop(c);return json(res,200,{ok:true})}
+  // One worker of bisu's own engine, stopped from the task bar; the rest of the chat goes on.
+  if(c&&m==='POST'&&cm[2]==='/stoptask'){const {task_id}=await body(req);if(!/^[0-9a-f]{8}$/.test(String(task_id||'')))return json(res,400,{error:'bad task'});
+   send(c,{type:'control_request',request_id:randomUUID(),request:{subtype:'stop_task',task_id}});return json(res,200,{ok:true})}
   if(c&&m==='DELETE'&&!cm[2]){close(c);return json(res,200,{ok:true})}
   json(res,404,{error:'not found'})
  }catch(e){json(res,e.status||(e instanceof SyntaxError?400:502),{error:String(e?.message||e),...(e.holder?{holder:e.holder}:{})})}

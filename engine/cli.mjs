@@ -162,68 +162,213 @@ async function compactIfLong() {
   } catch {}
 }
 
-// ---- workers: big jobs run in the background while bisu keeps talking ----
+// ---- the team: workers do big jobs in the background while bisu keeps talking ----
+// bisu briefs a worker and goes on talking with the person; the worker's report comes back as a
+// message, read against the brief by the judge. From there bisu can send the work back with feedback
+// (the same worker carries on with everything it already did), answer a worker that stopped to ask,
+// stop one, or look at where they all are. Workers handed out in the same turn report together, once
+// the last of them is done; a question comes through at once.
 const AGENTS = (() => { try { return JSON.parse(flags.agents || '{}') } catch { return {} } })();
 // The base prompt's working rules, without its voice: a worker reports to bisu, not to the person.
 const WORKING = (s => s.includes('## Working') ? '## Working' + s.split('## Working')[1].split('\n## ')[0] : '')(fs.readFileSync(new URL('./prompt.md', import.meta.url), 'utf8'));
-const WORKER_TOOLS = ['read_file', 'write_file', 'edit_file', 'list_files', 'search_files', 'run_command', 'web_fetch', 'web_search'];
-const running = new Map();
-let wake = null; // set by the stream mode: queue a message for the main conversation
+const FILE_TOOLS = ['read_file', 'write_file', 'edit_file', 'list_files', 'search_files', 'run_command', 'web_fetch', 'web_search'];
+const screenTools = () => Object.keys(EXTRA).filter(n => n.startsWith('cu_'));
+const ROLES = {
+  developer: {label: '개발 담당', tools: () => FILE_TOOLS, about: 'development work of any size: writing, changing or fixing code, tests, scripts, config, builds'},
+  publisher: {label: '퍼블리싱 담당', tools: () => FILE_TOOLS, about: 'large markup and styling jobs: a whole page, many components, a layout overhaul'},
+  refactorer: {label: '리팩토링 담당', tools: () => FILE_TOOLS, about: 'large refactors across several files or a whole module'},
+  researcher: {label: '조사 담당', tools: () => ['web_search', 'web_fetch', 'read_file', 'list_files', 'search_files', 'write_file'],
+    about: 'looking things up: web research, comparing options, reading docs or many files, and writing up what it found; changes no code',
+    prompt: 'You are a careful researcher. Check what you find against more than one source when it matters, name your sources, and say plainly what you could not confirm. Write a file only if the brief asks for one.'},
+  // Works on the screen, so only one at a time, and only when bisu can operate the Mac at all.
+  mac: {label: '맥 담당', model: MODEL, tools: () => [...screenTools(), 'calendar_list', 'reminders_list'], screen: true,
+    about: 'a longer job in other apps on this Mac, on screen (it takes over the mouse and keyboard while it works; one at a time)'},
+};
+const roleNames = () => Object.keys(ROLES).filter(k => !ROLES[k].screen || screenTools().length);
+const team = new Map();
+let wake = null;   // set by the stream mode: queue a message for the main conversation
+let turnNo = 0;    // workers handed out in the same turn of bisu's report together
+const MAX_ROUNDS = 4;
+const ASK_WAIT_MS = 30 * 60e3;
+const active = () => [...team.values()].filter(w => w.status === 'running' || w.status === 'asking');
+const STATUS = {running: '하는 중', asking: '묻는 중 · 답을 기다려', done: '끝냄', failed: '끝내지 못함', stopped: '멈춤'};
+const clipTo = (s, n) => { s = String(s ?? ''); return s.length > n ? s.slice(0, n) + '…' : s };
+
+// The worker's own way to stop and ask: it waits for bisu's answer_worker (or gives up after a while).
+const askTool = w => ({
+  description: 'Ask bisu, who gave you this task, something you cannot find out yourself and that blocks the task: a missing detail, or a choice only the person can make. You wait for the answer, then carry on. Never ask about what you can look up or decide sensibly yourself.',
+  parameters: {type: 'object', properties: {question: {type: 'string'}}, required: ['question']},
+  kind: 'delegate',
+  async run(ctx, {question}) {
+    if (!wake) return {text: 'Nobody can answer right now. Make the most reasonable choice, and say in your report what you chose and why.'};
+    w.status = 'asking'; w.question = String(question);
+    out({type: 'system', subtype: 'task_progress', task_id: w.id, description: `질문: ${clipTo(question, 90)}`, session_id: sessionId});
+    const answer = await new Promise(resolve => {
+      const timer = setTimeout(() => resolve(null), ASK_WAIT_MS);
+      const stop = () => { clearTimeout(timer); resolve(null) };
+      ctx.signal?.addEventListener('abort', stop, {once: true});
+      w.answer = a => { clearTimeout(timer); ctx.signal?.removeEventListener('abort', stop); resolve(a) };
+      wake(`(bisu: ${w.label}(작업 ${w.id})이 묻고 있어: "${question}"\n맡긴 일: ${clipTo(w.brief, 400)}\n\n알면 answer_worker로 바로 답해. 사람만 정할 수 있는 거면 사람에게 물어보고, 답을 들으면 answer_worker로 전해. 담당은 답을 기다리며 멈춰 있어.)`);
+    });
+    w.answer = null; w.question = null;
+    if (ctx.signal?.aborted) return {text: 'Stopped.', error: true};
+    w.status = 'running';
+    return {text: answer == null ? 'No answer came. Make the most reasonable choice, and say in your report what you chose and why.' : `bisu: ${answer}`};
+  },
+});
+
+// One round of a worker's work: the brief, or feedback on what it reported.
+function runRound(w, text, parent) {
+  const role = ROLES[w.role];
+  w.status = 'running'; w.rounds++; w.reported = false; w.group = turnNo; w.parent = parent || w.parent;
+  w.abort = new AbortController();
+  const startAt = w.messages.length;
+  w.messages.push({role: 'user', content: text});
+  out({type: 'system', subtype: 'task_started', task_id: w.id, task_type: 'local_agent', subagent_type: w.role,
+    description: (w.rounds > 1 ? '다시 · ' : '') + clipTo(w.rounds > 1 ? text.replace(/^\(bisu의 피드백\)\s*/, '') : w.brief, 120), session_id: sessionId});
+  const model = role.model || WORK_MODEL;
+  return runTurn({
+    model, thinking: true, maxSteps: 60, tools: [...role.tools(), 'ask_bisu'], extraTools: {...EXTRA, ask_bisu: askTool(w)}, canUseTool,
+    system: `${AGENTS[w.role]?.prompt || role.prompt || 'You are a careful worker.'}\n\n${WORKING}\n\nYou are a worker for bisu, the person's assistant. Nobody talks to you but bisu. Do the task, check it worked, then report in a few lines: what you did (files, where), how you checked it, anything left open. Never say you did what you did not do. If something only the person can decide blocks you, ask_bisu.\n- Folder: ${cwd}\n${nowLines()}`,
+    messages: w.messages,
+    ctx: {cwd, readFiles: w.readFiles, signal: w.abort.signal, env: {}},
+    shouldContinue: judge.watchProgress(text, w.messages, {startAt}),
+    checkAnswer: judge.watchClaims(text),
+    onEvent: ev => {
+      if (ev.kind === 'tool' && ev.name !== 'ask_bisu') out({type: 'system', subtype: 'task_progress', task_id: w.id, description: `${ev.name} ${ev.input?.path || ev.input?.command || ev.input?.query || ''}`.slice(0, 100), session_id: sessionId});
+    },
+    onMessage: (m, meta) => {
+      if (m.role === 'assistant') {
+        const content = [];
+        if (meta.text) content.push({type: 'text', text: meta.text});
+        for (const c of meta.toolCalls || []) { let input = {}; try { input = JSON.parse(c.arguments || '{}') } catch {} content.push({type: 'tool_use', id: c.id, name: c.name, input}) }
+        out({type: 'assistant', message: {model, content}, parent_tool_use_id: w.parent, session_id: sessionId});
+      } else if (m.role === 'tool') out({type: 'user', message: {role: 'user', content: [{type: 'tool_result', tool_use_id: m.tool_call_id, content: m.content, is_error: !!meta.error}]}, parent_tool_use_id: w.parent, session_id: sessionId});
+    },
+  }).catch(e => ({stop: 'error', error: e.message, actions: [], cost: 0})).then(async stats => {
+    costTotal += stats.cost || 0;
+    w.actions.push(...(stats.actions || []));
+    const ok = stats.stop === 'done' || stats.stop === 'judged_done';
+    w.status = w.abort.signal.aborted ? 'stopped' : ok ? 'done' : 'failed';
+    w.report = stats.text || stats.error || '(보고 없음)';
+    // Read against the brief before bisu sees it: a report that does not show the work is a reason to look.
+    w.review = w.status === 'done' ? await judge.reviewReport(w.brief, w.actions, w.report, {feedback: w.rounds > 1 ? text : ''}) : null;
+    out({type: 'system', subtype: 'task_notification', task_id: w.id, status: w.status === 'done' ? 'completed' : w.status === 'stopped' ? 'stopped' : 'failed', summary: clipTo(w.report, 300), session_id: sessionId});
+    if (w.review != null) out({type: 'system', subtype: 'bisu_judgment', kind: 'review', task_id: w.id, confidence: w.review, session_id: sessionId});
+    report(w);
+    return w;
+  });
+}
+
+function reportText(w) {
+  const r = w.review, n = r == null ? '' : ` (${r.toFixed(2)})`;
+  const review = r == null ? '' : r >= judge.REVIEW.short
+    ? `\n검토: 보고와 실제로 한 일을 맞춰 보면 맡긴 일 중 빠졌거나 확인되지 않은 게 있어 보여${n}. 직접 확인하고, 모자라면 send_back으로 무엇이 모자란지 구체적으로 되돌려 보내.`
+    : r >= judge.REVIEW.unsure
+      ? `\n검토: 맡긴 일 중 일부가 빠졌을 수 있어${n}. 맡긴 일을 항목마다 결과와 맞춰 봐.`
+      : `\n검토: 보고가 맡긴 일과 맞아 보여${n}. 그래도 결과를 한 번 직접 봐.`;
+  return `[${w.label} · 작업 ${w.id} · ${STATUS[w.status]}${w.rounds > 1 ? ` · ${w.rounds}번째` : ''}]\n맡긴 일: ${clipTo(w.brief, 500)}\n보고: ${clipTo(w.report, 3000)}${review}`;
+}
+// When the last worker of a turn is done, bisu hears from all of them at once. One the person stopped
+// from the page needs no word from bisu, but it no longer holds the others back.
+function report(w) {
+  if (!wake) return;
+  if (w.status === 'stopped') { w.reported = true; if (w.stoppedBy === 'bisu') return }
+  const group = [...team.values()].filter(x => x.group === w.group);
+  if (group.some(x => x.status === 'running' || x.status === 'asking')) return;
+  const due = group.filter(x => !x.reported);
+  if (!due.length) return;
+  for (const x of due) x.reported = true;
+  wake(`(bisu: 맡긴 일${due.length > 1 ? ` ${due.length}개가` : '이'} 끝났어. 사람에게 알리기 전에 확인해.\n\n${due.map(reportText).join('\n\n')}\n\n할 일: 결과를 직접 확인하고(파일을 읽거나 실행해 봐), 맡긴 일과 다르거나 모자라면 send_back으로 그 담당에게 되돌려 보내. 다 됐으면 사람에게 무엇이 됐는지 짧게 알려줘.)`);
+}
+
+const workerArg = {type: 'string', description: 'The task id from delegate.'};
+const findWorker = id => team.get(String(id || '').trim());
 EXTRA.delegate = {
-  description: `Hand a sizeable piece of work to a worker that does it in the background while you keep talking with the person. Workers: ${Object.entries(AGENTS).filter(([k]) => k !== 'mac').map(([k, v]) => `${k} — ${String(v.description || '').slice(0, 160)}`).join(' | ') || 'developer — any development work'}. Give one complete brief: the files, the goal, what done looks like. You will get the result as a message when it is done; check it then.`,
-  parameters: {type: 'object', properties: {worker: {type: 'string', enum: Object.keys(AGENTS).filter(k => k !== 'mac').length ? Object.keys(AGENTS).filter(k => k !== 'mac') : ['developer']}, task: {type: 'string'}}, required: ['worker', 'task']},
+  get description() {
+    return `Hand a sizeable piece of work to a worker that does it in the background while you keep talking with the person. Workers: ${roleNames().map(k => `${k} — ${AGENTS[k]?.description ? clipTo(AGENTS[k].description, 160) : ROLES[k].about}`).join(' | ')}. Give one complete brief: the files, the goal, what done looks like. To split a job, call delegate once per part in the same turn; they report together when the last one is done. The report comes back as a message: check it, and send_back what is wrong or missing.`;
+  },
+  get parameters() { return {type: 'object', properties: {worker: {type: 'string', enum: roleNames()}, task: {type: 'string'}}, required: ['worker', 'task']} },
   kind: 'delegate',
   async run(ctx, {worker, task}) {
-    const def = AGENTS[worker] || AGENTS.developer || {prompt: 'You are a careful developer.'};
-    const task_id = randomUUID().slice(0, 8);
-    const parent = ctx.callId || null;
-    const label = {developer: '개발 담당', publisher: '퍼블리싱 담당', refactorer: '리팩토링 담당'}[worker] || worker;
-    const wModel = WORK_MODEL;
-    const wAbort = new AbortController();
-    running.set(task_id, wAbort);
-    out({type: 'system', subtype: 'task_started', task_id, task_type: 'local_agent', subagent_type: worker, description: String(task).slice(0, 120), session_id: sessionId});
-    const job = runTurn({
-      model: wModel, thinking: true, tools: WORKER_TOOLS, extraTools: EXTRA, canUseTool,
-      system: `${def.prompt || ''}\n\n${WORKING}\n\nYou are a worker for bisu. Nobody talks to you; do the task, verify it, then report in a few lines: what changed (files), how you checked it, anything left open.\n- Folder: ${cwd}`,
-      messages: [{role: 'user', content: String(task)}],
-      ctx: {cwd, readFiles: new Set(), signal: wAbort.signal, env: {}},
-      onEvent: ev => {
-        if (ev.kind === 'tool') out({type: 'system', subtype: 'task_progress', task_id, description: `${ev.name} ${ev.input?.path || ev.input?.command || ''}`.slice(0, 100), session_id: sessionId});
-      },
-      onMessage: (m, meta) => {
-        if (m.role === 'assistant') {
-          const content = [];
-          if (meta.text) content.push({type: 'text', text: meta.text});
-          for (const c of meta.toolCalls || []) { let input = {}; try { input = JSON.parse(c.arguments || '{}') } catch {} content.push({type: 'tool_use', id: c.id, name: c.name, input}) }
-          out({type: 'assistant', message: {model: wModel, content}, parent_tool_use_id: parent, session_id: sessionId});
-        } else if (m.role === 'tool') out({type: 'user', message: {role: 'user', content: [{type: 'tool_result', tool_use_id: m.tool_call_id, content: m.content, is_error: !!meta.error}]}, parent_tool_use_id: parent, session_id: sessionId});
-      },
-    }).then(stats => {
-      running.delete(task_id);
-      costTotal += stats.cost || 0;
-      const ok = stats.stop === 'done' || stats.stop === 'judged_done';
-      out({type: 'system', subtype: 'task_notification', task_id, status: ok ? 'completed' : 'failed', summary: (stats.text || '').slice(0, 300), session_id: sessionId});
-      return {ok, text: stats.text || stats.error || '(no report)'};
-    }).catch(e => { running.delete(task_id); out({type: 'system', subtype: 'task_notification', task_id, status: 'failed', session_id: sessionId}); return {ok: false, text: e.message} });
-    // Talking to someone: hand it off and report back when done. A one-shot run waits for it.
-    if (wake) {
-      job.then(r => wake(`(bisu: ${label}이 맡긴 일을 ${r.ok ? '끝냈어' : '끝내지 못했어'}. 보고:\n${r.text}\n\n필요하면 결과를 직접 확인하고, 사람에게 짧게 알려줘.)`));
-      return {text: `${label}에게 맡겼어 (작업 ${task_id}). 끝나면 결과가 메시지로 와. 사람에게 맡겼다고 한 줄로 말하고 이번 답을 마쳐.`};
-    }
-    const r = await job;
-    return {text: `${label} 보고 (${r.ok ? '완료' : '실패'}):\n${r.text}`, error: !r.ok};
+    const role = ROLES[worker] && roleNames().includes(worker) ? worker : 'developer';
+    if (ROLES[role].screen && active().some(w => ROLES[w.role].screen)) return {text: '맥 담당이 이미 화면을 쓰고 있어. 그 일이 끝난 뒤에 맡겨.', error: true};
+    const w = {id: randomUUID().slice(0, 8), role, label: ROLES[role].label, brief: String(task), messages: [], readFiles: new Set(), actions: [], rounds: 0, status: 'running', parent: ctx.callId || null};
+    team.set(w.id, w);
+    const job = runRound(w, String(task), ctx.callId);
+    if (wake) return {text: `${w.label}에게 맡겼어 (작업 ${w.id}). 끝나면 보고가 메시지로 와. 사람에게 맡겼다고 한 줄로 말하고 이번 답을 마쳐.`};
+    // A one-shot run has nobody to come back to: it waits for the report.
+    await job;
+    return {text: `${w.label} 보고 (${STATUS[w.status]}):\n${w.report}`, error: w.status !== 'done'};
   },
 };
+EXTRA.send_back = {
+  description: 'Send a worker\'s finished work back with feedback: what is wrong or missing, specifically. The same worker carries on with everything it already did, and reports again.',
+  parameters: {type: 'object', properties: {task_id: workerArg, feedback: {type: 'string'}}, required: ['task_id', 'feedback']},
+  kind: 'delegate',
+  async run(ctx, {task_id, feedback}) {
+    const w = findWorker(task_id);
+    if (!w) return {text: `작업 ${task_id}은 없어 (오래돼서 정리됐을 수 있어). 필요하면 delegate로 새로 맡겨.`, error: true};
+    if (w.status === 'running' || w.status === 'asking') return {text: `${w.label}은 아직 하는 중이야. 보고를 기다리거나, 방향이 틀렸으면 stop_worker로 멈춘 뒤 다시 맡겨.`, error: true};
+    if (w.rounds >= MAX_ROUNDS) return {text: `${w.label}에게 이미 ${w.rounds}번 맡겼어. 더 되돌리지 말고, 사람에게 지금 상태와 막힌 점을 말하고 어떻게 할지 물어봐.`, error: true};
+    if (ROLES[w.role].screen && active().some(x => ROLES[x.role].screen)) return {text: '맥 담당이 이미 화면을 쓰고 있어. 그 일이 끝난 뒤에 되돌려 보내.', error: true};
+    const job = runRound(w, `(bisu의 피드백) ${feedback}\n\n이 피드백대로 고치고, 확인한 다음 다시 짧게 보고해.`, ctx.callId);
+    if (wake) return {text: `${w.label}에게 되돌려 보냈어 (작업 ${w.id}, ${w.rounds}번째). 끝나면 다시 보고가 와. 사람에게 한 줄로 말하고 이번 답을 마쳐.`};
+    await job;
+    return {text: `${w.label} 보고 (${STATUS[w.status]}):\n${w.report}`, error: w.status !== 'done'};
+  },
+};
+EXTRA.answer_worker = {
+  description: 'Answer a worker that stopped to ask you something. It carries on with your answer.',
+  parameters: {type: 'object', properties: {task_id: workerArg, answer: {type: 'string'}}, required: ['task_id', 'answer']},
+  kind: 'delegate',
+  async run(ctx, {task_id, answer}) {
+    const w = findWorker(task_id);
+    if (!w || w.status !== 'asking' || !w.answer) return {text: `작업 ${task_id}은 지금 답을 기다리고 있지 않아.`, error: true};
+    w.answer(String(answer));
+    return {text: `${w.label}에게 전했어. 이어서 하고 있어.`};
+  },
+};
+EXTRA.stop_worker = {
+  description: 'Stop a worker that is going the wrong way or is no longer needed.',
+  parameters: {type: 'object', properties: {task_id: workerArg}, required: ['task_id']},
+  kind: 'delegate',
+  async run(ctx, {task_id}) {
+    const w = findWorker(task_id);
+    if (!w || !(w.status === 'running' || w.status === 'asking')) return {text: `작업 ${task_id}은 지금 하고 있지 않아.`, error: true};
+    w.stoppedBy = 'bisu'; w.abort.abort(new Error('stopped'));
+    return {text: `${w.label}을 멈췄어.`};
+  },
+};
+EXTRA.team_status = {
+  description: 'Where every worker of this conversation is: what each was given, whether it is working, asking or done, and its last report.',
+  parameters: {type: 'object', properties: {}},
+  kind: 'delegate',
+  async run() {
+    if (!team.size) return {text: '맡긴 일이 없어.'};
+    return {text: [...team.values()].map(w => `${w.label} · 작업 ${w.id} · ${STATUS[w.status]}${w.rounds > 1 ? ` · ${w.rounds}번째` : ''}\n맡긴 일: ${clipTo(w.brief, 200)}${w.question ? `\n묻는 것: ${w.question}` : ''}${w.report && w.status !== 'running' ? `\n보고: ${clipTo(w.report, 400)}` : ''}`).join('\n\n')};
+  },
+};
+const TEAM_TOOLS = ['send_back', 'answer_worker', 'stop_worker', 'team_status'];
+if (wanted.includes('delegate')) wanted.push(...TEAM_TOOLS);
+// A turn that only carries the team's news (a report, a question) is bisu's own business: no routing
+// (a report could pass for small talk and lose its tools), the assistant's model, and no claims check
+// (what it tells the person was done by the worker, and the report was already read against the brief).
+const wakeTexts = new Set();
+const TEAM_HINT = 'This message is from your team, not from the person. Deal with it (check, send_back, answer_worker), then tell the person in a line or two only what they need to know.';
+// The page's stop button on one worker.
+function stopWorker(id) { const w = findWorker(id); if (w && (w.status === 'running' || w.status === 'asking')) { w.stoppedBy = 'person'; w.abort.abort(new Error('stopped')) } }
 
-async function turn(text) {
+async function turn(text, {team = false} = {}) {
   currentRequest = text;
+  turnNo++;
   await compactIfLong();
   const t0 = Date.now();
   // What kind of request this is decides who answers (GLM-5.3, or Flash for work in the folder),
   // whether tools are offered, and a one-line hint.
   const recent = messages.slice(-6).filter(m => m.role !== 'tool').map(m => `${m.role === 'user' ? '사람' : 'bisu'}: ${String(m.content || '').slice(0, 200)}`).join('\n');
-  const r = await judge.route(text, {recent, folder: judge.folderSummary(cwd)});
-  const {model, tools, thinking, hint} = judge.planTurn(r, {model: MODEL, workModel: WORK_MODEL, tools: wanted});
+  const r = team ? null : await judge.route(text, {recent, folder: judge.folderSummary(cwd)});
+  const {model, tools, thinking, hint} = team ? {model: MODEL, tools: wanted, thinking: true, hint: TEAM_HINT} : judge.planTurn(r, {model: MODEL, workModel: WORK_MODEL, tools: wanted});
   if (r) out({type: 'system', subtype: 'bisu_judgment', kind: 'route', route: r.route, confidence: r.confidence, hard: r.hard, model, session_id: sessionId});
   messages.push({role: 'user', content: text});
   transcript.user(text);
@@ -237,7 +382,7 @@ async function turn(text) {
     shouldContinue: judge.watchProgress(text, messages, {startAt, onJudgment: p =>
       out({type: 'system', subtype: 'bisu_judgment', kind: 'progress', state: p.state, confidence: p.confidence, session_id: sessionId})}),
     // An answer that claims a change no tool made this turn is sent back once to do it or say so.
-    checkAnswer: judge.watchClaims(text, {onJudgment: c =>
+    checkAnswer: team ? null : judge.watchClaims(text, {onJudgment: c =>
       out({type: 'system', subtype: 'bisu_judgment', kind: 'claim', confidence: c.p, acted: c.acted, session_id: sessionId})}),
     onMessage: (m, meta) => {
       if (m.role === 'assistant') {
@@ -286,13 +431,15 @@ if (STREAM_IN) {
   const queue = [];
   let busy = false, closing = false;
   // A worker that finishes wakes the conversation with its report, as if the person had said it.
-  wake = text => { queue.push(text); pump() };
+  wake = text => { wakeTexts.add(text); queue.push(text); pump() };
   const pump = async () => {
-    if (busy || !queue.length) { if (!busy && closing && !running.size) process.exit(0); return }
+    if (busy || !queue.length) { if (!busy && closing && !active().length) process.exit(0); return }
     busy = true;
     const taken = queue.splice(0);
     if (REPLAY) for (const t of taken) out({type: 'user', message: {role: 'user', content: t}, session_id: sessionId});
-    const result = await turn(taken.join('\n\n'));
+    const team = taken.every(t => wakeTexts.has(t));
+    for (const t of taken) wakeTexts.delete(t);
+    const result = await turn(taken.join('\n\n'), {team});
     out(result);
     busy = false;
     pump();
@@ -308,13 +455,21 @@ if (STREAM_IN) {
       const r = j.response || {};
       const resolve = pending.get(r.request_id);
       if (resolve) { pending.delete(r.request_id); resolve(r.response || {behavior: 'deny'}) }
+    } else if (j.type === 'control_request' && j.request?.subtype === 'stop_task') {
+      stopWorker(j.request.task_id);
+      emit({type: 'control_response', response: {subtype: 'success', request_id: j.request_id}});
     } else if (j.type === 'control_request' && j.request?.subtype === 'interrupt') {
       abort?.abort(new Error('interrupted'));
       for (const [id, resolve] of pending) { pending.delete(id); resolve({behavior: 'deny', message: 'stopped'}) }
       emit({type: 'control_response', response: {subtype: 'success', request_id: j.request_id}});
     }
   });
-  rl.on('close', () => { closing = true; if (!busy && !running.size) process.exit(0) });
+  rl.on('close', () => {
+    closing = true;
+    // Nobody is left to answer a worker that asked.
+    for (const w of team.values()) w.answer?.(null);
+    if (!busy && !active().length) process.exit(0);
+  });
   for (const s of ['SIGTERM', 'SIGINT']) process.on(s, () => { abort?.abort(); process.exit(143) });
 } else if (PRINT) {
   // One-shot: the prompt is the argument (or stdin), the answer goes to stdout as text or JSON.
