@@ -394,6 +394,7 @@ let shimJS = """
     bounds: () => call('bounds'),
     pickFolder: () => call('pickFolder'),
     move: (x, y) => post('move', {x, y}),
+    panelPlace: (place, reset) => call('panelPlace', {place: place || '', reset: !!reset}),
     endMove: () => post('endMove'),
     accessibility: () => call('accessibility'),
     grantAccessibility: () => post('axGrant'),
@@ -427,7 +428,7 @@ let shimJS = """
   // Dragging: the page marks its grab areas with -webkit-app-region, which WebKit ignores, so the
   // shell moves the window here. Pointer capture keeps the drag alive past the window edge.
   let drag = null;
-  const DRAG = '.dragbar, .chathead';
+  const DRAG = '.dragbar, .chathead, #panelStart .startWrap > .bisu, #panelStart .startTitle, #panelStart .ccStatus';
   const skip = 'button, input, textarea, select, a, .grip, [contenteditable]';
   document.addEventListener('pointerdown', async e => {
     if (e.button !== 0) return;
@@ -440,7 +441,8 @@ let shimJS = """
   }, true);
   document.addEventListener('pointermove', e => {
     if (!drag) return;
-    host.move(drag.x + (e.screenX - drag.sx), drag.y + (e.screenY - drag.sy));
+    // Screen coordinates grow downward in the page and upward in AppKit, hence the minus.
+    host.move(drag.x + (e.screenX - drag.sx), drag.y - (e.screenY - drag.sy));
   }, true);
   const endDrag = () => { if (!drag) return; drag = null; host.endMove() };
   document.addEventListener('pointerup', endDrag, true);
@@ -928,20 +930,30 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     return comps.url!
   }
 
+/// Where the panel opens. 「메뉴바 아래」 (the default and what 위치 초기화 goes back to) puts it under the
+  /// icon; 「마지막으로 옮긴 곳」 opens it where it was last dragged on this display, pulled back inside the
+  /// screen if that spot no longer fits, and under the icon on a display it was never dragged on.
+  private func positionPanel() {
+    let state = readState()
+    let size = panel.frame.size
+    if state["panelPlace"] as? String == "free" {
+      let mouse = NSEvent.mouseLocation
+      let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? statusItem?.button?.window?.screen ?? NSScreen.main ?? NSScreen.screens[0]
+      if let spot = (state["panelSpots"] as? [String: Any])?[screenKey(screen)] as? [String: Any],
+         let x = spot["x"] as? Double, let y = spot["y"] as? Double {
+        let pt = clampToScreen(NSPoint(x: x, y: y), size: size)
+        panel.setFrame(NSRect(x: pt.x, y: pt.y, width: size.width, height: size.height), display: true)
+        return
+      }
+    }
+    positionUnderStatusItem()
+  }
+
   private func positionUnderStatusItem() {
     guard let button = statusItem?.button else { return }
     let screen = button.window?.screen ?? NSScreen.main ?? NSScreen.screens[0]
     let area = screen.visibleFrame
-    let saved = readState()
     let size = panel.frame.size
-    if saved["panelMoved"] as? Bool == true, let p = saved["panel"] as? [String: Any],
-       let x = p["x"] as? Double, let y = p["y"] as? Double {
-      // The saved point is the panel's bottom-left; clamping happens on the whole rect so a screen
-      // that was unplugged cannot leave the panel off-screen.
-      let pt = clampToScreen(NSPoint(x: x, y: y), size: size)
-      panel.setFrame(NSRect(x: pt.x, y: pt.y, width: size.width, height: size.height), display: true)
-      return
-    }
     var x = area.maxX - size.width - 12
     var y = area.maxY - size.height - 8
     if button.window != nil {
@@ -953,6 +965,13 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     x = max(area.minX + 8, min(x, area.maxX - size.width - 8))
     y = max(area.minY + 8, min(y, area.maxY - size.height - 8))
     panel.setFrame(NSRect(x: x, y: y, width: size.width, height: size.height), display: true)
+  }
+
+  /// A display, the same one across restarts and replugging: vendor, model and serial of its panel.
+  private func screenKey(_ screen: NSScreen) -> String {
+    guard let n = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return "main" }
+    let id = CGDirectDisplayID(n.uint32Value)
+    return "\(CGDisplayVendorNumber(id))-\(CGDisplayModelNumber(id))-\(CGDisplaySerialNumber(id))"
   }
 
   private func clampToScreen(_ origin: NSPoint, size: NSSize) -> NSPoint {
@@ -969,7 +988,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
 
   func showPanel() {
     if web.url == nil { loadPanel() }
-    positionUnderStatusItem()
+    positionPanel()
     captureContextSoon()
     NSApp.activate(ignoringOtherApps: true)
     panel.makeKeyAndOrderFront(nil)
@@ -1238,7 +1257,9 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       let top = f.maxY
       let rect = NSRect(x: f.minX, y: top - size.height, width: size.width, height: size.height)
       panel.setFrame(rect, display: true)
-      saveState(["panel": ["x": rect.minX, "y": rect.minY, "width": rect.width, "height": rect.height], "panelMoved": true])
+      // Resizing is not moving: only the size is kept. (It used to mark the panel as moved, which pinned a
+      // panel resized while hidden to the bottom-left corner of the screen.)
+      saveState(["panel": ["width": rect.width, "height": rect.height]])
       reply(["x": rect.minX, "y": rect.minY, "width": rect.width, "height": rect.height])
     case "bounds":
       let f = panel.frame
@@ -1268,7 +1289,19 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       panel.setFrameOrigin(origin)
     case "endMove":
       let f = panel.frame
-      saveState(["panel": ["x": f.minX, "y": f.minY, "width": f.width, "height": f.height], "panelMoved": true])
+      let probe = NSPoint(x: f.midX, y: f.midY)
+      let screen = NSScreen.screens.first { $0.frame.contains(probe) } ?? panel.screen ?? NSScreen.main ?? NSScreen.screens[0]
+      var spots = readState()["panelSpots"] as? [String: Any] ?? [:]
+      spots[screenKey(screen)] = ["x": f.minX, "y": f.minY]
+      saveState(["panelSpots": spots, "panelPlace": "free"])
+    case "panelPlace":
+      // 메뉴바 아래 or 마지막으로 옮긴 곳; reset forgets every display's spot and goes back under the icon.
+      var patch: [String: Any] = [:]
+      if args["reset"] as? Bool == true { patch["panelSpots"] = [String: Any](); patch["panelPlace"] = "menubar" }
+      else if let place = args["place"] as? String, place == "menubar" || place == "free" { patch["panelPlace"] = place }
+      if !patch.isEmpty { saveState(patch); if panel.isVisible { positionPanel() } }
+      let st = readState()
+      reply(["place": st["panelPlace"] as? String ?? "menubar", "spots": (st["panelSpots"] as? [String: Any])?.count ?? 0])
     case "accessibility":
       reply([
         "trusted": AXIsProcessTrusted(),
