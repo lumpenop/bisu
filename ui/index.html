@@ -529,6 +529,12 @@ dialog#routineDlg::backdrop{background:rgba(0,0,0,.28)}
 .m.saveRow{align-self:flex-start;margin-top:-4px}
 .saveRoutine{border:0;background:none;box-shadow:none;padding:2px 8px;font-size:11.5px;font-weight:600;color:var(--muted);margin-left:6px}
 .saveRoutine:hover:not(:disabled){transform:none;color:var(--accent)}
+/* work handed to another bot: one line, which opens that bot's chat */
+.m.handoffRow{align-self:flex-start;text-align:left}
+.handoffLine{border:1px solid var(--line);background:color-mix(in srgb,var(--card) 70%,var(--bg));box-shadow:none;padding:6px 12px;font-size:12.5px;font-weight:500;color:var(--muted);display:inline-flex;gap:6px;align-items:baseline;border-radius:999px}
+.handoffLine b{color:var(--ink);font-weight:650}.handoffLine .tk{color:var(--muted);opacity:.8;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.handoffLine.running::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--accent);align-self:center;animation:pulse 1.2s ease-in-out infinite}
+.handoffLine.done{color:var(--accent)}.handoffLine.error{color:var(--bad)}
 </style>
 </head>
 <body>
@@ -1162,10 +1168,16 @@ function render(ev){
    toolEls[ev.id]=el;const label=ev.parent?'담당이 '+stepLabel(ev.name):stepLabel(ev.name);actStep(label);if(!ev.past)setMood('working',label+'…')}break;
   case 'tool_result':{const el=toolEls[ev.id];if(!el)break;const st=el.querySelector('.st');st.textContent=ev.error?'오류':'완료';st.classList.toggle('e',ev.error);
    el.querySelector('details').insertAdjacentHTML('beforeend',`<pre>${esc(ev.text||'(no output)')}</pre>`)}break;
-  case 'approval':live=null;{const what=String(ev.description||toolSummary(ev.tool,ev.input)||'').slice(0,90);const el=add(`<div class="ask" data-id="${esc(ev.request_id)}" data-what="${esc(what)}"><div class="q">${esc(askQ(ev.tool))}${ev.description?` <span class="note" style="font-weight:400">${esc(ev.description)}</span>`:''}</div>${askBody(ev.tool,ev.input)}
+  case 'approval':live=null;{const what=String(ev.description||toolSummary(ev.tool,ev.input)||'').slice(0,90);const el=add(`<div class="ask" data-id="${esc(ev.request_id)}" data-what="${esc(what)}"><div class="q">${ev.via?`<span class="tag blush">${esc(ev.via.bot)}</span> `:''}${esc(askQ(ev.tool))}${ev.description?` <span class="note" style="font-weight:400">${esc(ev.description)}</span>`:''}</div>${askBody(ev.tool,ev.input)}
    <div class="btns">${isBotTool(ev.tool)?`<button class="primary" data-a="allow">${/routine_save$/.test(ev.tool)?'저장하기':/create$/.test(ev.tool)?'만들기':'바꾸기'}</button><button class="danger" data-a="deny">다시 할게요</button>`:`<button class="primary" data-a="allow">허용</button><button data-a="always">이 대화에선 계속 허용</button><button class="danger" data-a="deny">안 돼요</button>`}</div></div>`,null);
    if(isBotTool(ev.tool))el.querySelector('.q').textContent=/routine_save$/.test(ev.tool)?'이 루틴을 저장할까요?':/create$/.test(ev.tool)?'이렇게 만들까요?':'이렇게 바꿀까요?';
    for(const b of el.querySelectorAll('button'))b.onclick=()=>answer(ev.request_id,b.dataset.a,el);setMood('waiting','확인이 필요해요')}break;
+  case 'handoff':{let el=wrap().querySelector(`.handoffLine[data-id="${CSS.escape(ev.id)}"]`);
+   const st={running:'진행 중',done:'끝남 · 보고 받음',error:'끝까지 못 했어요'}[ev.status]||'';
+   if(!el){el=add('',null,'sys handoffRow').appendChild(Object.assign(document.createElement('button'),{type:'button',className:'handoffLine'}));el.dataset.id=ev.id;el.dataset.bot=ev.bot;
+    // The line opens the other bot's chat for this task.
+    el.onclick=async()=>{setBot(el.dataset.bot);await refreshChats();if(chats.some(c=>c.id===el.dataset.id))open(el.dataset.id)}}
+   el.className='handoffLine '+(ev.status||'');el.innerHTML=`→ <b>${esc(ev.botName)}</b>에게 넘김 · ${st}<span class="tk">${esc(String(ev.task||'').slice(0,60))}</span>`}break;
   case 'approval_done':{if(ev.allow&&isBotTool(ev.tool))setTimeout(loadBots,1500);const el=wrap().querySelector(`.ask[data-id="${CSS.escape(ev.request_id)}"]`);if(el){el.className='ask done';const w=el.dataset.what?` · ${esc(el.dataset.what)}`:'';el.innerHTML=ev.allow?`허용했어요${w}${ev.always?' · 이 대화에선 계속':''}`:ev.reason==='stopped'?'답하지 않았어요 (멈춤)':`거절했어요${w}`}
    if(mood.state==='waiting'&&!wrap().querySelector('.ask:not(.done)'))setMood('thinking','이어서 하는 중…')}break;
   case 'auto_allowed':if(ev.judged){const row=document.createElement('div');row.className='m autoallow';row.textContent=`자동 허용 · ${stepName(ev.tool)} · ${ev.reason}`;actBlock().querySelector('.actL').appendChild(row)}break;

@@ -140,6 +140,9 @@ export function block(id, { maker = false } = {}) {
       bot.instructions ? `How the person wants you to work:\n${bot.instructions}` : '');
     if (!bot.default) parts.push(`Your memory folder is ${short(memoryDir(bot.id))} — save and read memories there, not in ~/.config/bisu/memory. A scheduled job you create carries \`bot: ${bot.id}\` in its frontmatter so it runs as you.`);
   }
+  // Who else there is, for handing work over (bot_handoff); "@이름" in a message means that bot.
+  const others = list().filter(b => b.id !== bot.id);
+  if (others.length && !maker) parts.push(`## 다른 봇 (handing work over)\nThe person's other bots: ${others.map(b => `${b.name} (${b.id})${b.job ? ' — ' + b.job : ''}`).join('; ')}.\nWhen the person writes @ and a bot's name, or a task plainly belongs to another bot's job, hand it over with bot_handoff (one complete brief), say in one line who is on it, and end your turn; its report comes back here as a message — check it and tell the person. Handing over is only the bot_handoff call: never say a bot has the task unless that call returned "Handed to".`);
   if (maker) parts.push(MAKER);
   return parts.filter(Boolean).join('\n');
 }

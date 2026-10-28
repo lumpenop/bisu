@@ -51,7 +51,7 @@ let wanted = flags.tools && flags.tools !== 'default'
   : [...Object.keys(TOOLS), 'web_search', 'delegate'];
 // A run that may change files (a chat, an edit job) also gets memory, scheduling, bots and the calendar;
 // one that only reads (a read job, like a morning summary) may still read the calendar.
-if (wanted.includes('write_file')) wanted.push('remember', 'forget', 'schedule_job', 'goal_add', 'goal_list', 'bot_create', 'bot_update', 'routine_save', ...Object.keys(CALENDAR_TOOLS), ...Object.keys(BROWSER_TOOLS));
+if (wanted.includes('write_file')) wanted.push('remember', 'forget', 'schedule_job', 'goal_add', 'goal_list', 'bot_create', 'bot_update', 'routine_save', 'bot_handoff', ...Object.keys(CALENDAR_TOOLS), ...Object.keys(BROWSER_TOOLS));
 else if (wanted.includes('read_file')) wanted.push('calendar_list', 'reminders_list');
 const preAllowed = new Set(String(flags.allowedTools || flags['allowed-tools'] || '').split(',').map(t => NAME[t.trim()] || plain(t)).filter(Boolean));
 
@@ -144,6 +144,8 @@ let abort = null;
 // ---- long conversations ----
 // Past this many characters (about 80k tokens of Korean and code), everything before the new message
 // is replaced by a summary the cheap model writes; the transcript keeps both.
+// "@봇이름" asks for another bot (bot_handoff), so a message that names one is never a tool-less chat turn.
+const mentioned = r => r && r.route === 'chat' && /(^|\s)@[^\s@]/.test(currentRequest) ? {...r, route: 'other'} : r;
 const COMPACT_AT = Number(process.env.BISU_COMPACT_CHARS) || 200_000;
 async function compactIfLong() {
   const size = JSON.stringify(messages).length;
@@ -369,7 +371,7 @@ async function turn(text, {team = false} = {}) {
   // whether tools are offered, and a one-line hint.
   const recent = messages.slice(-6).filter(m => m.role !== 'tool').map(m => `${m.role === 'user' ? '사람' : 'bisu'}: ${String(m.content || '').slice(0, 200)}`).join('\n');
   const r = team ? null : await judge.route(text, {recent, folder: judge.folderSummary(cwd)});
-  const {model, tools, thinking, hint} = team ? {model: MODEL, tools: wanted, thinking: true, hint: TEAM_HINT} : judge.planTurn(r, {model: MODEL, workModel: WORK_MODEL, tools: wanted});
+  const {model, tools, thinking, hint} = team ? {model: MODEL, tools: wanted, thinking: true, hint: TEAM_HINT} : judge.planTurn(mentioned(r), {model: MODEL, workModel: WORK_MODEL, tools: wanted});
   if (r) out({type: 'system', subtype: 'bisu_judgment', kind: 'route', route: r.route, confidence: r.confidence, hard: r.hard, model, session_id: sessionId});
   messages.push({role: 'user', content: text});
   transcript.user(text);

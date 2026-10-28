@@ -2,6 +2,7 @@
 // things later. They write through the same modules the page uses (ui/memory.mjs, ui/jobs.mjs), so
 // what the model saves is exactly what the Memory and Settings tabs show.
 import fs from 'node:fs';
+import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import * as memory from '../ui/memory.mjs';
 import {DIR as JOBS_DIR, parseCron, nextRun} from '../ui/jobs.mjs';
@@ -92,6 +93,32 @@ export const BISU_TOOLS = {
     run(ctx, {id, ...patch}) {
       try { const b = bots.update(id, patch); return ok(`Updated the bot "${b.name}".`) }
       catch (e) { return err(e.message) }
+    },
+  },
+  // Another bot does it with its own instructions, folder and memory; its answer comes back to this chat as a
+  // message, and its approvals show here. Only in a bisu ui chat (the server holds the chats).
+  bot_handoff: {
+    description: 'Hand a task to another of the person\'s bots ("@리서치 봇 …", or when another bot\'s job fits better). Give one complete brief. It works in its own chat; its result comes back to this conversation as a message, so end your turn after handing off.',
+    parameters: {type: 'object', properties: {
+      bot: {type: 'string', description: 'the other bot\'s name or id'},
+      task: {type: 'string', description: 'the whole brief: what to do, the files or facts it needs, and what done looks like'},
+    }, required: ['bot', 'task']},
+    kind: 'delegate',
+    async run(ctx, {bot, task}) {
+      const key = process.env.BISU_HANDOFF_KEY, chat = process.env.BISU_CHAT_ID;
+      if (!key || !chat) return err('Handing work to another bot works only in a bisu ui conversation.');
+      const dir = path.join(process.env.XDG_CONFIG_HOME || path.join(process.env.HOME || '', '.config'), 'bisu', 'handoff');
+      const id = randomUUID(), file = path.join(dir, `${id}.json`), res = path.join(dir, `${id}.res.json`);
+      fs.mkdirSync(dir, {recursive: true});
+      fs.writeFileSync(file, JSON.stringify({key, chat, bot, task, at: Date.now()}), {mode: 0o600});
+      for (let i = 0; i < 40; i++) {
+        await new Promise(r => setTimeout(r, 250));
+        let a = null; try { a = JSON.parse(fs.readFileSync(res, 'utf8')) } catch { continue }
+        fs.rmSync(res, {force: true});
+        return a.ok ? ok(`Handed to ${a.bot}. Its answer will come back to this conversation as a message; tell the person in one line who is on it, then end your turn.`) : err(a.error);
+      }
+      fs.rmSync(file, {force: true});
+      return err('bisu did not pick up the handoff (is the bisu window running?).');
     },
   },
   routine_save: {

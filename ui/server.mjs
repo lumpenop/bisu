@@ -277,7 +277,8 @@ function start(c){
   '-p','--input-format','stream-json','--output-format','stream-json','--verbose','--include-partial-messages','--permission-prompt-tool','stdio','--replay-user-messages',
   '--settings',BACKGROUND_AGENTS,
   ...(c.sessionId?['--resume',c.sessionId]:[])];
- const proc=spawn('zsh',args,{cwd:c.cwd,env:{...process.env,BISU_CHAT_ID:c.id,BISU_BOT:c.bot||bots.DEFAULT,BISU_BOT_MAKER:c.maker?'1':''},stdio:['pipe','pipe','pipe']});c.proc=proc;c.models=r;c.costSoFar=0;
+ c.handoffKey??=randomBytes(16).toString('hex');
+ const proc=spawn('zsh',args,{cwd:c.cwd,env:{...process.env,BISU_CHAT_ID:c.id,BISU_BOT:c.bot||bots.DEFAULT,BISU_BOT_MAKER:c.maker?'1':'',BISU_HANDOFF_KEY:c.handoffKey,BISU_HANDOFF_DEPTH:String(c.depth||0)},stdio:['pipe','pipe','pipe']});c.proc=proc;c.models=r;c.costSoFar=0;
  // A chat started in a folder macOS has not granted access to does not fail — zsh blocks in getcwd
  // until the permission dialog is answered, which looks like a spinner forever. Say what is happening.
  // Only when it is actually still the launcher: Claude Code says nothing until the first message, so
@@ -331,22 +332,56 @@ function handle(c,j){
  if(!parent&&!c.busy&&(j.type==='stream_event'||j.type==='assistant'))setBusy(c,true);
  if(j.type==='stream_event'){const e=j.event;if(e?.type==='content_block_delta'&&e.delta?.type==='text_delta')push(c,{kind:'delta',text:e.delta.text,parent});return}
  if(j.type==='assistant'){for(const b of j.message?.content||[]){
-   if(b.type==='text'&&b.text)push(c,{kind:'text',text:b.text,parent,model:j.message.model});
+   if(b.type==='text'&&b.text){if(!parent)c.lastText=b.text;push(c,{kind:'text',text:b.text,parent,model:j.message.model})}
    else if(b.type==='tool_use')push(c,{kind:'tool',id:b.id,name:b.name,input:b.input,parent})}return}
  if(j.type==='user'&&!parent&&replayed(c,j.message?.content))return;
  if(j.type==='user'){const content=j.message?.content;if(Array.isArray(content))for(const b of content)if(b.type==='tool_result'){
    const text=typeof b.content==='string'?b.content:Array.isArray(b.content)?b.content.map(x=>x.text||'').join('\n'):'';push(c,{kind:'tool_result',id:b.tool_use_id,text:text.slice(0,4000),error:!!b.is_error,parent})}return}
  if(j.type==='control_request'&&j.request?.subtype==='can_use_tool'){const q=j.request;
   if(c.allowTools.has(q.tool_name)){send(c,{type:'control_response',response:{subtype:'success',request_id:j.request_id,response:{behavior:'allow',updatedInput:q.input}}});push(c,{kind:'auto_allowed',tool:q.tool_name,input:q.input});return}
-  c.pending.set(j.request_id,q);push(c,{kind:'approval',request_id:j.request_id,tool:q.tool_name,input:q.input,description:q.description||'',parent});return}
+  c.pending.set(j.request_id,q);push(c,{kind:'approval',request_id:j.request_id,tool:q.tool_name,input:q.input,description:q.description||'',parent});handoffUp(c,{kind:'approval',request_id:j.request_id,tool:q.tool_name,input:q.input,description:q.description||''});return}
  if(j.type==='result'){c.turnsDone++;
   const usage={};for(const [m,u] of Object.entries(j.modelUsage||{}))usage[m]={input:(u.inputTokens||0)+(u.cacheCreationInputTokens||0),cacheRead:u.cacheReadInputTokens||0,output:u.outputTokens||0};
   // modelUsage adds up over the whole process, so a turn's cost is the difference from the previous result.
   // bisu's own engine reports what it spent at Z.ai's prices; Claude Code's own figure uses Claude's.
   const total=j.bisu_native?(j.total_cost_usd??null):estimate(usage,priceNow()),cost=total==null?null:total-c.costSoFar;if(total!=null)c.costSoFar=total;
   c.lastAt=Date.now();saveChats();
-  push(c,{kind:'result',error:!!j.is_error,subtype:j.subtype,turns:j.num_turns,ms:j.duration_ms,cost});setBusy(c,false);idleLater(c);return}
+  push(c,{kind:'result',error:!!j.is_error,subtype:j.subtype,turns:j.num_turns,ms:j.duration_ms,cost});setBusy(c,false);idleLater(c);handoffDone(c,j);return}
 }
+// ---- one bot handing work to another (engine tool bot_handoff) ----
+// A chat's engine cannot reach this server (its token stays here), so it writes a request file with the chat's
+// own one-time key; the server checks the key, starts a chat of the other bot with the task, answers the file,
+// and reports the other bot's answer back into the first chat as a message. Approvals of that chat go up to the
+// first one too. A handed-off chat may hand off once more, no deeper (MAX_HANDOFF).
+const HANDOFF_DIR=path.join(path.dirname(CONFIG),'handoff');
+const MAX_HANDOFF=2;
+function handoffUp(k,ev){const h=k.handoff;if(!h)return;const o=chats.get(h.from);if(!o)return;push(o,{...ev,via:{chat:k.id,bot:h.botName}})}
+async function handoffDone(k,j){const h=k.handoff;if(!h||k.busy||k.tasks?.size||h.reported)return;h.reported=true;const o=chats.get(h.from);if(!o)return;
+ const text=String(k.lastText||'(답이 없었어요)').slice(0,6000),ok=!j.is_error;
+ push(o,{kind:'handoff',id:k.id,bot:k.bot,botName:h.botName,task:h.task,status:ok?'done':'error'});
+ // The first bot reads the report like a message, and answers the person from it.
+ if(!o.proc)start(o);
+ if(o.busy){o.queued.push({id:randomUUID(),text:`[${h.botName} 보고`})}else setBusy(o,true);
+ send(o,{type:'user',message:{role:'user',content:`[${h.botName} 보고 — 넘긴 일: ${h.task.slice(0,200)}]\n${ok?text:'끝까지 하지 못했어요: '+text}\n\n(이 보고를 확인하고, 사람에게 한두 줄로 알려 줘.)`}})}
+async function handoffTick(){let names=[];try{names=fs.readdirSync(HANDOFF_DIR)}catch{return}
+ for(const n of names){if(!/^[0-9a-f-]{36}\.json$/.test(n))continue;const f=path.join(HANDOFF_DIR,n);let r=null;try{r=JSON.parse(fs.readFileSync(f,'utf8'))}catch{continue}
+  const o=chats.get(r?.chat);
+  if(!o||!o.handoffKey||r.key!==o.handoffKey){try{if(Date.now()-fs.statSync(f).mtimeMs>10*60e3)fs.rmSync(f,{force:true})}catch{}continue}
+  fs.rmSync(f,{force:true});
+  const answer=x=>{try{fs.writeFileSync(f.replace(/\.json$/,'.res.json'),JSON.stringify(x))}catch{}};
+  const depth=(o.depth||0)+1,want=String(r.bot||'').replace(/^@/,'').trim().toLowerCase();
+  const all=bots.list(),target=all.find(b=>b.id===want||b.name.toLowerCase()===want)||(want?all.find(b=>b.name.toLowerCase().includes(want)):null);
+  if(depth>MAX_HANDOFF){answer({ok:false,error:`넘긴 일을 또 넘길 수는 ${MAX_HANDOFF}단계까지예요. 직접 하거나 사람에게 물어봐 주세요.`});continue}
+  if(!target){answer({ok:false,error:`그런 봇이 없어요: ${r.bot}. 있는 봇: ${all.map(b=>b.name).join(', ')}`});continue}
+  if(target.id===(o.bot||bots.DEFAULT)){answer({ok:false,error:'자기 자신에게는 넘길 수 없어요. 직접 하거나 담당 에이전트에게 맡기세요.'});continue}
+  const task=String(r.task||'').slice(0,4000);if(!task.trim()){answer({ok:false,error:'넘길 일이 비어 있어요.'});continue}
+  const fromName=bots.resolve(o.bot).name,k=await newChat({bot:target.id});
+  k.depth=depth;k.title=`${fromName}에게서 · ${task.slice(0,40)}`;k.handoff={from:o.id,botName:target.name,task};
+  (o.handoffs??=new Map()).set(k.id,{bot:target.id});
+  say(k,`[${fromName}가 넘긴 일]\n${task}\n\n이 대화의 답이 ${fromName}에게 그대로 전달돼요. 끝나면 결과를 짧게 정리해 주세요.`);
+  push(o,{kind:'handoff',id:k.id,bot:target.id,botName:target.name,task,status:'running'});
+  answer({ok:true,bot:target.name,chat:k.id})}}
+setInterval(()=>{handoffTick().catch(e=>console.error('bisu handoff:',e.message))},1000).unref?.();
 // A job's card continues the run that produced it, so "그럼 고쳐" has the whole context; a suggestion
 // starts a fresh chat and sends what it proposed.
 // The cards a goal left that its answer (or its removal) settles.
@@ -374,10 +409,13 @@ function say(c,text){
  if(c.busy){const id=randomUUID();c.queued.push({id,text});push(c,{kind:'user',text,queued:id})}
  else{push(c,{kind:'user',text});setBusy(c,true)}
  send(c,{type:'user',message:{role:'user',content:text}})}
-function decide(c,{request_id,allow,always,message}){const q=c.pending.get(request_id);if(!q)throw Error('no such approval (already answered?)');c.pending.delete(request_id);
+function decide(c,{request_id,allow,always,message}){
+ // An approval shown here for a bot this chat handed work to is that chat's to answer.
+ if(!c.pending.has(request_id))for(const id of c.handoffs?.keys?.()||[]){const k=chats.get(id);if(k?.pending.has(request_id))return decide(k,{request_id,allow,always,message})}
+ const q=c.pending.get(request_id);if(!q)throw Error('no such approval (already answered?)');c.pending.delete(request_id);
  if(allow&&always)c.allowTools.add(q.tool_name);
  send(c,{type:'control_response',response:{subtype:'success',request_id,response:allow?{behavior:'allow',updatedInput:q.input}:{behavior:'deny',message:message||'The person declined this on the bisu page.'}}});
- push(c,{kind:'approval_done',request_id,allow:!!allow,always:!!(allow&&always),tool:q.tool_name})}
+ push(c,{kind:'approval_done',request_id,allow:!!allow,always:!!(allow&&always),tool:q.tool_name});handoffUp(c,{kind:'approval_done',request_id,allow:!!allow,tool:q.tool_name})}
 function stop(c){if(!c.proc)return;send(c,{type:'control_request',request_id:randomUUID(),request:{subtype:'interrupt'}});
  // A model that ignores the interrupt still gets stopped; the next message resumes the session.
  const p=c.proc;setTimeout(()=>{if(c.proc===p&&c.busy)p.kill('SIGTERM')},4000)}

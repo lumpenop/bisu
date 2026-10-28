@@ -74,7 +74,7 @@ JSON
   extra+=(--mcp-config "$mcp" --strict-mcp-config)
   # The calendar, web search, goals and the browser too, except deleting from the calendar and pressing a step the
   # browser held (paying, sending, booking), which ask.
-  allowed="mcp__bisu__session_search,mcp__bisu__session_show,mcp__bisu__web_search,mcp__bisu__calendar_list,mcp__bisu__calendar_add,mcp__bisu__calendar_change,mcp__bisu__reminders_list,mcp__bisu__reminder_add,mcp__bisu__reminder_change,mcp__bisu__goal_add,mcp__bisu__goal_list,mcp__bisu__goal_update,mcp__bisu__browser_task,mcp__bisu__browser_check,mcp__bisu__browser_read"
+  allowed="mcp__bisu__session_search,mcp__bisu__session_show,mcp__bisu__web_search,mcp__bisu__calendar_list,mcp__bisu__calendar_add,mcp__bisu__calendar_change,mcp__bisu__reminders_list,mcp__bisu__reminder_add,mcp__bisu__reminder_change,mcp__bisu__goal_add,mcp__bisu__goal_list,mcp__bisu__goal_update,mcp__bisu__browser_task,mcp__bisu__browser_check,mcp__bisu__browser_read,mcp__bisu__bot_handoff"
   # A goal session (ui/goals.mjs) may only look, add events and reminders, and write its own goal.
   [ -n "$BISU_GOAL_ID" ] && allowed="mcp__bisu__session_search,mcp__bisu__session_show,mcp__bisu__web_search,mcp__bisu__calendar_list,mcp__bisu__calendar_add,mcp__bisu__reminders_list,mcp__bisu__reminder_add,mcp__bisu__reminder_change,mcp__bisu__goal_update"
   [ "${BISU_CU:-1}" != "0" ] && allowed+=",mcp__bisu__cu_look,mcp__bisu__cu_state,mcp__bisu__cu_decide,mcp__bisu__cu_click,mcp__bisu__cu_type,mcp__bisu__cu_key,mcp__bisu__cu_scroll,mcp__bisu__cu_wait,mcp__bisu__cu_screenshot,mcp__bisu__cu_ground"
