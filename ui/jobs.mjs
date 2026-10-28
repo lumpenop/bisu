@@ -119,7 +119,7 @@ function parseJob(file) {
   const slug = path.basename(file, '.md');
   let st = null, text = '';
   try { st = fs.statSync(file); text = fs.readFileSync(file, 'utf8') } catch (e) { return { slug, file, error: e.message } }
-  const job = { slug, file, mtime: st.mtimeMs, hash: createHash('sha256').update(text).digest('hex'), name: slug, schedule: null, cron: null, at: null, cwd: os.homedir(), tools: 'read', enabled: true, awake: false, model: null, timeoutMin: 10, prompt: '', error: null };
+  const job = { slug, file, mtime: st.mtimeMs, hash: createHash('sha256').update(text).digest('hex'), name: slug, schedule: null, cron: null, at: null, cwd: os.homedir(), tools: 'read', enabled: true, awake: false, bot: 'bisu', model: null, timeoutMin: 10, prompt: '', error: null };
   try {
     const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
     if (!m) throw Error('the file needs a frontmatter block (--- … ---) and the request below it');
@@ -134,6 +134,8 @@ function parseJob(file) {
       else if (k === 'tools') { if (!(v in TOOLS)) throw Error(`tools: "${v}" — use read, edit or full`); job.tools = v }
       else if (k === 'enabled') job.enabled = !/^(false|no|off|0)$/i.test(v);
       else if (k === 'awake') job.awake = /^(true|yes|on|1)$/i.test(v);
+      // Which bot it runs as (ui/bots.mjs); a job without one belongs to the default bot.
+      else if (k === 'bot' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(v)) job.bot = v;
       else if (k === 'model' && v) job.model = v;
       else if (k === 'timeout') { const n = Number(v); if (Number.isFinite(n)) job.timeoutMin = Math.min(60, Math.max(1, n)) }
     }
@@ -213,7 +215,7 @@ export function snapshot() {
     jobs: list().map(j => {
       const r = runOf(j.slug);
       return { slug: j.slug, name: j.name, schedule: j.schedule, once: !!j.at, cwd: j.cwd, tools: j.tools, enabled: j.enabled, model: j.model, error: j.error, needsApproval: needsApproval(j), prompt: j.prompt.slice(0, 600),
-        nextAt: nextAt(j, now), lastRun: r.lastRun || null, lastError: r.lastError, lastResult: r.lastResult, lastSession: r.lastSession, running: running?.slug === j.slug, awake: awakeOf(j) };
+        nextAt: nextAt(j, now), lastRun: r.lastRun || null, lastError: r.lastError, lastResult: r.lastResult, lastSession: r.lastSession, running: running?.slug === j.slug, awake: awakeOf(j), bot: j.bot };
     }),
   };
 }
@@ -231,7 +233,7 @@ function runClaude(job, models) {
       models?.dev || process.env.BISU_DEV_MODEL || 'deepseek/deepseek-v4.1-flash', path.join(root, 'agents.json'), '-p', prompt, '--output-format', 'json'];
     if (job.tools === 'edit') args.push('--permission-mode', 'acceptEdits');
     if (job.tools === 'full') args.push('--dangerously-skip-permissions');
-    const env = { ...process.env, BISU_PROMPT: path.join(root, 'prompt-job.md'), BISU_CU: '0', BISU_EFFORT: '' };
+    const env = { ...process.env, BISU_PROMPT: path.join(root, 'prompt-job.md'), BISU_CU: '0', BISU_EFFORT: '', BISU_BOT: job.bot || 'bisu' };
     if (TOOLS[job.tools]) env.BISU_TOOLS = TOOLS[job.tools]; else delete env.BISU_TOOLS;
     const proc = spawn('zsh', args, { cwd: job.cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
     child = proc;

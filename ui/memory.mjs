@@ -21,7 +21,20 @@ import { fileURLToPath } from 'node:url';
 // The digest is on every request, so it is capped: memory is a few facts, not a diary. Pinned entries
 // never fall off the end; the rest are taken newest first.
 export const BUDGET = Number(process.env.BISU_MEMORY_CHARS) || 3000;
-export const DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu', 'memory');
+// Each bot keeps its own memory. The default bot ('bisu') owns the folder that existed before bots;
+// another bot's lives in bots/<id>/memory (ui/bots.mjs). A run knows its bot from BISU_BOT; the page's
+// server, which serves every bot, switches with inBot() around each call.
+const CONFIG_DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu');
+export function dirFor(bot) {
+  return !bot || bot === 'bisu' || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(bot) ? path.join(CONFIG_DIR, 'memory') : path.join(CONFIG_DIR, 'bots', bot, 'memory');
+}
+export let DIR = dirFor(process.env.BISU_BOT);
+// Every function here is synchronous, so swapping the folder around one call cannot interleave with another.
+export function inBot(bot, fn) {
+  const was = DIR;
+  DIR = dirFor(bot);
+  try { return fn() } finally { DIR = was }
+}
 
 // One memory, from the file and its stat. The first non-empty line is the title (`# 제목` or plain),
 // the rest is the fact; frontmatter carries `pin` and, when the memory belongs to a topic, `key`.

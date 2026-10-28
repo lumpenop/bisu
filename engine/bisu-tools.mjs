@@ -6,6 +6,7 @@ import path from 'node:path';
 import * as memory from '../ui/memory.mjs';
 import {DIR as JOBS_DIR, parseCron, nextRun} from '../ui/jobs.mjs';
 import * as goals from '../ui/goals.mjs';
+import * as bots from '../ui/bots.mjs';
 
 const ok = text => ({text});
 const err = text => ({text, error: true});
@@ -63,6 +64,35 @@ export const BISU_TOOLS = {
       return ok(`Forgot "${hit.title}".`);
     },
   },
+  // Bots (ui/bots.mjs): bisu for one job. Writing a bot file always waits for the person: kind 'bot' is
+  // never cleared by the judge, and in Claude Code these are not pre-allowed, so the call is the preview card.
+  bot_create: {
+    description: 'Create a new bisu bot once you know its name and main job (from the bot-making conversation). The person sees a preview card and nothing is written until they press 만들기.',
+    parameters: {type: 'object', properties: {
+      name: {type: 'string', description: 'the bot name, in their language'},
+      job: {type: 'string', description: 'its one main job, one sentence'},
+      cwd: {type: 'string', description: 'the folder it works in (default ~)'},
+      instructions: {type: 'string', description: 'how it should work, in their words, as short lines'},
+      tone: {type: 'string', description: 'how it talks, e.g. 존댓말, 짧게'},
+    }, required: ['name', 'job']},
+    kind: 'bot',
+    run(ctx, {name, job, cwd = '~', instructions = '', tone = ''}) {
+      try { const b = bots.create({name, job, cwd, instructions, tone}); return ok(`Created the bot "${b.name}" (id ${b.id}). They can pick it in the sidebar.`) }
+      catch (e) { return err(e.message) }
+    },
+  },
+  bot_update: {
+    description: 'Change a bot the person already has (its name, job, folder, way of working or tone). Shows them a preview card first.',
+    parameters: {type: 'object', properties: {
+      id: {type: 'string', description: 'the bot id'},
+      name: {type: 'string'}, job: {type: 'string'}, cwd: {type: 'string'}, instructions: {type: 'string'}, tone: {type: 'string'},
+    }, required: ['id']},
+    kind: 'bot',
+    run(ctx, {id, ...patch}) {
+      try { const b = bots.update(id, patch); return ok(`Updated the bot "${b.name}".`) }
+      catch (e) { return err(e.message) }
+    },
+  },
   schedule_job: {
     description: 'Do something later or on a schedule, as a scheduled job whose answer appears as a card. Use cron (five fields, local time) for repeating, or at for once. tools: read (default) only looks; edit may change files in cwd; full may also run commands — edit/full wait for the person to approve the job in Settings.',
     parameters: {type: 'object', properties: {
@@ -84,7 +114,9 @@ export const BISU_TOOLS = {
       const file = path.join(JOBS_DIR, `${s}.md`);
       const existed = fs.existsSync(file);
       fs.mkdirSync(JOBS_DIR, {recursive: true});
-      fs.writeFileSync(file, `---\nname: ${String(name).replace(/\n/g, ' ')}\n${cron ? `schedule: ${cron}` : `at: ${at}`}\ncwd: ${folder}\ntools: ${tools}\n---\n${String(request).trim()}\n`);
+      // A bot's own job runs as that bot (BISU_BOT is set for its conversations).
+      const bot = /^[a-z0-9][a-z0-9-]{0,39}$/.test(process.env.BISU_BOT || '') && process.env.BISU_BOT !== 'bisu' ? `bot: ${process.env.BISU_BOT}\n` : '';
+      fs.writeFileSync(file, `---\nname: ${String(name).replace(/\n/g, ' ')}\n${cron ? `schedule: ${cron}` : `at: ${at}`}\ncwd: ${folder}\ntools: ${tools}\n${bot}---\n${String(request).trim()}\n`);
       const when = cron ? (() => { const t = nextRun(parseCron(cron)); return t ? new Date(t).toLocaleString('ko-KR', {dateStyle: 'medium', timeStyle: 'short'}) : '?' })() : at;
       return ok(`${existed ? 'Updated' : 'Created'} the job "${name}" (${s}). Next run: ${when}.${tools !== 'read' ? ' It can change things, so it waits until they approve it in Settings → 예약 작업.' : ''}`);
     },

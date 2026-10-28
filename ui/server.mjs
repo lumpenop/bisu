@@ -13,6 +13,7 @@
 //  * Every API call carries a per-launch token that only this page knows; other hosts and cross-site origins are refused.
 import http from 'node:http';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {execFile,spawn} from 'node:child_process';import {randomBytes,randomUUID} from 'node:crypto';import {fileURLToPath} from 'node:url';
 import * as memory from './memory.mjs';
+import * as bots from './bots.mjs';
 import * as proactive from './proactive.mjs';
 import * as sessions from './sessions.mjs';
 import * as jobs from './jobs.mjs';
@@ -191,7 +192,7 @@ function saveChats(){
   // A chat that never got a session has no conversation to come back to; the next panel open
   // should offer a folder instead of an empty one.
   const list=[...chats.values()].filter(c=>c.sessionId).sort((a,b)=>b.created-a.created).slice(0,30)
-   .map(c=>({id:c.id,cwd:c.cwd,title:c.title,sessionId:c.sessionId,created:c.created,lastAt:c.lastAt||c.created}));
+   .map(c=>({id:c.id,cwd:c.cwd,title:c.title,sessionId:c.sessionId,created:c.created,lastAt:c.lastAt||c.created,bot:c.bot||bots.DEFAULT,...(c.maker?{maker:true}:{})}));
   fs.mkdirSync(path.dirname(CHATS_FILE),{recursive:true});
   const tmp=CHATS_FILE+'.tmp';fs.writeFileSync(tmp,JSON.stringify(list));fs.renameSync(tmp,CHATS_FILE);
  }catch(e){console.error('bisu chats: cannot save:',e.message)}
@@ -207,7 +208,9 @@ function restoreChats(){
   const sessionId=typeof saved.sessionId==='string'&&/^[0-9a-f-]{36}$/.test(saved.sessionId)?saved.sessionId:null;
   chats.set(id,{id,cwd,title:typeof saved.title==='string'?cleanTitle(saved.title):null,busy:false,proc:null,sessionId,
    events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),tasks:new Map(),queued:[],turnsDone:0,costSoFar:0,
-   created:Number(saved.created)||Date.now(),lastAt:Number(saved.lastAt)||Number(saved.created)||Date.now()});
+   created:Number(saved.created)||Date.now(),lastAt:Number(saved.lastAt)||Number(saved.created)||Date.now(),
+   // Chats from before bots belong to the default bot.
+   bot:bots.validId(saved.bot)?saved.bot:bots.DEFAULT,maker:saved.maker===true});
  }
 }
 
@@ -236,7 +239,7 @@ function idleLater(c){
 function unwatched(c){clearTimeout(c.idle);if(c.proc&&!c.busy&&!c.pending.size&&!c.tasks?.size)idleLater(c)}
 // lastAt is the last time the person or bisu actually said something, which is what decides whether
 // the panel picks a conversation up again or starts fresh.
-function publicChat(c){return {id:c.id,cwd:c.cwd,title:c.title,busy:c.busy,alive:!!c.proc,sessionId:c.sessionId,pending:c.pending.size,tasks:c.tasks?.size||0,queued:c.queued?.length||0,created:c.created,lastAt:c.lastAt||c.created}}
+function publicChat(c){return {id:c.id,bot:c.bot||bots.DEFAULT,maker:!!c.maker,cwd:c.cwd,title:c.title,busy:c.busy,alive:!!c.proc,sessionId:c.sessionId,pending:c.pending.size,tasks:c.tasks?.size||0,queued:c.queued?.length||0,created:c.created,lastAt:c.lastAt||c.created}}
 // A restored chat has no events until it is opened; its transcript is replayed into the stream then.
 async function hydrate(c){
  if(c.events.length||!c.sessionId)return;
@@ -273,7 +276,7 @@ function start(c){
   '-p','--input-format','stream-json','--output-format','stream-json','--verbose','--include-partial-messages','--permission-prompt-tool','stdio','--replay-user-messages',
   '--settings',BACKGROUND_AGENTS,
   ...(c.sessionId?['--resume',c.sessionId]:[])];
- const proc=spawn('zsh',args,{cwd:c.cwd,env:{...process.env,BISU_CHAT_ID:c.id},stdio:['pipe','pipe','pipe']});c.proc=proc;c.models=r;c.costSoFar=0;
+ const proc=spawn('zsh',args,{cwd:c.cwd,env:{...process.env,BISU_CHAT_ID:c.id,BISU_BOT:c.bot||bots.DEFAULT,BISU_BOT_MAKER:c.maker?'1':''},stdio:['pipe','pipe','pipe']});c.proc=proc;c.models=r;c.costSoFar=0;
  // A chat started in a folder macOS has not granted access to does not fail — zsh blocks in getcwd
  // until the permission dialog is answered, which looks like a spinner forever. Say what is happening.
  // Only when it is actually still the launcher: Claude Code says nothing until the first message, so
@@ -351,10 +354,12 @@ async function acceptSuggestion(item){
  proactive.resolve(item.id,'accepted');
  if(item.kind==='job'){if(!item.sessionId)return null;return newChat({cwd:item.cwd||undefined,resume:item.sessionId})}
  const c=await newChat({cwd:item.cwd||undefined});say(c,item.action);return c}
-async function newChat({cwd,resume}){
- const dir=path.resolve(String(cwd||os.homedir()).replace(/^~(?=\/|$)/,os.homedir()));
+async function newChat({cwd,resume,bot,maker}){
+ // A bot's chat starts in the bot's folder unless one is given; the bot-making chat belongs to the default bot.
+ const owner=maker?bots.DEFAULT:bots.validId(bot)&&bots.get(bot)?bot:bots.DEFAULT;
+ const dir=path.resolve(String(cwd||bots.resolve(owner).cwd||os.homedir()).replace(/^~(?=\/|$)/,os.homedir()));
  if(!fs.statSync(dir,{throwIfNoEntry:false})?.isDirectory())throw Error('not a folder: '+dir);
- const c={id:randomUUID(),cwd:dir,title:null,busy:false,proc:null,sessionId:resume||null,events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),tasks:new Map(),queued:[],turnsDone:0,costSoFar:0,created:Date.now(),lastAt:Date.now()};
+ const c={id:randomUUID(),cwd:dir,title:null,busy:false,proc:null,sessionId:resume||null,events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),tasks:new Map(),queued:[],turnsDone:0,costSoFar:0,created:Date.now(),lastAt:Date.now(),bot:owner,maker:!!maker};
  if(resume){if(!/^[0-9a-f-]{36}$/.test(resume))throw Error('bad session id');const past=await pastMessages(resume);
   c.title=cleanTitle(past.find(m=>m.kind==='user')?.text)||'Resumed session';push(c,{kind:'resumed',sessionId:resume,count:past.length});for(const m of past)push(c,{...m,past:true})}
  chats.set(c.id,c);saveChats();warm(c);return c}
@@ -416,13 +421,15 @@ const server=http.createServer(async(req,res)=>{
    writeConfig(next);return json(res,200,{roles:roles()})}
   // Memory: the files the assistant keeps and the exact block a new run is given. Editing here is
   // immediate for the next chat or bisu run; a chat that is already running keeps what it started with.
-  if(m==='GET'&&p==='/api/memory')return json(res,200,memory.snapshot());
-  if(m==='POST'&&p==='/api/memory')return json(res,200,memory.save(await body(req)));
+  // Each bot's own memory: ?bot= (or bot in the body) picks the folder; none is the default bot's.
+  const memBot=bots.validId(url.searchParams.get('bot'))?url.searchParams.get('bot'):bots.DEFAULT;
+  if(m==='GET'&&p==='/api/memory')return json(res,200,memory.inBot(memBot,()=>memory.snapshot()));
+  if(m==='POST'&&p==='/api/memory'){const b=await body(req);return json(res,200,memory.inBot(bots.validId(b.bot)?b.bot:memBot,()=>memory.save(b)))}
   // What already looks like the memory being written. Returns candidates and never writes, so the page
   // decides: edit the one that is there, or keep both.
-  if(m==='POST'&&p==='/api/memory/check')return json(res,200,{candidates:memory.check(await body(req))});
+  if(m==='POST'&&p==='/api/memory/check'){const b=await body(req);return json(res,200,{candidates:memory.inBot(bots.validId(b.bot)?b.bot:memBot,()=>memory.check(b))})}
   const mm=/^\/api\/memory\/([^/]+)$/.exec(p);
-  if(mm&&m==='DELETE')return json(res,200,memory.remove(decodeURIComponent(mm[1])));
+  if(mm&&m==='DELETE')return json(res,200,memory.inBot(memBot,()=>memory.remove(decodeURIComponent(mm[1]))));
   // Proactive suggestions: what bisu brings without being asked. The run itself is read-only and
   // happens in its own process; accepting one only opens an ordinary chat and sends the request.
   // Telegram (ui/telegram.mjs): its state and settings, a fresh pairing code, unpairing, a test message.
@@ -501,6 +508,11 @@ const server=http.createServer(async(req,res)=>{
     if(action==='delete')return json(res,200,jobs.remove(jm[1]));
     return json(res,400,{error:'unknown action'})
    }catch(e){return json(res,e.status||500,{error:e.message})}}
+  // Bots (ui/bots.mjs): list, create (the quick form, or after the making chat's preview), change, delete.
+  if(m==='GET'&&p==='/api/bots')return json(res,200,{bots:bots.list(),default:bots.DEFAULT});
+  if(m==='POST'&&p==='/api/bots')return json(res,200,{bot:bots.create(await body(req)),bots:bots.list()});
+  const bm=/^\/api\/bots\/([a-z0-9-]{1,40})$/.exec(p);
+  if(bm&&m==='POST'){const b=await body(req);if(b.action==='delete'){bots.remove(bm[1]);return json(res,200,{bots:bots.list()})}return json(res,200,{bot:bots.update(bm[1],b),bots:bots.list()})}
   if(m==='GET'&&p==='/api/chats')return json(res,200,{chats:[...chats.values()].map(publicChat).sort((a,b)=>b.lastAt-a.lastAt),home:os.homedir()});
   if(m==='POST'&&p==='/api/chats'){if(!canThink())return json(res,400,{error:noKey()||''});const c=await newChat(await body(req));return json(res,200,{chat:publicChat(c)})}
   const cm=/^\/api\/chats\/([0-9a-f-]{36})(\/[a-z]+)?$/.exec(p);const c=cm&&chats.get(cm[1]);

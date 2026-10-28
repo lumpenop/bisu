@@ -37,8 +37,15 @@ if [ -n "$BISU_PROMPT" ] || [ "${BISU_ENGINE:-}" = native ]; then
 else
   sysprompt="$HOME/Library/Application Support/bisu/system-prompt.md"
 fi
+# One file per bot (and for the bot-making conversation): two bots starting at once must not share one.
+[ -n "$BISU_BOT" ] && [ "$BISU_BOT" != bisu ] && sysprompt="${sysprompt:r}-bot-${BISU_BOT}.md"
+[ "$BISU_BOT_MAKER" = 1 ] && sysprompt="${sysprompt:r}-maker.md"
 mkdir -p "${sysprompt:h}"
-if [ -f "$root/ui/memory.mjs" ] && command -v node >/dev/null 2>&1 &&
+# bisu's prompt, then the bot's block (its job, way of working, tone; ui/bots.mjs), then its memory.
+if [ -f "$root/ui/bots.mjs" ] && command -v node >/dev/null 2>&1 &&
+   node "$root/ui/bots.mjs" prompt "$base" > "$sysprompt.$$.tmp" 2>/dev/null; then
+  mv -f "$sysprompt.$$.tmp" "$sysprompt"
+elif [ -f "$root/ui/memory.mjs" ] && command -v node >/dev/null 2>&1 &&
    node "$root/ui/memory.mjs" prompt "$base" > "$sysprompt.$$.tmp" 2>/dev/null; then
   mv -f "$sysprompt.$$.tmp" "$sysprompt"
 else
