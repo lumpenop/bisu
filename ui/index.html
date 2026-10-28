@@ -175,6 +175,20 @@ body.panel:has(#sug:not([hidden])) #panelStart .startWrap{margin-top:2vh}
 #panelStart .row{display:flex;gap:6px}
 #panelStart .row .lbl{align-self:center;font-size:12px;color:var(--muted)}
 details.note summary{cursor:pointer;width:max-content}details.note p{margin:6px 0 0}
+/* Telegram's setup, one step at a time */
+.tgState{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;margin-bottom:12px}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.steps li{display:grid;grid-template-columns:28px 1fr;column-gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
+.steps li>*{grid-column:2}
+.steps li::before{content:attr(data-n);grid-column:1;grid-row:1/span 3;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:700 13px/1 var(--display);background:var(--accent-soft);color:var(--accent)}
+.steps li.done::before{content:'✓';background:linear-gradient(180deg,var(--g1),var(--g2));color:var(--accent-ink)}
+.steps li.done .note,.steps li.done .actions{display:none}
+.steps li.later{opacity:.5}.steps li.later button{pointer-events:none}
+.steps li b{font-family:var(--display);font-size:14px}
+.steps li .note{margin:4px 0 0}
+.steps li .actions{margin-top:10px;flex-wrap:wrap;gap:8px}
+.checks{display:flex;flex-direction:column;gap:6px}
+#tgOn .kv{margin-top:4px}
 .cuLog{max-height:260px;overflow:auto;font-size:11.5px;line-height:1.5;white-space:pre-wrap;margin:6px 0 0}
 #panelStart input{flex:1;min-width:0}
 #panelStart .err{margin:0;font-size:12px;min-height:0}
@@ -495,6 +509,35 @@ body.panel .compose{padding:6px 10px 16px}
   <p class="note">bisu가 가끔 스스로 최근 작업을 훑어보고, 지금 말할 만한 걸 하나 남겨요. 읽기만 하는 별도 실행이라 아무것도 바꾸지 못하고, 고르면 그때 폴더에서 진짜 대화가 시작돼요. 마음에 안 든 제안은 “나중에”로 지우면 다시 꺼내지 않아요.</p>
   <div id="sugPast"></div>
  </section>
+  <p class="note">맥이 잠들면 bisu도 멈춰요. 전원이 연결되어 있는 동안은 잠들지 않게 해서, 자리를 비워도 텔레그램과 예약 작업에 답할 수 있어요. 화면은 평소처럼 꺼지고, 뚜껑을 닫으면 잠들어요. 알림을 누르면 그 대화가 열려요.</p>
+ <section id="tgSec">
+  <h2>텔레그램</h2>
+  <div class="tgState" id="tgState">…</div>
+  <ol class="steps" id="tgSteps">
+   <li data-n="1" id="tgStep1"><b>봇 만들기</b>
+    <p class="note">텔레그램에서 @BotFather에게 <code>/newbot</code>을 보내고, 봇 이름과 아이디(…bot으로 끝나게)를 정하면 숫자와 글자로 된 토큰을 줘요.</p>
+    <div class="actions"><button id="tgBotFather">BotFather 열기</button></div></li>
+   <li data-n="2" id="tgStep2"><b>토큰을 Dec에 저장</b>
+    <p class="note">Dec → 설정 → 자격 증명에서 새 항목을 만들고, <b>허용 사이트</b>에 <code>https://api.telegram.org</code>, <b>값</b>에 토큰을 넣어 저장해요. 이름은 아무거나 괜찮아요. bisu는 토큰을 직접 보지 않아요.</p>
+    <div class="actions"><button id="tgDec">Dec 열기</button><button id="tgCopySite">사이트 주소 복사</button><button class="primary" id="tgRestart">저장했어요 · bisu 다시 켜기</button></div></li>
+   <li data-n="3" id="tgStep3"><b>내 텔레그램과 연결</b>
+    <p class="note" id="tgPairNote">…</p>
+    <div class="actions"><button class="primary" id="tgPair">텔레그램에서 연결하기</button><button id="tgNewCode">코드 새로 받기</button></div></li>
+  </ol>
+  <div id="tgOn" hidden>
+   <div class="kv">
+    <div class="k">텔레그램으로 받기</div><div class="checks">
+     <label class="sw"><input type="checkbox" id="tgNApprovals"> 승인 요청 (버튼으로 답해요)</label>
+     <label class="sw"><input type="checkbox" id="tgNSuggestions"> bisu의 제안</label>
+     <label class="sw"><input type="checkbox" id="tgNJobs"> 예약 작업 · 아침 브리핑</label>
+     <label class="sw"><input type="checkbox" id="tgNEvents"> 일정 전 알림</label></div>
+    <div class="k">텔레그램 대화 폴더</div><div><input type="text" id="tgCwd" class="mono" list="cwdList" spellcheck="false" autocomplete="off" placeholder="~ (홈 폴더)"></div>
+   </div>
+   <div class="actions"><button id="tgTest">테스트 메시지 보내기</button><button class="danger" id="tgUnpair">연결 끊기</button></div>
+  </div>
+  <p class="note err" id="tgErr"></p>
+  <p class="note">텔레그램에서 보낸 말은 bisu의 대화 하나로 이어지고, 마지막 답이 돌아와요. <code>/new</code>는 새 대화, <code>/stop</code>은 멈추기예요. 맥이 켜져 있고 bisu가 실행 중일 때만 답해요.</p>
+ </section>
  <section id="briefSec">
   <h2>아침 브리핑</h2>
   <form id="briefForm">
@@ -684,7 +727,7 @@ document.body.classList.toggle('meta',META);
 
 // ---- tabs ----
 function show(v){for(const b of document.querySelectorAll('nav button'))b.classList.toggle('on',b.dataset.view===v);for(const el of document.querySelectorAll('.view'))el.classList.toggle('on',el.id===v+'View');
- if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='settings'){loadAccount();loadRoles();if(prefs.engine==='native')loadNative();renderSugSettings();loadSuggestions();loadJobs();loadBrief();loadCu()}try{localStorage.setItem('bisu.view',v)}catch{}}
+ if(v==='history')loadRuns();if(v==='memory')loadMemory();if(v==='settings'){loadAccount();loadRoles();if(prefs.engine==='native')loadNative();renderSugSettings();loadSuggestions();loadJobs();loadBrief();loadCu();loadTg()}try{localStorage.setItem('bisu.view',v)}catch{}}
 for(const b of document.querySelectorAll('nav button'))b.onclick=()=>show(b.dataset.view);
 
 // ---- light markdown: fenced code, inline code, paragraphs ----
@@ -1185,6 +1228,39 @@ $('briefForm').onsubmit=e=>{e.preventDefault();saveBrief()};
 $('briefRun').onclick=async()=>{const b=$('briefRun');b.disabled=true;$('briefNote').textContent='';
  try{const r=await post('/api/briefing/run');$('briefNote').textContent=r.error?r.error:r.skipped?BRIEF_SKIP[r.skipped]||r.skipped:'패널에 남겼어요.';loadSuggestions();loadBrief()}
  catch(e){$('briefNote').textContent=e.message}finally{b.disabled=false}};
+// ---- Telegram (ui/telegram.mjs) ----
+let tgSnap=null,tgPoll=null;
+async function loadTg(){try{tgSnap=await api('/api/telegram');renderTg()}catch(e){$('tgErr').textContent=e.message}}
+function renderTg(){const t=tgSnap;if(!t)return;
+ const step=(id,state)=>{const li=$(id);li.classList.toggle('done',state==='done');li.classList.toggle('later',state==='later')};
+ step('tgStep1',t.token?'done':'now');step('tgStep2',t.token?'done':'now');step('tgStep3',t.paired?'done':t.token?'now':'later');
+ $('tgSteps').hidden=t.paired;$('tgOn').hidden=!t.paired;
+ $('tgState').innerHTML=t.paired?`<span class="tag">연결됨</span> ${esc(t.user?.name||'')}${t.user?.username?' (@'+esc(t.user.username)+')':''}${t.bot?.username?` · 봇 @${esc(t.bot.username)}`:''}`
+  :t.token?`<span class="tag">토큰 있음</span> ${t.bot?.username?'봇 @'+esc(t.bot.username)+' · 아직 내 텔레그램과 연결 안 됨':'봇 이름을 확인하는 중…'}`
+  :'<span class="tag blush">아직 설정 안 됨</span> 세 단계면 휴대폰에서 bisu를 부를 수 있어요.';
+ $('tgRestart').hidden=!t.restartable;
+ $('tgPairNote').innerHTML=!t.token?'토큰을 저장하면 여기서 연결할 수 있어요.'
+  :t.link?`버튼을 누르면 텔레그램이 열려요. 「시작」을 누르면 바로 연결돼요. 버튼이 안 되면 봇에게 이 숫자를 보내세요: <b class="mono">${esc(t.code)}</b>`
+  :`봇 이름을 확인하는 중이에요${t.code?` · 연결 코드 <b class="mono">${esc(t.code)}</b>`:''}`;
+ $('tgPair').disabled=!t.link;
+ if(t.paired){$('tgNApprovals').checked=t.notify.approvals;$('tgNSuggestions').checked=t.notify.suggestions;$('tgNJobs').checked=t.notify.jobs;$('tgNEvents').checked=t.notify.events!==false;if(document.activeElement!==$('tgCwd'))$('tgCwd').value=t.cwd||''}
+ $('tgErr').textContent=t.lastError?`텔레그램: ${t.lastError}`:'';
+ // Until it is paired, the page waits for the person to press 「시작」 on their phone.
+ const waiting=t.token&&!t.paired;
+ if(waiting&&!tgPoll)tgPoll=setInterval(()=>{if(!$('settingsView').classList.contains('on')){clearInterval(tgPoll);tgPoll=null;return}loadTg()},3000);
+ if(!waiting&&tgPoll){clearInterval(tgPoll);tgPoll=null}}
+const tgDo=async(p,b={})=>{$('tgErr').textContent='';try{tgSnap=await post(p,b);renderTg()}catch(e){$('tgErr').textContent=e.message}};
+const openOut=what=>post('/api/open',{what}).catch(e=>{$('tgErr').textContent=e.message});
+$('tgBotFather').onclick=()=>openOut('botfather');
+$('tgDec').onclick=()=>openOut('dec');
+$('tgPair').onclick=()=>openOut('pair');
+$('tgCopySite').onclick=async()=>{try{await navigator.clipboard.writeText('https://api.telegram.org');$('tgCopySite').textContent='복사했어요 ✓';setTimeout(()=>{$('tgCopySite').textContent='사이트 주소 복사'},1600)}catch{$('tgErr').textContent='복사하지 못했어요. https://api.telegram.org 를 직접 적어 주세요.'}};
+$('tgRestart').onclick=async()=>{$('tgRestart').disabled=true;$('tgRestart').textContent='다시 켜는 중…';try{await post('/api/restart')}catch(e){$('tgErr').textContent=e.message;$('tgRestart').disabled=false;$('tgRestart').textContent='저장했어요 · bisu 다시 켜기'}};
+$('tgNewCode').onclick=()=>tgDo('/api/telegram/code');
+$('tgTest').onclick=async()=>{await tgDo('/api/telegram/test');if(!$('tgErr').textContent){$('tgTest').textContent='보냈어요 ✓';setTimeout(()=>{$('tgTest').textContent='테스트 메시지 보내기'},1600)}};
+$('tgUnpair').onclick=()=>{if(confirm('텔레그램 연결을 끊을까요? 다시 쓰려면 연결을 새로 해야 해요.'))tgDo('/api/telegram/unpair')};
+for(const [id,k] of [['tgNApprovals','approvals'],['tgNSuggestions','suggestions'],['tgNJobs','jobs'],['tgNEvents','events']])$(id).addEventListener('change',()=>tgDo('/api/telegram',{notify:{[k]:$(id).checked}}));
+$('tgCwd').addEventListener('change',()=>tgDo('/api/telegram',{cwd:$('tgCwd').value}));
 // ---- computer-use test (engine/eval/cu-bench.mjs, run by the engine) ----
 let cuSnap=null,cuPoll=null;
 const CU_GROUP={TextEdit:'텍스트 편집기',Finder:'Finder',Notes:'메모',Calculator:'계산기','System Settings':'시스템 설정'};

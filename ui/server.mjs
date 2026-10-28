@@ -18,6 +18,7 @@ import * as sessions from './sessions.mjs';
 import * as jobs from './jobs.mjs';
 import * as briefing from './briefing.mjs';
 import * as cubench from './cubench.mjs';
+import * as telegram from './telegram.mjs';
 import {releaseSchedule} from './lock.mjs';
 import {PRICES as GLM_PRICES} from '../engine/glm.mjs';
 import {eventKit} from '../engine/calendar.mjs';
@@ -247,7 +248,9 @@ async function hydrate(c){
  return c.hydrating;
 }
 function push(c,ev){ev.at=Date.now();c.events.push(ev);if(c.events.length>MAX_EVENTS)c.events.splice(0,c.events.length-MAX_EVENTS);
- const line=`data: ${JSON.stringify(ev)}\n\n`;for(const res of c.clients)res.write(line)}
+ const line=`data: ${JSON.stringify(ev)}\n\n`;for(const res of c.clients)res.write(line);
+ // Telegram sees every chat's events too: approvals from any of them, replies in its own.
+ try{telegram.onEvent(c,ev)}catch{}}
 function setBusy(c,busy){if(c.busy===busy)return;c.busy=busy;push(c,{kind:'status',busy})}
 function warm(c){if(!c.proc&&canThink()){start(c);idleLater(c)}}
 // Chats run delegated work in the background (see background-agents.mjs), which is what keeps the assistant free to talk.
@@ -332,6 +335,12 @@ function handle(c,j){
   c.lastAt=Date.now();saveChats();
   push(c,{kind:'result',error:!!j.is_error,subtype:j.subtype,turns:j.num_turns,ms:j.duration_ms,cost});setBusy(c,false);idleLater(c);return}
 }
+// A job's card continues the run that produced it, so "그럼 고쳐" has the whole context; a suggestion
+// starts a fresh chat and sends what it proposed.
+async function acceptSuggestion(item){
+ proactive.resolve(item.id,'accepted');
+ if(item.kind==='job'){if(!item.sessionId)return null;return newChat({cwd:item.cwd||undefined,resume:item.sessionId})}
+ const c=await newChat({cwd:item.cwd||undefined});say(c,item.action);return c}
 async function newChat({cwd,resume}){
  const dir=path.resolve(String(cwd||os.homedir()).replace(/^~(?=\/|$)/,os.homedir()));
  if(!fs.statSync(dir,{throwIfNoEntry:false})?.isDirectory())throw Error('not a folder: '+dir);
@@ -406,6 +415,21 @@ const server=http.createServer(async(req,res)=>{
   if(mm&&m==='DELETE')return json(res,200,memory.remove(decodeURIComponent(mm[1])));
   // Proactive suggestions: what bisu brings without being asked. The run itself is read-only and
   // happens in its own process; accepting one only opens an ordinary chat and sends the request.
+  // Telegram (ui/telegram.mjs): its state and settings, a fresh pairing code, unpairing, a test message.
+  if(m==='GET'&&p==='/api/telegram')return json(res,200,telegram.snapshot());
+  if(m==='POST'&&p==='/api/telegram')return json(res,200,telegram.configure(await body(req)));
+  if(m==='POST'&&p==='/api/telegram/code')return json(res,200,telegram.newCode());
+  if(m==='POST'&&p==='/api/telegram/unpair')return json(res,200,await telegram.unpair());
+  if(m==='POST'&&p==='/api/telegram/test')return json(res,200,await telegram.test());
+  // Opening something outside the page for a setup step: only these, never an address the page sends.
+  if(m==='POST'&&p==='/api/open'){const {what}=await body(req),tg=telegram.snapshot();
+   const target={botfather:['https://t.me/BotFather'],pair:tg.link?[tg.link]:null,dec:['-b','local.dec.browser']}[what];
+   if(!target)return json(res,400,{error:'nothing to open'});
+   execFile('/usr/bin/open',target,e=>{});return json(res,200,{ok:true})}
+  // The keys are read when the shell starts the engine, so a key saved in dec a moment ago needs a fresh
+  // engine: this one exits and the shell starts the next (only under the app; a terminal run would just stop).
+  if(m==='POST'&&p==='/api/restart'){if(PARENT!=='stdin')return json(res,400,{error:'터미널에서 띄운 bisu는 여기서 다시 켤 수 없어요'});
+   json(res,200,{ok:true});setTimeout(()=>process.exit(0),300);return}
   if(m==='GET'&&p==='/api/cubench')return json(res,200,cubench.snapshot());
   if(m==='POST'&&p==='/api/cubench')return json(res,200,cubench.start(await body(req)));
   if(m==='POST'&&p==='/api/cubench/stop')return json(res,200,cubench.stop());
@@ -429,14 +453,8 @@ const server=http.createServer(async(req,res)=>{
    if(action==='dismiss'){proactive.resolve(item.id,'dismissed');return json(res,200,proactive.snapshot())}
    if(action!=='accept')return json(res,400,{error:'unknown action'});
    if(!canThink())return json(res,400,{error:noKey()||''});
-   proactive.resolve(item.id,'accepted');
-   // A job's card continues the run that produced it, so "그럼 고쳐" has the whole context; a
-   // suggestion starts a fresh chat and sends what it proposed.
-   if(item.kind==='job'){if(!item.sessionId)return json(res,200,proactive.snapshot());
-    const c=await newChat({cwd:item.cwd||undefined,resume:item.sessionId});return json(res,200,{...proactive.snapshot(),chat:publicChat(c)})}
-   const c=await newChat({cwd:item.cwd||undefined});
-   say(c,item.action);
-   return json(res,200,{...proactive.snapshot(),chat:publicChat(c)})}
+   const c=await acceptSuggestion(item);
+   return json(res,200,{...proactive.snapshot(),...(c?{chat:publicChat(c)}:{})})}
   // Scheduled jobs (ui/jobs.mjs): the files are the jobs; this lists them with their state, runs one
   // now (answered at once, the page polls), flips enabled in the file, or deletes the file.
   if(m==='GET'&&p==='/api/jobs')return json(res,200,jobs.snapshot());
@@ -489,11 +507,13 @@ proactive.start();
 jobs.setContext(proactiveContext);
 jobs.start();
 briefing.start();
-for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
+telegram.attach({newChat,say,decide,stop,getChat:id=>chats.get(id),accept:acceptSuggestion});
+telegram.start();
+for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();telegram.shutdown();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),1500)});
 // The desktop shell holds this pipe open for as long as it is running, so the pipe closing means the
 // shell quit or was force-killed. Without this the engine, dec and every Claude Code run outlive it.
 if(PARENT==='stdin'){
- process.stdin.on('end',()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');process.exit(0)});
+ process.stdin.on('end',()=>{proactive.stop();jobs.stop();briefing.stop();cubench.shutdown();telegram.shutdown();releaseSchedule();for(const c of chats.values())c.proc?.kill('SIGTERM');process.exit(0)});
  process.stdin.on('error',()=>{});
  process.stdin.resume();
 }

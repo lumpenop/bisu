@@ -151,23 +151,31 @@ final class Engine {
     return FileManager.default.fileExists(atPath: p) ? p : nil
   }
 
-  // Whether dec holds a key, without reading it: referencing a missing key would stop the engine
-  // from starting at all, which is worse than running without the optional one.
-  private func decHas(_ node: String, _ name: String) -> Bool {
+  // What dec holds (references and sites, never values), so only keys that exist are referenced:
+  // a missing one would stop the engine from starting at all, which is worse than running without it.
+  private func decList(_ node: String) -> String {
     let bridge = decBridge()
     let shim = "/Users/lumpen/.local/bin/dec-secret"
     var exe = node, args: [String]
-    if let b = bridge { args = [b, "list"] } else if FileManager.default.isExecutableFile(atPath: shim) { exe = shim; args = ["list"] } else { return false }
+    if let b = bridge { args = [b, "list"] } else if FileManager.default.isExecutableFile(atPath: shim) { exe = shim; args = ["list"] } else { return "" }
     let p = Process()
     p.executableURL = URL(fileURLWithPath: exe)
     p.arguments = args
     let pipe = Pipe()
     p.standardOutput = pipe
     p.standardError = FileHandle.nullDevice
-    do { try p.run() } catch { return false }
+    do { try p.run() } catch { return "" }
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
     p.waitUntilExit()
-    return bin(data).range(of: "OPENAI_API_KEY", options: .caseInsensitive) != nil
+    return bin(data)
+  }
+  private func decHas(_ list: String, _ name: String) -> Bool { list.range(of: "dec://" + name, options: .caseInsensitive) != nil }
+  // A key found by the site it is saved for, under whatever name it was given ("텔레그램 봇", say).
+  private func decRef(_ list: String, site: String) -> String? {
+    for line in list.split(separator: "\n") where line.contains(site) {
+      if let ref = line.split(separator: " ").first(where: { $0.hasPrefix("dec://") }) { return String(ref) }
+    }
+    return nil
   }
 
   func start(server: URL, root: URL) throws {
@@ -192,9 +200,13 @@ final class Engine {
       p.executableURL = URL(fileURLWithPath: node)
       p.arguments = [bridge, "run", "--", node, server.path]
       env["OPENROUTER_API_KEY"] = "dec://OPENROUTER_API_KEY"
-      if decHas(node, "OPENAI_API_KEY") { env["OPENAI_API_KEY"] = "dec://OPENAI_API_KEY" }
+      let list = decList(node)
+      if decHas(list, "OPENAI_API_KEY") { env["OPENAI_API_KEY"] = "dec://OPENAI_API_KEY" }
       // bisu's own engine thinks with Z.ai GLM; the key is passed the same use-only way.
-      if decHas(node, "GLM_API_KEY") { env["GLM_API_KEY"] = "dec://GLM_API_KEY" }
+      if decHas(list, "GLM_API_KEY") { env["GLM_API_KEY"] = "dec://GLM_API_KEY" }
+      // Telegram: the bot token saved in dec for api.telegram.org, whatever its name. Read at every
+      // engine start, so Settings' "bisu 다시 켜기" picks up a token saved a moment ago.
+      if let ref = decRef(list, site: "https://api.telegram.org") { env["TELEGRAM_BOT_TOKEN"] = ref }
     } else if let key = env["OPENROUTER_API_KEY"], !key.isEmpty {
       p.executableURL = URL(fileURLWithPath: node)
       p.arguments = [server.path]
