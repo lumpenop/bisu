@@ -379,7 +379,7 @@ let shimJS = """
     pending.set(id, {res, rej});
     post(cmd, Object.assign({__id: id}, args || {}));
   });
-  const subs = {context: new Set(), shown: new Set(), hidden: new Set(), open: new Set(), view: new Set()};
+  const subs = {context: new Set(), shown: new Set(), hidden: new Set(), open: new Set(), view: new Set(), teach: new Set()};
   const host = {
     panel: true,
     platform: 'darwin',
@@ -396,6 +396,10 @@ let shimJS = """
     move: (x, y) => post('move', {x, y}),
     panelPlace: (place, reset) => call('panelPlace', {place: place || '', reset: !!reset}),
     iconOpens: value => call('iconOpens', {value: value || ''}),
+    teachStart: () => call('teachStart'),
+    teachStop: () => call('teachStop'),
+    teachState: () => call('teachState'),
+    onTeach: fn => { subs.teach.add(fn); return () => subs.teach.delete(fn) },
     endMove: () => post('endMove'),
     accessibility: () => call('accessibility'),
     grantAccessibility: () => post('axGrant'),
@@ -490,6 +494,8 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
   private var statusItem: NSStatusItem!
   /// The screen the full window should open on ("settings" from the menu or the panel); empty for the last one.
   private var fullView = ""
+  /// 보여 주고 가르치기: records only between the page's 시작 and 멈추기.
+  let recorder = Recorder()
   private var panel: Panel!
   private var web: WKWebView!
   private var container: NSView!
@@ -771,6 +777,12 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
   /// settings and quit. Rebuilt on every click so the switches and the spend are current.
   private func statusMenu() -> NSMenu {
     let menu = NSMenu()
+    if recorder.recording {
+      let rec = NSMenuItem(title: "● 기록 중 — 멈추기 (\(recorder.steps.count)단계)", action: #selector(stopTeachFromMenu), keyEquivalent: "")
+      rec.target = self
+      menu.addItem(rec)
+      menu.addItem(.separator())
+    }
     let state = NSMenuItem(title: "bisu · " + (engine == nil ? "엔진 꺼짐" : "듣고 있어요") + (spend.map { " · 오늘 \($0)" } ?? ""), action: nil, keyEquivalent: "")
     state.isEnabled = false
     menu.addItem(state)
@@ -817,6 +829,29 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
   @objc private func toggleFromMenu() { togglePanel() }
   @objc private func openFullFromMenu() { openFull() }
   @objc private func openSettingsFromMenu() { openFull(view: "settings") }
+
+  /// While 보여 주고 가르치기 records, the menu bar says so in red and every open page shows its 기록 중 bar.
+  func watchRecorder() {
+    recorder.onChange = { [weak self] in
+      guard let self else { return }
+      let rec = self.recorder.recording
+      if let b = self.statusItem?.button {
+        if rec { b.attributedTitle = NSAttributedString(string: " ● 기록 중", attributes: [.foregroundColor: NSColor.systemRed, .font: NSFont.menuBarFont(ofSize: 0)]) }
+        else { b.title = "" }
+      }
+      self.emitTeach(stop: false)
+    }
+  }
+  private func emitTeach(stop: Bool) {
+    let js = "window.bisuHost.__emit('teach', {recording: \(recorder.recording), steps: \(recorder.steps.count), stop: \(stop)})"
+    web?.evaluateJavaScript(js, completionHandler: nil)
+    if !stop { (fullWindow?.contentView as? WKWebView)?.evaluateJavaScript(js, completionHandler: nil) }
+  }
+  /// 멈추기 from the menu: the panel finishes it (it sends the steps and opens the draft).
+  @objc private func stopTeachFromMenu() {
+    showPanel()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.emitTeach(stop: true) }
+  }
 
   /// The one action a suggestion needs from the shell: ask for one now. The page shows it on its next
   /// poll, so the panel is opened here — asking and seeing nothing would look broken.
@@ -1249,7 +1284,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     case "openPane":
       // Privacy panes the page may send someone to, after asking. Nothing else is reachable from here.
       let panes = ["calendars": "Privacy_Calendars", "reminders": "Privacy_Reminders", "accessibility": "Privacy_Accessibility",
-                   "automation": "Privacy_Automation", "screen": "Privacy_ScreenCapture"]
+                   "automation": "Privacy_Automation", "screen": "Privacy_ScreenCapture", "input": "Privacy_ListenEvent"]
       if let anchor = panes[(args["pane"] as? String) ?? ""] {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")!)
       }
@@ -1300,6 +1335,17 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       var spots = readState()["panelSpots"] as? [String: Any] ?? [:]
       spots[screenKey(screen)] = ["x": f.minX, "y": f.minY]
       saveState(["panelSpots": spots, "panelPlace": "free"])
+    case "teachStart":
+      // Asked at the press: the page shows 「설정하러 가시겠어요?」 for whichever permission is missing.
+      if !AXIsProcessTrusted() { reply(["ok": false, "need": "accessibility"]); return }
+      if !Recorder.inputAllowed { CGRequestListenEventAccess(); reply(["ok": false, "need": "input"]); return }
+      watchRecorder()
+      let ok = recorder.start()
+      reply(ok ? ["ok": true] : ["ok": false, "need": "input"])
+    case "teachStop":
+      reply(["steps": recorder.stop()])
+    case "teachState":
+      reply(["recording": recorder.recording, "steps": recorder.steps.count])
     case "iconOpens":
       if let v = args["value"] as? String, v == "panel" || v == "full" { saveState(["iconOpens": v]) }
       reply(readState()["iconOpens"] as? String ?? "panel")
@@ -1366,6 +1412,139 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
 
 // A borderless panel that can still take the keyboard, which is what a popover with a text field
 // needs.
+// MARK: show and teach
+
+/// Records what the person does on the Mac for 보여 주고 가르치기, only between 시작 and 멈추기: switching apps,
+/// the control clicked (its Accessibility role and name, never a screenshot), the text a field ended up with
+/// (read once when the typing is done, not keystroke by keystroke) and shortcuts. Nothing is recorded from
+/// password fields, while macOS has secure input on, or in bisu's own windows. The steps go to the engine,
+/// which keeps them on this Mac and sends the model only a one-line description of each (ui/teach.mjs).
+final class Recorder {
+  private(set) var steps: [[String: Any]] = []
+  private var tap: CFMachPort?
+  private var source: CFRunLoopSource?
+  private var appObserver: NSObjectProtocol?
+  private var typingIn: AXUIElement?
+  private var typingApp = ""
+  var onChange: (() -> Void)?
+  var recording: Bool { tap != nil }
+  static let maxSteps = 200
+
+  /// Listening to clicks and keys needs Input Monitoring; reading what was clicked needs Accessibility.
+  static var inputAllowed: Bool { CGPreflightListenEventAccess() }
+
+  func start() -> Bool {
+    if tap != nil { return true }
+    steps = []
+    let mask = (CGEventMask(1) << CGEventMask(CGEventType.leftMouseDown.rawValue)) | (CGEventMask(1) << CGEventMask(CGEventType.keyDown.rawValue))
+    let me = Unmanaged.passUnretained(self).toOpaque()
+    guard let t = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .listenOnly, eventsOfInterest: mask,
+                                    callback: { _, type, event, info in
+                                      if let info { Unmanaged<Recorder>.fromOpaque(info).takeUnretainedValue().handle(type, event) }
+                                      return Unmanaged.passUnretained(event)
+                                    }, userInfo: me) else { return false }
+    tap = t
+    source = CFMachPortCreateRunLoopSource(nil, t, 0)
+    CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+    CGEvent.tapEnable(tap: t, enable: true)
+    appObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] n in
+      guard let self, let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+            app.processIdentifier != getpid() else { return }
+      self.flushTyping()
+      self.add(["type": "app", "app": app.localizedName ?? ""])
+    }
+    if let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier != getpid() {
+      add(["type": "app", "app": front.localizedName ?? ""])
+    }
+    onChange?()
+    return true
+  }
+
+  func stop() -> [[String: Any]] {
+    flushTyping()
+    if let t = tap { CGEvent.tapEnable(tap: t, enable: false) }
+    if let s = source { CFRunLoopRemoveSource(CFRunLoopGetMain(), s, .commonModes) }
+    tap = nil
+    source = nil
+    if let o = appObserver { NSWorkspace.shared.notificationCenter.removeObserver(o) }
+    appObserver = nil
+    let out = steps
+    steps = []
+    onChange?()
+    return out
+  }
+
+  private func add(_ s: [String: Any]) {
+    guard steps.count < Recorder.maxSteps else { return }
+    steps.append(s)
+    onChange?()
+  }
+  private var frontName: String { NSWorkspace.shared.frontmostApplication?.localizedName ?? "" }
+  private func attr(_ el: AXUIElement, _ name: String) -> String? {
+    var v: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(el, name as CFString, &v) == .success else { return nil }
+    return v as? String
+  }
+  private func isSecure(_ el: AXUIElement) -> Bool {
+    attr(el, kAXRoleAttribute as String) == "AXSecureTextField" || attr(el, kAXSubroleAttribute as String) == "AXSecureTextField"
+  }
+  private func label(_ el: AXUIElement) -> String {
+    for k in [kAXTitleAttribute as String, kAXDescriptionAttribute as String, "AXPlaceholderValue", kAXHelpAttribute as String] {
+      if let t = attr(el, k), !t.isEmpty { return String(t.prefix(80)) }
+    }
+    let role = attr(el, kAXRoleAttribute as String) ?? ""
+    if role == "AXButton" || role == "AXStaticText" || role == "AXMenuItem", let v = attr(el, kAXValueAttribute as String) { return String(v.prefix(80)) }
+    return ""
+  }
+  private func pidOf(_ el: AXUIElement) -> pid_t { var pid: pid_t = 0; AXUIElementGetPid(el, &pid); return pid }
+
+  /// A field the person typed into, read once now that they moved on.
+  private func flushTyping() {
+    guard let el = typingIn else { return }
+    typingIn = nil
+    if isSecure(el) || IsSecureEventInputEnabled() { return }
+    let text = String((attr(el, kAXValueAttribute as String) ?? "").prefix(200))
+    if !text.isEmpty { add(["type": "type", "app": typingApp, "field": label(el), "text": text]) }
+  }
+
+  fileprivate func handle(_ type: CGEventType, _ event: CGEvent) {
+    if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput { if let t = tap { CGEvent.tapEnable(tap: t, enable: true) }; return }
+    // A password prompt is open somewhere: nothing at all is recorded.
+    if IsSecureEventInputEnabled() { return }
+    if type == .leftMouseDown {
+      flushTyping()
+      let p = event.location
+      var hit: AXUIElement?
+      guard AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(p.x), Float(p.y), &hit) == .success, let el = hit else { return }
+      let pid = pidOf(el)
+      if pid == getpid() || isSecure(el) { return }
+      add(["type": "click", "app": NSRunningApplication(processIdentifier: pid)?.localizedName ?? frontName,
+           "role": attr(el, kAXRoleAttribute as String) ?? "", "title": label(el)])
+    } else if type == .keyDown {
+      let f = event.flags
+      if NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid() { return }
+      if f.contains(.maskCommand) || f.contains(.maskControl) {
+        flushTyping()
+        let chars = (NSEvent(cgEvent: event)?.charactersIgnoringModifiers ?? "").uppercased()
+        var keys = ""
+        if f.contains(.maskControl) { keys += "⌃" }
+        if f.contains(.maskAlternate) { keys += "⌥" }
+        if f.contains(.maskShift) { keys += "⇧" }
+        if f.contains(.maskCommand) { keys += "⌘" }
+        add(["type": "shortcut", "app": frontName, "keys": keys + (chars.isEmpty ? "#\(event.getIntegerValueField(.keyboardEventKeycode))" : chars)])
+      } else if typingIn == nil {
+        var v: CFTypeRef?
+        if AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString, &v) == .success, let v,
+           CFGetTypeID(v) == AXUIElementGetTypeID() {
+          let el = v as! AXUIElement
+          let pid = pidOf(el)
+          if pid != getpid() && !isSecure(el) { typingIn = el; typingApp = NSRunningApplication(processIdentifier: pid)?.localizedName ?? frontName }
+        }
+      }
+    }
+  }
+}
+
 final class Panel: NSPanel {
   override var canBecomeKey: Bool { true }
   override var canBecomeMain: Bool { false }

@@ -15,6 +15,7 @@ import http from 'node:http';import fs from 'node:fs';import os from 'node:os';i
 import * as memory from './memory.mjs';
 import * as bots from './bots.mjs';
 import * as routines from './routines.mjs';
+import * as teach from './teach.mjs';
 import * as proactive from './proactive.mjs';
 import * as sessions from './sessions.mjs';
 import * as jobs from './jobs.mjs';
@@ -278,7 +279,7 @@ function start(c){
   '--settings',BACKGROUND_AGENTS,
   ...(c.sessionId?['--resume',c.sessionId]:[])];
  c.handoffKey??=randomBytes(16).toString('hex');
- const proc=spawn('zsh',args,{cwd:c.cwd,env:{...process.env,BISU_CHAT_ID:c.id,BISU_BOT:c.bot||bots.DEFAULT,BISU_BOT_MAKER:c.maker?'1':'',BISU_HANDOFF_KEY:c.handoffKey,BISU_HANDOFF_DEPTH:String(c.depth||0)},stdio:['pipe','pipe','pipe']});c.proc=proc;c.models=r;c.costSoFar=0;
+ const proc=spawn('zsh',args,{cwd:c.cwd,env:{...process.env,BISU_CHAT_ID:c.id,BISU_BOT:c.bot||bots.DEFAULT,BISU_BOT_MAKER:c.maker?'1':'',BISU_HANDOFF_KEY:c.handoffKey,BISU_TEACH:c.teach?'1':'',BISU_HANDOFF_DEPTH:String(c.depth||0)},stdio:['pipe','pipe','pipe']});c.proc=proc;c.models=r;c.costSoFar=0;
  // A chat started in a folder macOS has not granted access to does not fail — zsh blocks in getcwd
  // until the permission dialog is answered, which looks like a spinner forever. Say what is happening.
  // Only when it is actually still the launcher: Claude Code says nothing until the first message, so
@@ -390,12 +391,12 @@ async function acceptSuggestion(item){
  proactive.resolve(item.id,'accepted');
  if(item.kind==='job'){if(!item.sessionId)return null;return newChat({cwd:item.cwd||undefined,resume:item.sessionId})}
  const c=await newChat({cwd:item.cwd||undefined});say(c,item.action);return c}
-async function newChat({cwd,resume,bot,maker}){
+async function newChat({cwd,resume,bot,maker,teach}){
  // A bot's chat starts in the bot's folder unless one is given; the bot-making chat belongs to the default bot.
  const owner=maker?bots.DEFAULT:bots.validId(bot)&&bots.get(bot)?bot:bots.DEFAULT;
  const dir=path.resolve(String(cwd||bots.resolve(owner).cwd||os.homedir()).replace(/^~(?=\/|$)/,os.homedir()));
  if(!fs.statSync(dir,{throwIfNoEntry:false})?.isDirectory())throw Error('not a folder: '+dir);
- const c={id:randomUUID(),cwd:dir,title:null,busy:false,proc:null,sessionId:resume||null,events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),tasks:new Map(),queued:[],turnsDone:0,costSoFar:0,created:Date.now(),lastAt:Date.now(),bot:owner,maker:!!maker};
+ const c={id:randomUUID(),cwd:dir,title:null,busy:false,proc:null,sessionId:resume||null,events:[],clients:new Set(),pending:new Map(),allowTools:new Set(),tasks:new Map(),queued:[],turnsDone:0,costSoFar:0,created:Date.now(),lastAt:Date.now(),bot:owner,maker:!!maker,teach:!!teach};
  if(resume){if(!/^[0-9a-f-]{36}$/.test(resume))throw Error('bad session id');const past=await pastMessages(resume);
   c.title=cleanTitle(past.find(m=>m.kind==='user')?.text)||'Resumed session';push(c,{kind:'resumed',sessionId:resume,count:past.length});for(const m of past)push(c,{...m,past:true})}
  chats.set(c.id,c);saveChats();warm(c);return c}
@@ -567,6 +568,12 @@ const server=http.createServer(async(req,res)=>{
     fs.writeFileSync(file,`---\nname: ${r.name}\nschedule: ${cron}\ncwd: ${bots.resolve(r.bot).cwd}\ntools: ${r.tools}\nbot: ${r.bot}\nroutine: ${r.slug}\n---\n`);
     return json(res,200,{job:jobs.snapshot().jobs.find(j=>j.slug===slug)||null})}
    return json(res,200,{routine:routines.update(r.slug,b)})}
+  // Show and teach (ui/teach.mjs): the shell's recorded steps are kept here, and their one-line description
+  // starts a chat of the bot that drafts a routine (routine_save, which the person confirms).
+  if(m==='POST'&&p==='/api/teach'){const b=await body(req),bot=bots.validId(b.bot)&&bots.get(b.bot)?b.bot:bots.DEFAULT;
+   const {steps}=teach.save(b.steps,{bot});if(!steps.length)return json(res,400,{error:'기록된 단계가 없어요.'});
+   if(!canThink())return json(res,400,{error:noKey()||''});
+   const c=await newChat({bot,teach:true});c.title='보여 준 작업 · 루틴 초안';say(c,teach.draftPrompt(steps));return json(res,200,{chat:publicChat(c),steps:steps.length})}
   if(m==='GET'&&p==='/api/chats')return json(res,200,{chats:[...chats.values()].map(publicChat).sort((a,b)=>b.lastAt-a.lastAt),home:os.homedir()});
   if(m==='POST'&&p==='/api/chats'){if(!canThink())return json(res,400,{error:noKey()||''});const c=await newChat(await body(req));return json(res,200,{chat:publicChat(c)})}
   const cm=/^\/api\/chats\/([0-9a-f-]{36})(\/[a-z]+)?$/.exec(p);const c=cm&&chats.get(cm[1]);

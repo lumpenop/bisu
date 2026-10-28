@@ -535,10 +535,18 @@ dialog#routineDlg::backdrop{background:rgba(0,0,0,.28)}
 .handoffLine b{color:var(--ink);font-weight:650}.handoffLine .tk{color:var(--muted);opacity:.8;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .handoffLine.running::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--accent);align-self:center;animation:pulse 1.2s ease-in-out infinite}
 .handoffLine.done{color:var(--accent)}.handoffLine.error{color:var(--bad)}
+/* 보여 주고 가르치기: while it records, a red bar on every bisu page */
+.teachBar{flex:none;display:flex;align-items:center;gap:8px;padding:7px 14px;background:color-mix(in srgb,var(--bad) 12%,var(--card));border-bottom:1px solid color-mix(in srgb,var(--bad) 30%,var(--line));font-size:13px;color:var(--ink)}
+.teachBar[hidden]{display:none}
+body.desktop:not(.panel) .teachBar{padding-left:84px}
+.teachBar .rec{width:9px;height:9px;border-radius:50%;background:var(--bad);animation:pulse 1.1s ease-in-out infinite}
+.teachBar b{color:var(--bad);font-family:var(--display)}.teachBar #teachN{color:var(--muted);font-size:12px}.teachBar .sp{flex:1}
+.teachBar button{padding:4px 12px;font-size:12.5px;color:var(--bad);border-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
 </style>
 </head>
 <body>
 <div class="dragbar" aria-hidden="true"></div>
+<div id="teachBar" class="teachBar" hidden role="status"><span class="rec"></span><b>기록 중</b><span id="teachN">0단계</span><span class="sp"></span><button type="button" id="teachStop">멈추기</button></div>
 
 <div class="shell">
 <nav class="side" id="side" aria-label="화면">
@@ -1896,6 +1904,21 @@ function renderRoutines(){const s=routineSnap;if(!s)return;const el=$('routineLi
 function openRoutine(r){routineEdit=r.slug;$('rName').value=r.name;$('rInputs').value=r.inputs.join(', ');$('rTools').value=r.tools;$('rSteps').value=r.steps;$('rErr').textContent='';$('routineDlg').showModal()}
 $('rCancel').onclick=()=>$('routineDlg').close();
 $('rSave').onclick=async()=>{try{await post('/api/routines/'+encodeURIComponent(routineEdit),{name:$('rName').value,inputs:$('rInputs').value,tools:$('rTools').value,steps:$('rSteps').value});$('routineDlg').close();loadRoutines()}catch(e){$('rErr').textContent=e.message}};
+// ---- 보여 주고 가르치기 (the shell records; ui/teach.mjs keeps it and starts the draft) ----
+function teachUI(st){const on=!!st?.recording;$('teachBar').hidden=!on;$('teachN').textContent=`${st?.steps||0}단계`;$('teachBtn').disabled=on}
+if(HOST?.teachStart){$('teachBtn').hidden=false;HOST.teachState?.().then(teachUI).catch(()=>{});
+ HOST.onTeach?.(st=>{teachUI(st);if(st?.stop&&PANEL)teachFinish()})}
+$('teachBtn').onclick=async()=>{
+ if(!confirm('보여 주고 가르치기를 시작할까요?\n\n지금부터 「멈추기」를 누를 때까지 앱 전환, 누른 버튼과 메뉴, 입력 칸에 넣은 글, 단축키를 단계로 기록해요. 비밀번호 칸과 보안 입력은 기록하지 않고, 기록은 이 맥에만 남아요. 다 하면 위쪽의 빨간 막대나 메뉴바에서 멈추기를 눌러 주세요.'))return;
+ let r=null;try{r=await HOST.teachStart()}catch(e){$('routineNote').textContent=e.message;return}
+ if(r?.need==='accessibility')return askSettings('손쉬운 사용 권한','누른 버튼과 메뉴의 이름을 읽으려면 손쉬운 사용 권한이 필요해요. 설정하러 가시겠어요?','accessibility',()=>{});
+ if(r?.need==='input')return askSettings('입력 모니터링','클릭과 단축키를 기록하려면 입력 모니터링 권한이 필요해요. 켠 뒤에는 bisu를 다시 열어야 할 수 있어요. 설정하러 가시겠어요?','input',()=>{});
+ teachUI({recording:true,steps:0})};
+async function teachFinish(){let steps=[];try{steps=(await HOST.teachStop()).steps||[]}catch{}
+ teachUI({recording:false});
+ if(!steps.length){alert('기록된 단계가 없어요. 다시 시작해서 맥에서 직접 한 번 해 주세요.');return}
+ try{const r=await post('/api/teach',{bot:curBot,steps});chats.unshift(r.chat);show('chat');open(r.chat.id)}catch(e){alert(e.message)}}
+$('teachStop').onclick=teachFinish;
 // ---- boot ----
 mountBisu();setMood('idle','듣고 있어요');helpify();
 $('metaOn').checked=META;

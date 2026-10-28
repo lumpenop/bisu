@@ -131,7 +131,7 @@ export const BISU_TOOLS = {
     }, required: ['name', 'steps']},
     kind: 'bot',
     run(ctx, {name, steps, inputs = [], tools = 'read'}) {
-      try { const r = routines.save({name, steps, inputs, tools, bot: process.env.BISU_BOT || 'bisu'}); return ok(`Saved the routine "${r.name}" (${r.slug}). It is in 루틴, where it can be run, paused or scheduled.`) }
+      try { const r = routines.save({name, steps, inputs, tools, bot: process.env.BISU_BOT || 'bisu', source: process.env.BISU_TEACH === '1' ? 'teach' : ''}); return ok(`Saved the routine "${r.name}" (${r.slug}). It is in 루틴, where it can be run, paused or scheduled.`) }
       catch (e) { return err(e.message) }
     },
   },
