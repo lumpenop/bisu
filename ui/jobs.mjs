@@ -36,7 +36,8 @@ import { holdsSchedule, releaseSchedule } from './lock.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(here);
 export const DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu', 'jobs');
-const STATE = path.join(os.homedir(), 'Library', 'Application Support', 'bisu', 'jobs.json');
+// BISU_JOBS_STATE: another state file, so a trial run in a temporary XDG_CONFIG_HOME leaves the real one alone.
+const STATE = process.env.BISU_JOBS_STATE || path.join(os.homedir(), 'Library', 'Application Support', 'bisu', 'jobs.json');
 const TICK_MS = 60e3;
 // What a job that may act can never have as its folder, or inside it: its own jobs and memory, Claude
 // Code's settings (which would grant future runs anything), and bisu's support files.
@@ -137,7 +138,8 @@ function parseJob(file) {
     for (const line of m[1].split(/\r?\n/)) {
       const kv = /^([a-zA-Z_]+)\s*:\s*(.*)$/.exec(line);
       if (!kv) continue;
-      const k = kv[1].toLowerCase(), v = kv[2].replace(/\s+#.*$/, '').trim();
+      // A value may be quoted, as YAML allows (name: "@someone 새 글"): the quotes are not part of it.
+      const k = kv[1].toLowerCase(), v = kv[2].replace(/\s+#.*$/, '').trim().replace(/^(["'])(.*)\1$/, '$2');
       if (k === 'name' && v) job.name = v.slice(0, 80);
       else if (k === 'schedule') { job.schedule = v; job.cron = parseCron(v) }
       else if (k === 'every') { job.cron = parseCron(parseEvery(v)); job.schedule = `every ${v}` }
@@ -189,7 +191,7 @@ export function list() {
 
 // Re-read whenever the file changed under us: `node jobs.mjs run x` in a terminal and the engine
 // both write it, and each used to overwrite the other with what it loaded at start.
-let state = { runs: {}, approved: {} }, stateMtime = -1;
+let state = { runs: {}, approved: {}, awake: {} }, stateMtime = -1;
 function fresh() {
   let m = -1;
   try { m = fs.statSync(STATE).mtimeMs } catch {}

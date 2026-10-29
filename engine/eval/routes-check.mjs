@@ -34,7 +34,7 @@ R.save({family: 'glm', order: ['GLM_API_KEY', 'OPENROUTER_API_KEY']});
 empty.add('zai');
 assert.equal((await ask()).text, 'ok');
 assert.deepEqual(calls.map(c => [c.url, c.key]), [['http://z.local/api/paas/v4/chat/completions', 'zai'], ['http://or.local/api/v1/chat/completions', 'or1']]);
-assert.equal(calls[0].model, 'glm-5.3'); assert.equal(calls[1].model, 'z-ai/glm-5.3'); assert.deepEqual(calls[1].reasoning, {effort: 'low'});
+assert.equal(calls[0].model, 'glm-5.3'); assert.equal(calls[1].model, 'z-ai/glm-5.3'); assert.deepEqual(calls[1].reasoning, {effort: 'medium'});
 // It rests: the next request (or the next chat's process) starts with OpenRouter.
 assert.ok(R.resting('GLM_API_KEY')); assert.equal(R.routes('glm').at(-1).name, 'GLM_API_KEY');
 calls.length = 0; await ask(); assert.deepEqual(calls.map(c => c.key), ['or1']);

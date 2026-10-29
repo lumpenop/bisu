@@ -14,10 +14,11 @@ every: 30m
 cwd: /Users/you/watch/x-someone
 tools: edit
 ---
-mcp__bisu__browser_task로 https://x.com/someone 를 열고, 고정된 글을 빼고 가장 최근 글 3개의 링크와 첫 줄을 읽어.
-seen.txt(없으면 새로)에 적힌 링크와 비교해서:
+mcp__bisu__browser_task로 https://x.com/someone 를 읽기만(look_only) 하고, 이어서 mcp__bisu__browser_read로 그 페이지의 글과 링크를 읽어.
+고정된 글을 빼고 가장 최근 글 3개: 글 주소는 날짜에 걸린 링크(https://x.com/someone/status/숫자)야.
+seen.txt(없으면 새로)에 적힌 주소와 비교해서:
 - 새 글이 없으면 [조용] 만 답해.
-- 새 글이 있으면 글마다 "첫 줄 — 링크" 한 줄씩 말하고, 가장 최근 링크를 seen.txt에 써.
+- 새 글이 있으면 글마다 "첫 줄 — 주소" 한 줄씩 말하고, 가장 최근 주소를 seen.txt에 써.
 로그인하라고 나오면 "X 로그인이 필요해요" 한 줄만 말해. 지어내지 마.
 ```
 

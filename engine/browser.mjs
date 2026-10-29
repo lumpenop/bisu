@@ -216,7 +216,10 @@ export const BROWSER_TOOLS = {
       try {
         if (l.via === 'dec') {
           const r = await dec.api('POST', `/v1/tabs/${l.tabId}/content`, {limit: 8000, offset: Math.max(0, offset | 0)});
-          return ok(lines(`${r.title || ''} — ${r.url || ''}`, String(r.text || '').slice(0, 8000), r.next != null && `(more: offset ${r.next})`));
+          // The page's links too, once (first page): a post's own address is only there (X: the date links to /status/<id>).
+          const seen = new Set(), links = offset ? [] : (Array.isArray(r.links) ? r.links : [])
+            .filter(k => k?.href && !seen.has(k.href) && seen.add(k.href)).slice(0, 80).map(k => `${String(k.text || '').replace(/\s+/g, ' ').trim().slice(0, 60)} → ${k.href}`);
+          return ok(lines(`${r.title || ''} — ${r.url || ''}`, String(r.text || '').slice(0, 8000), r.next != null && `(more: offset ${r.next})`, links.length && `Links:\n${links.join('\n')}`));
         }
         const r = await ego.read({space: l.space, offset});
         const next = offset + r.text.length;
