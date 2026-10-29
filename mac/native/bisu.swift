@@ -349,9 +349,10 @@ enum Context {
     return t.count > limit ? String(t.prefix(limit)) : s
   }
 
-  static func capture(withSelection: Bool, selfName: String = "bisu") -> [String: Any] {
+  static func capture(withSelection: Bool, selfName: String = "덱 인턴") -> [String: Any] {
     let app = frontApp()
-    let own = app?.caseInsensitiveCompare(selfName) == .orderedSame
+    // Its own window under either name: the display name, or the bundle name an older build had.
+    let own = app?.caseInsensitiveCompare(selfName) == .orderedSame || app?.caseInsensitiveCompare("bisu") == .orderedSame
     let clip = clipboard()
     var sel: (String?, String?) = (nil, nil)
     if withSelection && !own { sel = selection() }
@@ -474,7 +475,7 @@ final class Dialogs: NSObject, WKUIDelegate {
                initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
     log("page alert:", message)
     let alert = NSAlert()
-    alert.messageText = "bisu"
+    alert.messageText = "덱 인턴"
     alert.informativeText = message
     alert.addButton(withTitle: "OK")
     NSApp.activate(ignoringOtherApps: true)
@@ -485,7 +486,7 @@ final class Dialogs: NSObject, WKUIDelegate {
   func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
                initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
     let alert = NSAlert()
-    alert.messageText = "bisu"
+    alert.messageText = "덱 인턴"
     alert.informativeText = message
     alert.addButton(withTitle: "OK")
     alert.addButton(withTitle: "Cancel")
@@ -637,7 +638,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     let needsYou = chatState == "waiting" || suggestUnread > 0
     button.image = trayImage(badged: needsYou, ring: !needsYou && chatState == "working")
     button.image?.isTemplate = true
-    var tip = "bisu"
+    var tip = "덱 인턴"
     if chatState == "waiting" { tip += " · 확인이 필요해요" }
     else if chatState == "working" { tip += " · 일하는 중" }
     if suggestUnread > 0 { tip += " · 새 카드 \(suggestUnread)개" }
@@ -713,7 +714,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     let chat = n["chat"] as? String
     if ["approval", "reply", "card"].contains(kind) && bisuOnScreen { return }
     let content = UNMutableNotificationContent()
-    content.title = n["title"] as? String ?? "bisu"
+    content.title = n["title"] as? String ?? "덱 인턴"
     content.body = n["body"] as? String ?? ""
     if kind == "approval" || kind == "event" { content.sound = .default }
     if let chat { content.userInfo = ["chat": chat]; content.threadIdentifier = chat } else { content.threadIdentifier = kind }
@@ -795,7 +796,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       menu.addItem(rec)
       menu.addItem(.separator())
     }
-    let state = NSMenuItem(title: "bisu · " + (engine == nil ? "엔진 꺼짐" : "듣고 있어요") + (spend.map { " · 오늘 \($0)" } ?? ""), action: nil, keyEquivalent: "")
+    let state = NSMenuItem(title: "덱 인턴 · " + (engine == nil ? "엔진 꺼짐" : "듣고 있어요") + (spend.map { " · 오늘 \($0)" } ?? ""), action: nil, keyEquivalent: "")
     state.isEnabled = false
     menu.addItem(state)
     if spend == nil {
@@ -808,7 +809,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     }
     menu.addItem(.separator())
 
-    let show = NSMenuItem(title: panel?.isVisible == true ? "bisu 숨기기" : "bisu에게 말하기", action: #selector(toggleFromMenu), keyEquivalent: "")
+    let show = NSMenuItem(title: panel?.isVisible == true ? "덱 인턴 숨기기" : "덱 인턴에게 말하기", action: #selector(toggleFromMenu), keyEquivalent: "")
     show.target = self
     menu.addItem(show)
     menu.addItem(.separator())

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds ~/Applications/bisu.app from mac/native/bisu.swift — the same bundle name and identifier the
+# Builds ~/Applications/bisu.app from mac/native/bisu.swift — the same bundle folder and identifier the
 # Electron build used, so the Accessibility grant, the login item and everything else macOS knows
 # about "bisu" keep pointing at it.
 #
@@ -51,8 +51,8 @@ cat > "$plist" <<XML
 <dict>
   <key>CFBundleExecutable</key><string>bisu</string>
   <key>CFBundleIdentifier</key><string>com.bisu.desktop</string>
-  <key>CFBundleName</key><string>bisu</string>
-  <key>CFBundleDisplayName</key><string>bisu</string>
+  <key>CFBundleName</key><string>덱 인턴</string>
+  <key>CFBundleDisplayName</key><string>덱 인턴</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.2.0</string>
   <key>CFBundleVersion</key><string>2</string>
@@ -62,11 +62,11 @@ cat > "$plist" <<XML
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
   <key>NSAppleEventsUsageDescription</key>
-  <string>bisu reads the app you were in and the text you selected, so you do not have to explain it.</string>
+  <string>덱 인턴 reads the app you were in and the text you selected, so you do not have to explain it.</string>
   <key>NSDesktopFolderUsageDescription</key>
-  <string>bisu runs Claude Code in the folder you pick, which is often on your Desktop.</string>
+  <string>덱 인턴 runs Claude Code in the folder you pick, which is often on your Desktop.</string>
   <key>NSDocumentsFolderUsageDescription</key>
-  <string>bisu runs Claude Code in the folder you pick, which is often in your Documents.</string>
+  <string>덱 인턴 runs Claude Code in the folder you pick, which is often in your Documents.</string>
   <key>NSDownloadsFolderUsageDescription</key>
   <string>bisu runs Claude Code in the folder you pick, which is often in your Downloads.</string>
   <key>NSRemovableVolumesUsageDescription</key>

@@ -243,7 +243,7 @@ function runRound(w, text, parent) {
   const model = role.model || WORK_MODEL;
   return runTurn({
     model, thinking: true, effort: w.effort, maxSteps: 60, tools: [...role.tools(), 'ask_bisu'], extraTools: {...EXTRA, ask_bisu: askTool(w)}, canUseTool,
-    system: `${AGENTS[w.role]?.prompt || role.prompt || 'You are a careful worker.'}\n\n${WORKING}\n\n${FOLDER_RULES}You are a worker for bisu, the person's assistant. Nobody talks to you but bisu. Do the task, check it worked, then report in a few lines: what you did (files, where), how you checked it, anything left open. Never say you did what you did not do. If something only the person can decide blocks you, ask_bisu.\n- Folder: ${cwd}\n${nowLines()}`,
+    system: `${AGENTS[w.role]?.prompt || role.prompt || 'You are a careful worker.'}\n\n${WORKING}\n\n${FOLDER_RULES}You are a worker for 덱 인턴 (bisu), the person's assistant. Nobody talks to you but bisu. Do the task, check it worked, then report in a few lines: what you did (files, where), how you checked it, anything left open. Never say you did what you did not do. If something only the person can decide blocks you, ask_bisu.\n- Folder: ${cwd}\n${nowLines()}`,
     messages: w.messages,
     ctx: {cwd, readFiles: w.readFiles, signal: w.abort.signal, env: {}},
     shouldContinue: judge.watchProgress(text, w.messages, {startAt}),
