@@ -25,14 +25,22 @@ const SPACE = () => `bisu-${chat().slice(0, 40)}`;
 const state = {space: null, decTab: null, held: new Map(), last: null, handedOff: false};
 let heldNo = 0;
 
-function inputsOf(typing) {
-  const out = {};
+// Dec takes input names as [a-z][a-z0-9_]{0,23} (8 at most). A name the model wrote another way ("검색어", "Search
+// Words") becomes text1, text2… and its @mentions in the goal follow, so the run is not refused with AI_INPUT_INVALID.
+function inputsOf(typing, goal = '') {
+  const inputs = {};
   let n = 0;
+  const free = () => { let k; do k = `text${++n}`; while (k in inputs); return k; };
   for (const line of String(typing || '').split('\n').map(l => l.trim()).filter(Boolean)) {
+    if (Object.keys(inputs).length >= 8) break;
     const m = /^([^:=]{1,24}?)\s*[:=]\s*(.+)$/.exec(line);
-    out[m ? m[1].trim() : `text${++n}`] = (m ? m[2] : line).trim().slice(0, 500);
+    const said = m ? m[1].trim() : '';
+    const plain = said.toLowerCase().replace(/[\s-]+/g, '_');
+    const name = /^[a-z][a-z0-9_]{0,23}$/.test(plain) && !(plain in inputs) ? plain : free();
+    if (said && said !== name) goal = goal.split('@' + said).join('@' + name);
+    inputs[name] = (m ? m[2] : line).trim().slice(0, 500);
   }
-  return out;
+  return {inputs, goal};
 }
 
 function remember(r) {
@@ -117,7 +125,10 @@ export const BROWSER_TOOLS = {
       // A blank page is not a task: showing dec is browser_show.
       if (/^\s*(about:blank|about:newtab|chrome:\/\/newtab\/?)?\s*$/i.test(String(url || ''))) return err('No page given. To show dec or open a new tab with nothing to do there, use browser_show; for a task, give the real address.');
       if (!/^https?:\/\//i.test(String(url || ''))) url = 'https://' + String(url || '').replace(/^\/+/, '');
-      const inputs = inputsOf(typing);
+      // Korean words or spaces in the address are fine to write as is: dec gets the encoded form (%EC%84%9C %20).
+      try { url = new URL(String(url).trim()).href; } catch {}
+      const typed = inputsOf(typing, goal), inputs = typed.inputs;
+      goal = typed.goal;
       let note = '';
       // dec works on the open web only (https); a page on this Mac is ego's.
       if (/^https?:\/\/(localhost|127\.|\[::1\])/i.test(url)) browser = 'ego';
