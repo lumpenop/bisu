@@ -74,7 +74,14 @@ export async function api(method, p, body, {timeoutMs = 15_000} = {}) {
   }
 }
 
-const running = () => new Promise(r => execFile('/usr/bin/pgrep', ['-f', 'Dec Browser.app/Contents/MacOS/'], e => r(!e)));
+// The app itself, not a script run with its Electron as node (dec's dec-browser command does that): flags only after it.
+const running = () => new Promise(r => execFile('/usr/bin/pgrep', ['-f', 'Dec Browser\\.app/Contents/MacOS/Electron( -[^ ]*)*$'], e => r(!e)));
+// Which Dec Browser.app to open. Old development copies share dec's bundle id, so a path: BISU_DEC_APP, the usual
+// places, then the app dec's own dec-browser command runs (~/.local/bin/dec-browser names its Electron).
+export function decApp(home = os.homedir()) {
+  const shim = (() => { try { return /exec "([^"]*\/Dec Browser\.app)\/Contents\/MacOS\//.exec(fs.readFileSync(path.join(home, '.local', 'bin', 'dec-browser'), 'utf8'))?.[1] } catch { return null } })();
+  return [process.env.BISU_DEC_APP, '/Applications/Dec Browser.app', path.join(home, 'Applications', 'Dec Browser.app'), shim].find(a => a && fs.existsSync(a)) ?? null;
+}
 
 // dec's status, starting dec in the background first when it is installed but not running. Null when there is no
 // dec to use: not installed, or running with its agent endpoint switched off.
@@ -82,12 +89,15 @@ export async function up({start = true, waitMs = 25_000} = {}) {
   if (process.env.BISU_DEC === '0') return null;
   try { return await api('GET', '/v1/status') } catch (e) { if (!['DEC_OFF', 'DEC_UNREACHABLE'].includes(e.code)) throw e }
   if (!start || await running()) return null;
-  // -g: dec comes up behind whatever the person is doing.
-  const opened = await new Promise(r => execFile('/usr/bin/open', ['-g', '-b', BUNDLE], e => r(!e)));
+  // -g: dec comes up behind whatever the person is doing. --agent-connect: dec turns its agent connection on unless the
+  // person once turned it off. (open hands its environment to the app: no ELECTRON_RUN_AS_NODE.)
+  const app = decApp(), env = Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'ELECTRON_RUN_AS_NODE'));
+  const opened = await new Promise(r => execFile('/usr/bin/open', app ? ['-g', app, '--args', '--agent-connect'] : ['-g', '-b', BUNDLE, '--args', '--agent-connect'], {env}, e => r(!e)));
   if (!opened) return null;
+  // The endpoint is up before the tabs are back: wait until dec says they are (tabsReady), so the run finds its tab.
   for (const end = Date.now() + waitMs; Date.now() < end;) {
-    await sleep(1000);
-    try { return await api('GET', '/v1/status') } catch {}
+    await sleep(500);
+    try { const st = await api('GET', '/v1/status'); if (st?.tabsReady !== false) return st } catch {}
   }
   return null;
 }
