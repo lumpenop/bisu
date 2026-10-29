@@ -1368,7 +1368,7 @@ function render(ev){
   case 'approval_done':{if(ev.allow&&isBotTool(ev.tool))setTimeout(loadBots,1500);const el=wrap().querySelector(`.ask[data-id="${CSS.escape(ev.request_id)}"]`);if(el){el.className='ask done';const w=el.dataset.what?` · ${esc(el.dataset.what)}`:'';el.innerHTML=ev.allow?`허용했어요${w}${ev.always?' · 이 대화에선 계속':''}`:ev.reason==='stopped'?'답하지 않았어요 (멈춤)':`거절했어요${w}`}
    if(mood.state==='waiting'&&!wrap().querySelector('.ask:not(.done)'))setMood('thinking','이어서 하는 중…')}break;
   case 'auto_allowed':if(ev.judged){const row=document.createElement('div');row.className='m autoallow';row.textContent=`자동 허용 · ${stepName(ev.tool)} · ${ev.reason}`;actBlock().querySelector('.actL').appendChild(row)}break;
-  case 'judgment':if(ev.judge==='route')add(`판단 · ${esc(ROUTE_KO[ev.route]||ev.route)} ${Math.round((ev.confidence||0)*100)}%${ev.hard!=null?` · 어려움 ${Math.round(ev.hard*100)}%`:''}${ev.planned?' · 나눠 맡김':''}`,null,'res');
+  case 'judgment':if(ev.judge==='route')add(`판단 · ${esc(ROUTE_KO[ev.route]||ev.route)} ${Math.round((ev.confidence||0)*100)}%${ev.hard!=null?` · 어려움 ${Math.round(ev.hard*100)}%`:''}${ev.planned?' · 나눠 맡김':''}${ev.effort==='high'?' · 추론 높음':ev.effort==='low'?' · 추론 낮음':''}`,null,'res');
    else if(ev.judge==='progress')add(`판단 · 진행 ${esc(ev.state)} ${Math.round((ev.confidence||0)*100)}%`,null,'res');
    // Said everywhere, not only in the developer view: the answer above it is being corrected.
    else if(ev.judge==='claim'&&ev.acted){[...wrap().querySelectorAll('.m.text:not(.past)')].pop()?.classList.add('retracted');add('방금 답에 실제로 하지 않은 일이 있어서 다시 확인하고 있어요',null,'sys')}break;

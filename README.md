@@ -57,7 +57,7 @@ These subagents exist only inside `bisu`; your normal `claude` never sees them.
   - Dropped: scheduling and background work (`CronCreate`, `CronDelete`, `CronList`, `ScheduleWakeup`, `Monitor`, `Workflow`, `TaskCreate`, `TaskGet`, `TaskList`, `TaskOutput`, `TaskStop`, `TaskUpdate`), session and app features (`SendMessage`, `PushNotification`, `EnterWorktree`, `ExitWorktree`, `Skill`, `DesignSync`, `ReportFindings`, `ShareOnboardingGuide`), and every MCP server from your Claude config (`--strict-mcp-config`); the subscription-only ones never worked in `bisu` anyway.
   - `BISU_TOOLS=default bisu` brings back the full set, or pass your own comma-separated list.
 - **Short answers:** [prompt.md](prompt.md) is appended to Claude Code's system prompt: answer in the user's language, result first, no narration, full detail only for errors or when asked. It also holds the delegation rules. Edit it to taste.
-- **Reasoning effort:** `BISU_EFFORT=low|medium|high` passes `--effort` through. Off by default: in tests it made no measurable difference with GLM, whose reasoning can't be turned off.
+- **Reasoning effort:** `BISU_EFFORT=low|medium|high` passes `--effort` through. Off by default on the Claude Code engine: in tests it made no measurable difference with GLM, whose reasoning can't be turned off. bisu's own engine reads the same variable as its base level (보통 when unset) and goes to 높음 by itself for a build, a hard job or a split — see [bisu's own engine](#bisus-own-engine-beta-glm-talks-and-works-decisions-judges).
 
 ## Memory: what a session should not forget
 
@@ -215,7 +215,7 @@ The old shell is still in [mac/](mac): Electron main, a preload that only expose
   - *GLM-5.3 is the assistant:* conversation, memory, schedules, calendar and reminders, the web, past conversations, the Mac, anything the judge could not place, and the splitting of work that is several jobs at once (a line naming the parts, one worker per part, the reports checked when they come back). It reasons fully whenever it uses tools. At low effort it answered "서울 사는 사람 몇 명이야?" next to a `users.csv` with Seoul's population three times out of three, even when told to look at the files; with full reasoning it read the file and said 2.
   - *GLM-5.3-Flash does the work in the folder,* small or large, and every background worker. It reasons only for a build or what the judge calls hard: without reasoning it read the file and said 2 every time, at a tenth of GLM-5.3's cost.
 
-  `BISU_NATIVE_MODEL` and `BISU_NATIVE_WORK_MODEL` change either one, and `BISU_THINKING=on|off` forces reasoning everywhere. Measured on 2026-10-27:
+  `BISU_NATIVE_MODEL` and `BISU_NATIVE_WORK_MODEL` change either one, and `BISU_THINKING=on|off` forces reasoning everywhere. **How hard it reasons** is a level sent with every request that reasons (`reasoning_effort`, which OpenRouter lists for all four models bisu uses: glm-5.3, glm-5.3-flash, deepseek-v4.1-flash, qwen3.8-max, checked 2026-10-29): 보통 by default, or `BISU_EFFORT` when set, and 높음 whenever the judge calls the request a build, hard, or several jobs — the assistant's planning turn and every worker handed out in that turn run at 높음; a worker keeps its level across send_back rounds. The judgment line on the page says 추론 높음 when that happened. Measured on 2026-10-27:
 
   | Request | Answered by | Time | Cost |
   |---|---|---|---|

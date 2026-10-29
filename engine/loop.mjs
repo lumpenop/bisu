@@ -11,7 +11,7 @@ const clipFor = (s, n = 4000) => s.length > n ? s.slice(0, n) + `\n… (${s.leng
 
 export async function runTurn({
   model, system, messages, tools = Object.keys(TOOLS), extraTools = {}, ctx,
-  thinking = true, maxSteps = 40, onEvent = () => {}, canUseTool = async () => ({allow: true}),
+  thinking = true, effort, maxSteps = 40, onEvent = () => {}, canUseTool = async () => ({allow: true}),
   shouldContinue = null, // stage 2: a judge that may stop a loop that is going nowhere
   checkAnswer = null,    // a judge that reads the answer against what the tools actually did
   onMessage = () => {},    // every message added to the conversation, for the transcript
@@ -28,7 +28,7 @@ export async function runTurn({
     let res;
     try {
       res = await complete({
-        model, thinking, tools: specs, signal: ctx.signal,
+        model, thinking, effort, tools: specs, signal: ctx.signal,
         messages: [{role: 'system', content: system}, ...messages],
         onText: t => onEvent({kind: 'delta', text: t}),
         onToolStart: name => onEvent({kind: 'tool_start', name}),

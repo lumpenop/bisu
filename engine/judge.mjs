@@ -136,22 +136,26 @@ export const WORK_ROUTES = new Set(['work', 'build']);
 // Work the judge puts at or above this is several jobs, so the assistant splits it (judge-bench.mjs
 // prints what each cut-off would have done).
 export const SPLIT_ACT = 0.7;
+// How hard a model reasons when it reasons: 「보통」 unless BISU_EFFORT says otherwise, and 「높음」 for a
+// build, a hard job or a split, whatever the base. Every model bisu uses takes the level (glm.mjs).
+export const EFFORT = ['low', 'medium', 'high'].includes(process.env.BISU_EFFORT) ? process.env.BISU_EFFORT : 'medium';
 export function planTurn(r, {model, workModel, tools}) {
   const force = process.env.BISU_THINKING;
   const think = wanted => force === 'on' ? true : force === 'off' ? false : wanted;
-  const plan = {model, tools, thinking: think(true), hint: '', heavy: false, split: false};
+  const plan = {model, tools, thinking: think(true), effort: EFFORT, hint: '', heavy: false, split: false};
   if (!r) return plan;
   if (r.route === 'chat' && r.confidence >= 0.7) { plan.tools = []; plan.thinking = think(false); return plan }
   // Only the kind of request decides who answers: a hard question about past work is still the assistant's.
   if (WORK_ROUTES.has(r.route)) {
     // Several independent pieces, and workers to give them to: the assistant plans and delegates.
     if ((r.split ?? 0) >= SPLIT_ACT && Array.isArray(tools) && tools.includes('delegate')) {
-      plan.split = true; plan.heavy = true; plan.hint = HINTS.split;
+      plan.split = true; plan.heavy = true; plan.effort = 'high'; plan.hint = HINTS.split;
       return plan;
     }
     plan.model = workModel;
     plan.heavy = r.route === 'build' || (r.hard ?? 0) >= 0.7;
     plan.thinking = think(plan.heavy);
+    if (plan.heavy) plan.effort = 'high';
   }
   if (HINTS[r.route] && r.confidence >= 0.6) plan.hint = HINTS[r.route];
   return plan;

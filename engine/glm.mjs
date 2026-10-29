@@ -69,10 +69,13 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
 export async function complete({model, messages, tools, thinking = true, effort, maxTokens, temperature, signal, onText, onReasoning, onToolStart}) {
   const body = {model, messages, stream: true, tool_stream: !!tools?.length};
   if (tools?.length) body.tools = tools;
-  // Flash can switch reasoning off; GLM-5.3 always reasons and takes an effort level instead.
-  // (effort: how hard a model that always reasons does — 「보통」 unless the caller says otherwise: at 「낮음」 GLM-5.3 got
-  // simple comparisons wrong, and its tokens are cheap)
+  // Flash can switch reasoning off; GLM-5.3 always reasons and takes an effort level instead. When
+  // reasoning is on, the effort is sent as given — 「보통」 unless the caller says otherwise (judge.planTurn
+  // says 「높음」 for a build, a hard job or a split): at 「낮음」 GLM-5.3 got simple comparisons wrong, and
+  // its tokens are cheap. OpenRouter lists reasoning_effort for every model bisu uses (glm-5.3,
+  // glm-5.3-flash, deepseek-v4.1-flash, qwen3.8-max; checked 2026-10-29).
   if (!thinking) { if (ALWAYS_THINKS.has(model)) body.reasoning_effort = effort || 'medium'; else body.thinking = {type: 'disabled'} }
+  else body.reasoning_effort = effort || 'medium';
   if (maxTokens) body.max_tokens = maxTokens;
   if (temperature != null) body.temperature = temperature;
   let attempt = 0, at = 0;

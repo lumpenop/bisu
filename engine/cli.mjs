@@ -41,6 +41,8 @@ const PARTIAL = !!flags['include-partial-messages'];
 const REPLAY = !!flags['replay-user-messages'];
 const PROMPT_TOOL = flags['permission-prompt-tool'] === 'stdio';
 const MODE = flags['dangerously-skip-permissions'] ? 'bypassPermissions' : (flags['permission-mode'] || 'default');
+// --effort (launch.zsh passes BISU_EFFORT as it) is the base reasoning level; judge.planTurn reads it.
+if (['low', 'medium', 'high'].includes(flags.effort)) process.env.BISU_EFFORT = flags.effort;
 const cwd = fs.realpathSync(process.cwd());
 
 // Claude Code's tool names, as launch.zsh and the jobs still spell them, to this engine's tools.
@@ -199,6 +201,7 @@ const roleNames = () => Object.keys(ROLES).filter(k => !ROLES[k].screen || scree
 const team = new Map();
 let wake = null;   // set by the stream mode: queue a message for the main conversation
 let turnNo = 0;    // workers handed out in the same turn of bisu's report together
+let turnEffort = judge.EFFORT; // the turn's reasoning level; a worker handed out in it keeps it
 const MAX_ROUNDS = 4;
 const ASK_WAIT_MS = 30 * 60e3;
 const active = () => [...team.values()].filter(w => w.status === 'running' || w.status === 'asking');
@@ -239,7 +242,7 @@ function runRound(w, text, parent) {
     description: (w.rounds > 1 ? '다시 · ' : '') + clipTo(w.rounds > 1 ? text.replace(/^\(bisu의 피드백\)\s*/, '') : w.brief, 120), session_id: sessionId});
   const model = role.model || WORK_MODEL;
   return runTurn({
-    model, thinking: true, maxSteps: 60, tools: [...role.tools(), 'ask_bisu'], extraTools: {...EXTRA, ask_bisu: askTool(w)}, canUseTool,
+    model, thinking: true, effort: w.effort, maxSteps: 60, tools: [...role.tools(), 'ask_bisu'], extraTools: {...EXTRA, ask_bisu: askTool(w)}, canUseTool,
     system: `${AGENTS[w.role]?.prompt || role.prompt || 'You are a careful worker.'}\n\n${WORKING}\n\n${FOLDER_RULES}You are a worker for bisu, the person's assistant. Nobody talks to you but bisu. Do the task, check it worked, then report in a few lines: what you did (files, where), how you checked it, anything left open. Never say you did what you did not do. If something only the person can decide blocks you, ask_bisu.\n- Folder: ${cwd}\n${nowLines()}`,
     messages: w.messages,
     ctx: {cwd, readFiles: w.readFiles, signal: w.abort.signal, env: {}},
@@ -317,7 +320,7 @@ EXTRA.delegate = {
   async run(ctx, {worker, task}) {
     const role = ROLES[worker] && roleNames().includes(worker) ? worker : 'developer';
     if (ROLES[role].screen && active().some(w => ROLES[w.role].screen)) return {text: '맥 담당이 이미 화면을 쓰고 있어. 그 일이 끝난 뒤에 맡겨.', error: true};
-    const w = {id: randomUUID().slice(0, 8), role, label: ROLES[role].label, brief: String(task), messages: [], readFiles: new Set(), actions: [], rounds: 0, status: 'running', parent: ctx.callId || null};
+    const w = {id: randomUUID().slice(0, 8), role, label: ROLES[role].label, brief: String(task), messages: [], readFiles: new Set(), actions: [], rounds: 0, status: 'running', parent: ctx.callId || null, effort: turnEffort};
     team.set(w.id, w);
     const job = runRound(w, String(task), ctx.callId);
     if (wake) return {text: `${w.label}에게 맡겼어 (작업 ${w.id}). 끝나면 보고가 메시지로 와. 사람에게 맡겼다고 한 줄로 말하고 이번 답을 마쳐.`};
@@ -393,8 +396,9 @@ async function turn(text, {team = false} = {}) {
   // one-line hint.
   const recent = messages.slice(-6).filter(m => m.role !== 'tool').map(m => `${m.role === 'user' ? '사람' : 'bisu'}: ${String(m.content || '').slice(0, 200)}`).join('\n');
   const r = team ? null : await judge.route(text, {recent, folder: judge.folderSummary(cwd)});
-  const {model, tools, thinking, hint, split} = team ? {model: MODEL, tools: wanted, thinking: true, hint: TEAM_HINT} : judge.planTurn(mentioned(r), {model: MODEL, workModel: WORK_MODEL, tools: wanted});
-  if (r) out({type: 'system', subtype: 'bisu_judgment', kind: 'route', route: r.route, confidence: r.confidence, hard: r.hard, split: r.split, planned: !!split, model, session_id: sessionId});
+  const {model, tools, thinking, effort, hint, split} = team ? {model: MODEL, tools: wanted, thinking: true, effort: judge.EFFORT, hint: TEAM_HINT} : judge.planTurn(mentioned(r), {model: MODEL, workModel: WORK_MODEL, tools: wanted});
+  turnEffort = effort;
+  if (r) out({type: 'system', subtype: 'bisu_judgment', kind: 'route', route: r.route, confidence: r.confidence, hard: r.hard, split: r.split, planned: !!split, model, effort, session_id: sessionId});
   messages.push({role: 'user', content: text});
   transcript.user(text);
   abort = new AbortController();
@@ -402,7 +406,7 @@ async function turn(text, {team = false} = {}) {
   let msgId = 0;
   const startAt = messages.length;
   const stats = await runTurn({
-    model, system: hint ? `${system}\n\n## This request\n${hint}` : system, messages, tools, extraTools: EXTRA, ctx, thinking, canUseTool,
+    model, system: hint ? `${system}\n\n## This request\n${hint}` : system, messages, tools, extraTools: EXTRA, ctx, thinking, effort, canUseTool,
     // Every few steps of a long turn, ask whether it is still going somewhere.
     shouldContinue: judge.watchProgress(text, messages, {startAt, onJudgment: p =>
       out({type: 'system', subtype: 'bisu_judgment', kind: 'progress', state: p.state, confidence: p.confidence, session_id: sessionId})}),
