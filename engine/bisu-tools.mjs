@@ -6,7 +6,7 @@ import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import * as memory from '../ui/memory.mjs';
 import * as profile from '../ui/profile.mjs';
-import {DIR as JOBS_DIR, parseCron, nextRun} from '../ui/jobs.mjs';
+import {DIR as JOBS_DIR, parseCron, parseEvery, nextRun} from '../ui/jobs.mjs';
 import * as goals from '../ui/goals.mjs';
 import * as bots from '../ui/bots.mjs';
 import * as routines from '../ui/routines.mjs';
@@ -227,21 +227,26 @@ export const BISU_TOOLS = {
     },
   },
   schedule_job: {
-    description: 'Do something later or on a schedule, as a scheduled job whose answer appears as a card. Use cron (five fields, local time) for repeating, or at for once. tools: read (default) only looks; edit may change files in cwd; full may also run commands — edit/full wait for the person to approve the job in Settings.',
+    description: 'Do something later or on a schedule, as a scheduled job whose answer appears as a card and a notification. Use cron (five fields, local time) or every ("30m", "2h") for repeating, or at for once. tools: read (default) only looks; edit may change files in cwd; full may also run commands — edit/full wait for the person to approve the job in Settings. For watching until something happens, the request says to answer only [조용] when nothing changed (no card) and to end with [끝] once it happened (the job then stops by itself). cu: true lets the run look at and press things in other Mac apps (needs tools full).',
     parameters: {type: 'object', properties: {
       slug: {type: 'string', description: 'short ascii file name, e.g. morning-summary'},
       name: {type: 'string', description: 'title in their language'},
       cron: {type: 'string', description: 'e.g. "0 8 * * 1-5" for weekdays at 8:00'},
+      every: {type: 'string', description: 'repeating by interval instead of cron: "5m", "30m", "2h"'},
       at: {type: 'string', description: 'one time, "2026-10-28 09:00"'},
       cwd: {type: 'string', description: 'the folder it is about (default: the current folder)'},
       tools: {type: 'string', enum: ['read', 'edit', 'full']},
+      cu: {type: 'boolean', description: 'watch or work another Mac app through the screen (cu_* tools); sets tools to full'},
       request: {type: 'string', description: 'what to do then, written for a future run that knows nothing about this conversation'},
     }, required: ['slug', 'name', 'request']},
     kind: 'memory',
-    run(ctx, {slug, name, cron, at, cwd, tools = 'read', request}) {
+    run(ctx, {slug, name, cron, every, at, cwd, tools = 'read', cu = false, request}) {
       const s = String(slug || '').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
       if (!s) return err('slug must be a short ascii name.');
-      if (!cron && !at) return err('Give cron (repeating) or at (once).');
+      const byEvery = !cron && !!every;
+      if (byEvery) { try { cron = parseEvery(every) } catch (e) { return err(e.message) } }
+      if (!cron && !at) return err('Give cron or every (repeating) or at (once).');
+      if (cu) tools = 'full';
       if (cron) { try { const t = nextRun(parseCron(cron)); if (!t) return err('That schedule never fires.') } catch (e) { return err(`cron: ${e.message}`) } }
       const folder = cwd ? path.resolve(ctx.cwd, cwd.replace(/^~(?=\/|$)/, process.env.HOME || '')) : ctx.cwd;
       const file = path.join(JOBS_DIR, `${s}.md`);
@@ -249,7 +254,7 @@ export const BISU_TOOLS = {
       fs.mkdirSync(JOBS_DIR, {recursive: true});
       // A bot's own job runs as that bot (BISU_BOT is set for its conversations).
       const bot = /^[a-z0-9][a-z0-9-]{0,39}$/.test(process.env.BISU_BOT || '') && process.env.BISU_BOT !== 'bisu' ? `bot: ${process.env.BISU_BOT}\n` : '';
-      fs.writeFileSync(file, `---\nname: ${String(name).replace(/\n/g, ' ')}\n${cron ? `schedule: ${cron}` : `at: ${at}`}\ncwd: ${folder}\ntools: ${tools}\n${bot}---\n${String(request).trim()}\n`);
+      fs.writeFileSync(file, `---\nname: ${String(name).replace(/\n/g, ' ')}\n${byEvery ? `every: ${every}` : cron ? `schedule: ${cron}` : `at: ${at}`}\ncwd: ${folder}\ntools: ${tools}\n${cu ? 'cu: true\n' : ''}${bot}---\n${String(request).trim()}\n`);
       const when = cron ? (() => { const t = nextRun(parseCron(cron)); return t ? new Date(t).toLocaleString('ko-KR', {dateStyle: 'medium', timeStyle: 'short'}) : '?' })() : at;
       return ok(`${existed ? 'Updated' : 'Created'} the job "${name}" (${s}). Next run: ${when}.${tools !== 'read' ? ' It can change things, so it waits until they approve it in Settings → 예약 작업.' : ''}`);
     },
