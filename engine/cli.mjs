@@ -17,6 +17,7 @@ import {TOOLS, insideCwd, resolvePath} from './tools.mjs';
 import {Transcript, loadMessages} from './store.mjs';
 import * as judge from './judge.mjs';
 import {BISU_TOOLS, isDefaultBot} from './bisu-tools.mjs';
+import * as rules from '../ui/rules.mjs';
 import {CALENDAR_TOOLS, nowLines} from './calendar.mjs';
 import {BROWSER_TOOLS} from './browser.mjs';
 import {connect as connectMcp} from './mcp.mjs';
@@ -175,6 +176,8 @@ async function compactIfLong() {
 // the last of them is done; a question comes through at once.
 const AGENTS = (() => { try { return JSON.parse(flags.agents || '{}') } catch { return {} } })();
 // The base prompt's working rules, without its voice: a worker reports to bisu, not to the person.
+// The folder's CLAUDE.md files (ui/rules.mjs): a worker changes the project's files, so it follows them too.
+const FOLDER_RULES = (b => b ? b + '\n' : '')(rules.block(cwd, 6000));
 const WORKING = (s => s.includes('## Working') ? '## Working' + s.split('## Working')[1].split('\n## ')[0] : '')(fs.readFileSync(new URL('./prompt.md', import.meta.url), 'utf8'));
 const FILE_TOOLS = ['read_file', 'write_file', 'edit_file', 'list_files', 'search_files', 'run_command', 'web_fetch', 'web_search'];
 const screenTools = () => Object.keys(EXTRA).filter(n => n.startsWith('cu_'));
@@ -234,7 +237,7 @@ function runRound(w, text, parent) {
   const model = role.model || WORK_MODEL;
   return runTurn({
     model, thinking: true, maxSteps: 60, tools: [...role.tools(), 'ask_bisu'], extraTools: {...EXTRA, ask_bisu: askTool(w)}, canUseTool,
-    system: `${AGENTS[w.role]?.prompt || role.prompt || 'You are a careful worker.'}\n\n${WORKING}\n\nYou are a worker for bisu, the person's assistant. Nobody talks to you but bisu. Do the task, check it worked, then report in a few lines: what you did (files, where), how you checked it, anything left open. Never say you did what you did not do. If something only the person can decide blocks you, ask_bisu.\n- Folder: ${cwd}\n${nowLines()}`,
+    system: `${AGENTS[w.role]?.prompt || role.prompt || 'You are a careful worker.'}\n\n${WORKING}\n\n${FOLDER_RULES}You are a worker for bisu, the person's assistant. Nobody talks to you but bisu. Do the task, check it worked, then report in a few lines: what you did (files, where), how you checked it, anything left open. Never say you did what you did not do. If something only the person can decide blocks you, ask_bisu.\n- Folder: ${cwd}\n${nowLines()}`,
     messages: w.messages,
     ctx: {cwd, readFiles: w.readFiles, signal: w.abort.signal, env: {}},
     shouldContinue: judge.watchProgress(text, w.messages, {startAt}),

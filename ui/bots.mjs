@@ -28,6 +28,7 @@ import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as memory from './memory.mjs';
 import * as profile from './profile.mjs';
+import * as rules from './rules.mjs';
 
 const CONFIG = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu');
 export const DIR = path.join(CONFIG, 'bots');
@@ -177,7 +178,9 @@ async function main(argv) {
     // now says (their name, their tone) are left out, so the two cannot disagree.
     const me = profile.get();
     const mem = memory.inBot(id, () => memory.digest(Number(argv[2]) || memory.BUDGET, profile.supersedes(me)));
-    return process.stdout.write([base, mine, mem, profile.block(me)].filter(Boolean).join('\n\n') + '\n');
+    // The folder's CLAUDE.md files, for bisu's own engine only: claude loads them itself (ui/rules.mjs).
+    const folder = process.env.BISU_ENGINE === 'native' ? rules.block(process.cwd()) : '';
+    return process.stdout.write([base, mine, folder, mem, profile.block(me)].filter(Boolean).join('\n\n') + '\n');
   }
   for (const b of list()) process.stdout.write(`${b.id}${b.default ? ' (default)' : ''}  ${b.name}  — ${b.job}  [${short(b.cwd)}]\n`);
 }
