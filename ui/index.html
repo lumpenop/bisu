@@ -546,6 +546,27 @@ body.desktop:not(.panel) .teachBar{padding-left:84px}
 .teachBar .rec{width:9px;height:9px;border-radius:50%;background:var(--bad);animation:pulse 1.1s ease-in-out infinite}
 .teachBar b{color:var(--bad);font-family:var(--display)}.teachBar #teachN{color:var(--muted);font-size:12px}.teachBar .sp{flex:1}
 .teachBar button{padding:4px 12px;font-size:12.5px;color:var(--bad);border-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
+/* one confirm dialog, the quick switcher, and readable approval cards */
+dialog#askDlg{border:1px solid var(--line);border-radius:var(--rc);background:var(--card);color:var(--ink);box-shadow:var(--sh),0 24px 60px -20px rgba(0,0,0,.35);padding:20px 22px;width:min(380px,90vw)}
+dialog#askDlg::backdrop{background:rgba(0,0,0,.28)}
+#askDlg form{margin:0}#askDlg .dt{font-family:var(--display);font-weight:800;font-size:16px;margin:0 0 6px}
+#askDlg .note{margin:0;font-size:13px;line-height:1.55;white-space:pre-line}
+#askDlg .actions{justify-content:flex-end;margin-top:16px}
+#askDlg button.danger.primary{background:linear-gradient(180deg,color-mix(in srgb,var(--bad) 80%,#fff),var(--bad));color:#fff}
+.palette{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.22);display:flex;justify-content:center;align-items:flex-start;padding-top:12vh}
+.palette[hidden]{display:none}
+.palette .pbox{width:min(520px,92vw);background:var(--card);border:1px solid var(--line);border-radius:var(--rc);box-shadow:var(--sh),0 24px 60px -20px rgba(0,0,0,.35);padding:10px}
+.palette input{width:100%}
+.palList{max-height:min(360px,50vh);overflow:auto;margin-top:6px;display:flex;flex-direction:column;gap:1px}
+.palList .pi{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;cursor:pointer;font-size:13.5px}
+.palList .pi .k{font-size:11px;color:var(--muted);min-width:34px}
+.palList .pi .h{margin-left:auto;font-size:11.5px;color:var(--muted)}
+.palList .pi.on{background:var(--accent-soft)}
+.ask pre{max-height:5.4em;overflow:hidden;cursor:pointer;position:relative}
+.ask pre.open{max-height:none;cursor:auto}
+.ask pre:not(.open).long::after{content:'… 눌러서 전부 보기';position:absolute;right:8px;bottom:4px;font-size:11px;color:var(--muted);background:var(--card);padding:0 4px;border-radius:6px}
+.ask .btns .linkish{border:0;background:none;box-shadow:none;padding:6px 6px;font-weight:600;font-size:12.5px;color:var(--muted)}
+.ask .btns .linkish:hover:not(:disabled){transform:none;color:var(--ink)}
 </style>
 </head>
 <body>
@@ -885,6 +906,8 @@ body.desktop:not(.panel) .teachBar{padding-left:84px}
  <p class="note err" id="rErr"></p>
  <div class="actions"><span class="sp"></span><button type="button" id="rCancel">닫기</button><button class="primary" type="button" id="rSave">저장</button></div>
 </form></dialog>
+<dialog id="askDlg"><form method="dialog"><p class="dt" id="askTitle"></p><p class="note" id="askText"></p><div class="actions"><button value="cancel" id="askNo">취소</button><button class="primary" value="ok" id="askOk">확인</button></div></form></dialog>
+<div id="palette" class="palette" hidden><div class="pbox" role="dialog" aria-label="빠른 전환"><input type="text" id="palQ" placeholder="봇, 대화, 화면, 할 일 찾기" autocomplete="off" spellcheck="false"><div id="palList" class="palList" role="listbox"></div><p class="note" style="margin:6px 4px 0">↑↓ 고르기 · Enter 열기 · Esc 닫기</p></div></div>
 <dialog id="permDlg"><form method="dialog"><p class="dt" id="permTitle"></p><p class="note" id="permText"></p><div class="actions"><button value="cancel">취소</button><button class="primary" value="ok" id="permOk">설정 열기</button></div></form></dialog>
 
 <script>
@@ -1140,12 +1163,14 @@ const isBotTool=t=>/(^|__)(bot_create|bot_update|routine_save)$/.test(t||'');
 const TOOLS_KO={read:'보기만',edit:'파일 수정까지',full:'명령 실행까지'};
 function botPreview(tool,input={}){if(/routine_save$/.test(tool))return `<div class="botPrev"><span class="k">이름</span><span>${esc(input.name||'')}</span>${input.inputs?.length?`<span class="k">입력</span><span>${esc(input.inputs.join(', '))}</span>`:''}<span class="k">할 수 있는 일</span><span>${esc(TOOLS_KO[input.tools||'read']||input.tools)}</span><span class="k">단계</span><span></span><pre>${esc((input.steps||[]).map((x,i)=>`${i+1}. ${x}`).join('\n'))}</pre></div>`;const rows=[['이름',input.name],['맡은 일',input.job],['폴더',input.cwd||'~'],['말투',input.tone]].filter(([,v])=>v);
  return `<div class="botPrev">${rows.map(([k,v])=>`<span class="k">${k}</span><span>${esc(v)}</span>`).join('')}${input.instructions?`<span class="k">일하는 방식</span><span></span><pre>${esc(input.instructions)}</pre>`:''}</div>`}
+// Paths in what bisu wants to run, as the person thinks of them: ./ for the chat's folder, ~ for home.
+const relPaths=t=>{t=String(t??'');if(cur?.cwd)t=t.split(cur.cwd+'/').join('./').split(cur.cwd).join('.');return t.replace(/\/Users\/[^/\s'"]+/g,'~')};
 function askBody(tool,input={}){if(isBotTool(tool))return botPreview(tool,input);
  // bisu's own engine names its tools differently and says path instead of file_path.
  if(tool==='run_command')tool='Bash';
  if(tool==='edit_file'){tool='Edit';input={...input,file_path:input.path}}
  if(tool==='write_file'){tool='Write';input={...input,file_path:input.path}}
- if(tool==='Bash')return `<pre>${esc(input.command)}</pre>`;
+ if(tool==='Bash')return `<pre>${esc(relPaths(input.command))}</pre>`;
  // What would go is in the description; the id means nothing to the person.
  if(tool==='calendar_delete')return '';
  if(tool==='Edit'||tool==='MultiEdit'){const edits=input.edits||[input];return `<div class="note" style="margin:0 0 6px">${esc(short(input.file_path))}</div>`+edits.map(e=>`<pre><span class="del">${esc(e.old_string||'').split('\n').map(l=>'- '+l).join('\n')}</span>\n<span class="ins">${esc(e.new_string||'').split('\n').map(l=>'+ '+l).join('\n')}</span></pre>`).join('')}
@@ -1181,9 +1206,10 @@ function render(ev){
   case 'tool_result':{const el=toolEls[ev.id];if(!el)break;const st=el.querySelector('.st');st.textContent=ev.error?'오류':'완료';st.classList.toggle('e',ev.error);
    el.querySelector('details').insertAdjacentHTML('beforeend',`<pre>${esc(ev.text||'(no output)')}</pre>`)}break;
   case 'approval':live=null;{const what=String(ev.description||toolSummary(ev.tool,ev.input)||'').slice(0,90);const el=add(`<div class="ask" data-id="${esc(ev.request_id)}" data-what="${esc(what)}"><div class="q">${ev.via?`<span class="tag blush">${esc(ev.via.bot)}</span> `:''}${esc(askQ(ev.tool))}${ev.description?` <span class="note" style="font-weight:400">${esc(ev.description)}</span>`:''}</div>${askBody(ev.tool,ev.input)}
-   <div class="btns">${isBotTool(ev.tool)?`<button class="primary" data-a="allow">${/routine_save$/.test(ev.tool)?'저장하기':/create$/.test(ev.tool)?'만들기':'바꾸기'}</button><button class="danger" data-a="deny">다시 할게요</button>`:`<button class="primary" data-a="allow">허용</button><button data-a="always">이 대화에선 계속 허용</button><button class="danger" data-a="deny">안 돼요</button>`}</div></div>`,null);
+   <div class="btns">${isBotTool(ev.tool)?`<button class="primary" data-a="allow">${/routine_save$/.test(ev.tool)?'저장하기':/create$/.test(ev.tool)?'만들기':'바꾸기'}</button><button class="danger" data-a="deny">다시 할게요</button>`:`<button class="primary" data-a="allow">허용</button><button class="danger" data-a="deny">거절</button><button class="linkish" data-a="always">이 대화에선 묻지 않기</button>`}</div></div>`,null);
    if(isBotTool(ev.tool))el.querySelector('.q').textContent=/routine_save$/.test(ev.tool)?'이 루틴을 저장할까요?':/create$/.test(ev.tool)?'이렇게 만들까요?':'이렇게 바꿀까요?';
-   for(const b of el.querySelectorAll('button'))b.onclick=()=>answer(ev.request_id,b.dataset.a,el);setMood('waiting','확인이 필요해요')}break;
+   for(const b of el.querySelectorAll('button'))b.onclick=()=>answer(ev.request_id,b.dataset.a,el);
+   for(const pr of el.querySelectorAll('pre')){if(pr.scrollHeight>pr.clientHeight+4)pr.classList.add('long');pr.onclick=()=>pr.classList.add('open')}setMood('waiting','확인이 필요해요')}break;
   case 'handoff':{let el=wrap().querySelector(`.handoffLine[data-id="${CSS.escape(ev.id)}"]`);
    const st={running:'진행 중',done:'끝남 · 보고 받음',error:'끝까지 못 했어요'}[ev.status]||'';
    if(!el){el=add('',null,'sys handoffRow').appendChild(Object.assign(document.createElement('button'),{type:'button',className:'handoffLine'}));el.dataset.id=ev.id;el.dataset.bot=ev.bot;
@@ -1316,7 +1342,7 @@ const grow=()=>{const i=$('input');i.style.height='auto';i.style.height=Math.min
 $('input').oninput=grow;
 $('input').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();sendMsg()}};
 $('stop').onclick=()=>post(`/api/chats/${cur.id}/stop`).catch(e=>alert(e.message));
-$('closeChat').onclick=async()=>{if(!cur||!confirm('이 대화를 닫을까요? 기록에 남아서 나중에 이어갈 수 있어요.'))return;
+$('closeChat').onclick=async()=>{if(!cur||!await ask('이 대화를 닫을까요? 기록에 남아서 나중에 이어갈 수 있어요.'))return;
  // Already gone (closed in the other window) is the same outcome as closing it here.
  try{await api(`/api/chats/${cur.id}`,{method:'DELETE'})}catch(e){if(!/not found/.test(e.message)){alert(e.message);return}}es?.close();cur=null;
  wrap().innerHTML='';setMood('idle','듣고 있어요');await refreshChats();chatUI()};
@@ -1377,7 +1403,7 @@ function renderMemory(){
   const e=m.entries.find(x=>x.id===row.dataset.id);if(!e)continue;
   row.querySelector('[data-a=pin]').onclick=async()=>{try{mem=await post('/api/memory'+mb(),{id:e.id,pin:!e.pin});renderMemory()}catch(er){alert(er.message)}};
   row.querySelector('[data-a=edit]').onclick=()=>memForm(e);
-  row.querySelector('[data-a=del]').onclick=async()=>{if(!confirm(`“${e.title}” 기억을 지울까요? bisu가 다시 보지 않아요.`))return;
+  row.querySelector('[data-a=del]').onclick=async()=>{if(!await ask(`“${e.title}” 기억을 지울까요? bisu가 다시 보지 않아요.`))return;
    try{mem=await api('/api/memory/'+encodeURIComponent(e.id)+mb(),{method:'DELETE'});renderMemory();if(!$('memFormSec').hidden)memForm(null)}catch(er){alert(er.message)}}}
 }
 function memForm(e){memEdit=e?e.id:null;$('memFormSec').hidden=false;
@@ -1571,7 +1597,7 @@ $('tgCopySite').onclick=async()=>{try{await navigator.clipboard.writeText('https
 $('tgRestart').onclick=async()=>{$('tgRestart').disabled=true;$('tgRestart').textContent='다시 켜는 중…';try{await post('/api/restart')}catch(e){$('tgErr').textContent=e.message;$('tgRestart').disabled=false;$('tgRestart').textContent='저장했어요 · bisu 다시 켜기'}};
 $('tgNewCode').onclick=()=>tgDo('/api/telegram/code');
 $('tgTest').onclick=async()=>{await tgDo('/api/telegram/test');if(!$('tgErr').textContent){$('tgTest').textContent='보냈어요 ✓';setTimeout(()=>{$('tgTest').textContent='테스트 메시지 보내기'},1600)}};
-$('tgUnpair').onclick=()=>{if(confirm('텔레그램 연결을 끊을까요? 다시 쓰려면 연결을 새로 해야 해요.'))tgDo('/api/telegram/unpair')};
+$('tgUnpair').onclick=async()=>{if(await ask('텔레그램 연결을 끊을까요? 다시 쓰려면 연결을 새로 해야 해요.'))tgDo('/api/telegram/unpair')};
 for(const [id,k] of [['tgNApprovals','approvals'],['tgNSuggestions','suggestions'],['tgNJobs','jobs'],['tgNEvents','events']])$(id).addEventListener('change',()=>tgDo('/api/telegram',{notify:{[k]:$(id).checked}}));
 $('tgCwd').addEventListener('change',()=>tgDo('/api/telegram',{cwd:$('tgCwd').value}));
 // ---- goals (ui/goals.mjs): what bisu works on by itself over days or weeks ----
@@ -1590,7 +1616,7 @@ function renderGoals(){const s=goalsSnap;if(!s)return;const el=$('goalList');
    ${g.log.length?`<details><summary class="note" style="cursor:pointer;margin:0">진행 기록 ${g.log.length}개</summary><ul class="log">${g.log.slice(-10).reverse().map(l=>`<li>${esc(whenShort(l.at))} · ${esc(l.text)}</li>`).join('')}</ul></details>`:''}
    <div class="b note" style="margin-top:6px">${g.status==='active'?`다음 진행: ${g.nextAt>Date.now()?whenShort(g.nextAt):'곧'}`:g.status==='waiting'?'답을 받으면 바로 이어서 해요':g.status==='done'?`${ago(g.doneAt||g.lastRun)} 달성`:'멈춰 있어요'}${g.lastRun?` · 마지막 진행 ${ago(g.lastRun)}`:''}${g.lastError?` · <span class="err">${esc(g.lastError)}</span>`:''}</div></div>`}).join('');
  for(const b of el.querySelectorAll('button[data-a]'))b.onclick=async()=>{const box=b.closest('[data-id]'),id=box.dataset.id,a=b.dataset.a;
-  if(a==='delete'&&!confirm('이 목표를 지울까요? 계획과 기록도 같이 지워져요.'))return;
+  if(a==='delete'&&!await ask('이 목표를 지울까요? 계획과 기록도 같이 지워져요.'))return;
   const body={action:a};if(a==='answer'){body.text=box.querySelector('[data-answer]').value.trim();if(!body.text)return}
   b.disabled=true;$('goalNote').textContent='';
   try{goalsSnap=await post(`/api/goals/${id}`,body);renderGoals();watchGoals()}catch(e){$('goalNote').textContent=e.message;b.disabled=false}};
@@ -1683,7 +1709,7 @@ async function cuNeedsAx(then){if(!HOST?.accessibility)return then();let ok=true
  if(ok)return then();askSettings('손쉬운 사용 권한','컴퓨터 조작 시험은 bisu가 다른 앱을 눌러 보는 거라 손쉬운 사용 권한이 필요해요. 설정하러 가시겠어요?','accessibility',loadCu)}
 $('cuCheck').onclick=()=>cuNeedsAx(()=>cuStart('check'));
 $('cuDry').onclick=()=>cuStart('dry');
-$('cuRun').onclick=()=>cuNeedsAx(()=>{if(confirm('30초 뒤에 시험을 시작해요. 끝날 때까지 마우스와 창을 bisu가 쓰니, 그동안은 맥을 쓰지 말아 주세요. 중간에 멈추려면 이 화면의 「멈추기」를 누르면 돼요.'))cuStart('run')});
+$('cuRun').onclick=()=>cuNeedsAx(async()=>{if(await ask('30초 뒤에 시험을 시작해요. 끝날 때까지 마우스와 창을 bisu가 쓰니, 그동안은 맥을 쓰지 말아 주세요. 중간에 멈추려면 이 화면의 「멈추기」를 누르면 돼요.'))cuStart('run')});
 $('cuStop').onclick=async()=>{try{cuSnap=await post('/api/cubench/stop');renderCu()}catch(e){$('cuNote').textContent=e.message}};
 // ---- scheduled jobs ----
 let jobsSnap=null;
@@ -1699,7 +1725,7 @@ function renderJobs(){const s0=jobsSnap;if(!s0)return;const s={...s0,jobs:s0.job
  for(const c of el.querySelectorAll('[data-awake]'))c.onchange=async()=>{const slug=c.closest('[data-slug]').dataset.slug;
   try{jobsSnap=await post(`/api/jobs/${encodeURIComponent(slug)}`,{action:c.checked?'awake':'asleep'});renderJobs()}catch(e){c.checked=!c.checked;$('jobNote').textContent=e.message}};
  for(const b of el.querySelectorAll('button[data-a]'))b.onclick=async()=>{const slug=b.closest('[data-slug]').dataset.slug,a=b.dataset.a;
-  if(a==='delete'&&!confirm(`"${slug}" 작업 파일을 지울까요?`))return;
+  if(a==='delete'&&!await ask(`"${slug}" 작업 파일을 지울까요?`))return;
   b.disabled=true;$('jobNote').textContent='';
   try{jobsSnap=await post(`/api/jobs/${encodeURIComponent(slug)}`,{action:a});renderJobs();if(a==='run')setTimeout(loadJobs,6000)}catch(e){$('jobNote').textContent=e.message;b.disabled=false}};
 }
@@ -1823,7 +1849,7 @@ $('ccAwake').addEventListener('click',e=>{e.preventDefault();const a=alSnap||{};
  menu.open($('ccAwake'),AWAKE_MENU.map(x=>({label:x.label,hint:x.hint||'',b:x.b})),{selected:sel,pick:async it=>{try{alSnap=await post('/api/alerts',it.b);renderCC()}catch{}}})});
 $('ccFull').onclick=()=>HOST?.openFull?.();
 $('ccSettings').onclick=()=>HOST?.openFull?.('settings');
-$('ccQuit').onclick=()=>{if(confirm('bisu를 끌까요? 끄면 텔레그램과 예약 작업에도 답하지 못해요.'))HOST?.quit?.()};
+$('ccQuit').onclick=async()=>{if(await ask('bisu를 끌까요? 끄면 텔레그램과 예약 작업에도 답하지 못해요.'))HOST?.quit?.()};
 if(!PANEL){const box=document.createElement('div');box.className='ccSide';box.setAttribute('aria-label','제어');box.append($('ccStatus'),$('ccSwitches'));$('chatView').querySelector('aside').appendChild(box)}
 const ccRefresh=()=>Promise.all([api('/api/alerts').then(a=>{alSnap=a}),api('/api/proactive').then(p=>{sug=p})]).then(()=>{renderCC();if(viewOn('connect'))renderAlerts()}).catch(()=>{});
 ccRefresh();HOST?.onShown?.(ccRefresh);addEventListener('focus',ccRefresh);
@@ -1865,7 +1891,7 @@ $('bCancel').onclick=()=>$('botDlg').close();
 $('bSave').onclick=async()=>{$('bErr').textContent='';
  try{const r=await post('/api/bots/'+encodeURIComponent(curBot),{name:$('bName').value,job:$('bJob').value,cwd:$('bCwd').value||'~',tone:$('bTone').value,instructions:$('bIns').value});bots=r.bots;renderBots();$('botDlg').close()}
  catch(e){$('bErr').textContent=e.message}};
-$('bDel').onclick=async()=>{const b=curBotInfo();if(!b||b.default||!confirm(`“${b.name}” 봇을 지울까요? 대화와 예약 작업은 기본 봇으로 옮겨지고, 기억 폴더는 남겨 둬요.`))return;
+$('bDel').onclick=async()=>{const b=curBotInfo();if(!b||b.default||!await ask(`“${b.name}” 봇을 지울까요? 대화와 예약 작업은 기본 봇으로 옮겨지고, 기억 폴더는 남겨 둬요.`))return;
  try{const r=await post('/api/bots/'+encodeURIComponent(b.id),{action:'delete'});bots=r.bots;$('botDlg').close();setBot('bisu')}catch(e){$('bErr').textContent=e.message}};
 // Making a bot is a conversation: bisu asks up to four things, then shows the preview card. The quick form
 // on top of that conversation makes one from a name and a job right away.
@@ -1902,7 +1928,7 @@ function renderRoutines(){const s=routineSnap;if(!s)return;const el=$('routineLi
    else if(a==='edit')openRoutine(r);
    else if(a==='sched'){const sr=row.querySelector('.schedrow');sr.hidden=!sr.hidden}
    else if(a==='schedgo'){const sel=row.querySelector('[data-cron]'),cron=sel.value==='custom'?row.querySelector('[data-cron-custom]').value:sel.value;if(await act({action:'schedule',cron})){loadRoutines();loadJobs()}}
-   else if(a==='delete'){if(confirm(`“${r.name}” 루틴을 지울까요? 이 루틴을 쓰는 예약 작업은 돌지 않게 돼요.`)&&await act({action:'delete'}))loadRoutines()}};
+   else if(a==='delete'){if(await ask(`“${r.name}” 루틴을 지울까요? 이 루틴을 쓰는 예약 작업은 돌지 않게 돼요.`)&&await act({action:'delete'}))loadRoutines()}};
   row.querySelector('[data-cron]').addEventListener('change',e=>{row.querySelector('[data-cron-custom]').hidden=e.target.value!=='custom'});
   async function a2run(values){const res=await act({action:'run',values});if(res?.chat){chats.unshift(res.chat);show('chat');open(res.chat.id)}}}}
 function openRoutine(r){routineEdit=r.slug;$('rName').value=r.name;$('rInputs').value=r.inputs.join(', ');$('rTools').value=r.tools;$('rSteps').value=r.steps;$('rErr').textContent='';$('routineDlg').showModal()}
@@ -1913,7 +1939,7 @@ function teachUI(st){const on=!!st?.recording;$('teachBar').hidden=!on;$('teachN
 if(HOST?.teachStart){$('teachBtn').hidden=false;HOST.teachState?.().then(teachUI).catch(()=>{});
  HOST.onTeach?.(st=>{teachUI(st);if(st?.stop&&PANEL)teachFinish()})}
 $('teachBtn').onclick=async()=>{
- if(!confirm('보여 주고 가르치기를 시작할까요?\n\n지금부터 「멈추기」를 누를 때까지 앱 전환, 누른 버튼과 메뉴, 입력 칸에 넣은 글, 단축키를 단계로 기록해요. 비밀번호 칸과 보안 입력은 기록하지 않고, 기록은 이 맥에만 남아요. 다 하면 위쪽의 빨간 막대나 메뉴바에서 멈추기를 눌러 주세요.'))return;
+ if(!await ask('보여 주고 가르치기를 시작할까요?\n\n지금부터 「멈추기」를 누를 때까지 앱 전환, 누른 버튼과 메뉴, 입력 칸에 넣은 글, 단축키를 단계로 기록해요. 비밀번호 칸과 보안 입력은 기록하지 않고, 기록은 이 맥에만 남아요. 다 하면 위쪽의 빨간 막대나 메뉴바에서 멈추기를 눌러 주세요.'))return;
  let r=null;try{r=await HOST.teachStart()}catch(e){$('routineNote').textContent=e.message;return}
  if(r?.need==='accessibility')return askSettings('손쉬운 사용 권한','누른 버튼과 메뉴의 이름을 읽으려면 손쉬운 사용 권한이 필요해요. 설정하러 가시겠어요?','accessibility',()=>{});
  if(r?.need==='input')return askSettings('입력 모니터링','클릭과 단축키를 기록하려면 입력 모니터링 권한이 필요해요. 켠 뒤에는 bisu를 다시 열어야 할 수 있어요. 설정하러 가시겠어요?','input',()=>{});
@@ -1923,6 +1949,58 @@ async function teachFinish(){let steps=[];try{steps=(await HOST.teachStop()).ste
  if(!steps.length){alert('기록된 단계가 없어요. 다시 시작해서 맥에서 직접 한 번 해 주세요.');return}
  try{const r=await post('/api/teach',{bot:curBot,steps});chats.unshift(r.chat);show('chat');open(r.chat.id)}catch(e){alert(e.message)}}
 $('teachStop').onclick=teachFinish;
+// ---- one confirm dialog (replaces the system confirm) ----
+// The question in the first line, what happens in the rest; the risky choice in blush.
+function ask(text,{ok,danger}={}){const d=$('askDlg');let [title,...rest]=String(text).split('\n');
+ if(!rest.length){const i=title.indexOf('? ');if(i>0){rest=[title.slice(i+2)];title=title.slice(0,i+1)}}
+ $('askTitle').textContent=title;$('askText').textContent=rest.join('\n').trim();$('askText').hidden=!rest.join('').trim();
+ const risky=danger??/지울|끌까|끊을|뺄까|삭제/.test(title);$('askOk').textContent=ok||(risky?(/끌까/.test(title)?'끄기':/끊을/.test(title)?'끊기':/뺄까/.test(title)?'빼기':'지우기'):'좋아요');
+ $('askOk').classList.toggle('danger',risky);
+ return new Promise(res=>{d.onclose=()=>res(d.returnValue==='ok');d.returnValue='';d.showModal();$('askOk').focus()})}
+
+// ---- what is going on, in one place (the panel's status pill, the window's status line) ----
+function gstat(){const pend=chats.filter(c=>c.pending>0),busy=chats.filter(c=>c.busy||c.tasks>0);
+ const rec=!$('teachBar')?.hidden,today=prefs?.engine==='native'?natSnap?.spend?.today:acctSnap?.key?.usage_daily;
+ const awake=alSnap&&alSnap.holding?awakeText(alSnap).split(' · ').slice(0,2).join(' · '):null;
+ const state=rec?{k:'rec',t:'기록 중'}:pend.length?{k:'wait',t:`확인 필요 ${pend.reduce((a,c)=>a+c.pending,0)}`}:busy.length?{k:'busy',t:`작업 중 ${busy.length}`}:{k:'idle',t:'듣고 있어요'};
+ return {...state,pend,busy,today,awake}}
+function renderStatus(){const g=gstat();
+ for(const el of document.querySelectorAll('[data-gstatus]')){el.dataset.k=g.k;el.querySelector('.t').textContent=g.t;
+  const more=el.querySelector('.more');if(more)more.textContent=[g.today!=null?`오늘 ${usd(g.today)}`:null,g.awake].filter(Boolean).join(' · ')}}
+// The status pill answers "what needs me": the first approval, else the first thing working.
+function gotoStatus(){const g=gstat(),c=g.pend[0]||g.busy[0];if(!c)return false;if((c.bot||'bisu')!==curBot&&!c.maker)setBot(c.bot||'bisu');show('chat');open(c.id);return true}
+
+// ---- ⌘K: bots, conversations, screens and actions in one field ----
+const SCREENS={chat:'대화',routines:'루틴',memory:'기억',jobs:'예약 작업',goals:'목표',history:'기록',connect:'연결',settings:'설정'};
+let palItems=[],palAt=0;
+function palette(open){const p=$('palette');if(open===false||!p.hidden&&open!==true){p.hidden=true;return}p.hidden=false;$('palQ').value='';palFill();$('palQ').focus()}
+function palFill(){const q=$('palQ').value.trim().toLowerCase(),hit=t=>!q||String(t).toLowerCase().includes(q),botName=id=>bots.find(b=>b.id===(id||'bisu'))?.name||'bisu';
+ palItems=[
+  ...[['새 대화','⌘N',()=>newChatHere()],['봇 만들기','',()=>$('botNew').click()],['설정','⌘,',()=>openSettings()]].filter(([t])=>hit(t)).map(([t,h,go])=>({k:'할 일',t,h,go})),
+  ...bots.filter(b=>hit(b.name)||hit(b.job)).map(b=>({k:'봇',t:b.name,h:b.job||'',go:()=>{setBot(b.id);show('chat')}})),
+  ...chats.filter(c=>!c.maker&&hit(c.title||'')).slice(0,30).map(c=>({k:'대화',t:c.title||'새 대화',h:botName(c.bot),go:()=>{if((c.bot||'bisu')!==curBot)setBot(c.bot||'bisu');show('chat');open(c.id)}})),
+  ...(PANEL?[]:Object.entries(SCREENS).filter(([,t])=>hit(t)).map(([v,t])=>({k:'화면',t,h:'',go:()=>show(v)})))].slice(0,60);
+ palAt=0;$('palList').innerHTML=palItems.map((it,i)=>`<div class="pi${i?'':' on'}" data-i="${i}" role="option"><span class="k">${esc(it.k)}</span><span>${esc(it.t)}</span><span class="h">${esc(it.h)}</span></div>`).join('')||'<p class="note" style="margin:8px">찾는 게 없어요.</p>';
+ for(const el of $('palList').querySelectorAll('.pi')){el.onmousemove=()=>palMark(+el.dataset.i);el.onclick=()=>palGo(+el.dataset.i)}}
+function palMark(i){palAt=Math.max(0,Math.min(palItems.length-1,i));[...$('palList').children].forEach((c,k)=>c.classList.toggle('on',k===palAt));$('palList').children[palAt]?.scrollIntoView({block:'nearest'})}
+function palGo(i){const it=palItems[i];palette(false);it?.go()}
+$('palQ').addEventListener('input',palFill);
+$('palQ').addEventListener('keydown',e=>{if(e.key==='ArrowDown'){palMark(palAt+1);e.preventDefault()}else if(e.key==='ArrowUp'){palMark(palAt-1);e.preventDefault()}else if(e.key==='Enter'&&!e.isComposing){palGo(palAt);e.preventDefault()}});
+$('palette').addEventListener('mousedown',e=>{if(e.target===$('palette'))palette(false)});
+
+// ---- shortcuts: ⌘N new chat, ⌘K quick switch, ⌘, settings, Esc closes what is open ----
+function newChatHere(){if(cur){detach();cur=null;wrap().innerHTML=''}show('chat');chatUI();$('input').focus()}
+function openSettings(){if(PANEL)HOST?.openFull?.('settings');else show('settings')}
+addEventListener('keydown',e=>{const mod=e.metaKey||e.ctrlKey;
+ if(mod&&!e.shiftKey&&!e.altKey&&e.key.toLowerCase()==='k'){e.preventDefault();palette()}
+ else if(mod&&!e.shiftKey&&!e.altKey&&e.key.toLowerCase()==='n'){e.preventDefault();newChatHere()}
+ else if(mod&&e.key===','){e.preventDefault();openSettings()}
+ else if(e.key==='Escape'&&!e.isComposing){
+  // The first open thing closes; only when nothing is open does Esc reach the shell (which hides the panel).
+  if(!$('palette').hidden){palette(false);e.preventDefault();e.stopPropagation()}
+  else if(document.querySelector('dialog[open]')){/* the dialog closes itself */e.stopPropagation()}
+  else if(typeof detailOpen==='function'&&detailOpen()){closeDetail();e.preventDefault();e.stopPropagation()}}},true);
+setInterval(renderStatus,3000);
 // ---- boot ----
 mountBisu();setMood('idle','듣고 있어요');helpify();
 $('metaOn').checked=META;
