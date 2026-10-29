@@ -800,7 +800,7 @@ body.panel #panelStart .row{margin-top:2px}
 </div></div></div>
 
 <div class="view" id="memoryView"><div class="page"><div>
- <div class="hero" id="memoryHero"><div class="hx"><h1 class="ht">기억</h1><p class="hs" id="memorySum">…</p></div><button class="primary" id="memNew">기억 추가</button></div>
+ <div class="hero" id="memoryHero"><div class="hx"><h1 class="ht">기억</h1><p class="hs" id="memorySum">…</p></div><div class="actions" style="margin:0"><button id="memTidy" hidden title="같은 주제는 하나로 합치고, 이제 안 맞는 건 지우자고 제안해요. 승인하기 전엔 아무것도 바뀌지 않아요.">정리</button><button class="primary" id="memNew">기억 추가</button></div></div>
  <section>
   <h2>덱 인턴이 기억하는 것</h2>
   <div class="kv" id="memInfo"><div class="k">폴더</div><div class="mono">…</div></div>
@@ -1290,9 +1290,13 @@ function toolSummary(name,input={}){
  if(input.path&&!input.command&&!input.pattern)return short(input.path);
  if(input.command)return input.command;if(input.file_path)return short(input.file_path);if(input.pattern)return input.pattern+(input.path?'  in '+short(input.path):'');
  if(input.url)return input.url;if(input.description)return input.description;if(input.prompt)return input.prompt;return JSON.stringify(input)}
-const isBotTool=t=>/(^|__)(bot_create|bot_update|routine_save)$/.test(t||'');
+const isBotTool=t=>/(^|__)(bot_create|bot_update|routine_save|memory_compact)$/.test(t||'');
 const TOOLS_KO={read:'보기만',edit:'파일 수정까지',full:'명령 실행까지'};
-function botPreview(tool,input={}){if(/routine_save$/.test(tool))return `<div class="botPrev"><span class="k">이름</span><span>${esc(input.name||'')}</span>${input.inputs?.length?`<span class="k">입력</span><span>${esc(input.inputs.join(', '))}</span>`:''}<span class="k">할 수 있는 일</span><span>${esc(TOOLS_KO[input.tools||'read']||input.tools)}</span><span class="k">단계</span><span></span><pre>${esc((input.steps||[]).map((x,i)=>`${i+1}. ${x}`).join('\n'))}</pre></div>`;const rows=[['이름',input.name],['맡은 일',input.job],['폴더',input.cwd||'~'],['말투',input.tone]].filter(([,v])=>v);
+function botPreview(tool,input={}){
+ // Compacting memory: what becomes one memory, and what goes. The old files stay in .compacted/ under the folder.
+ if(/memory_compact$/.test(tool)){const merges=Array.isArray(input.merge)?input.merge:[],drops=Array.isArray(input.drop)?input.drop:[];
+  return `<div class="botPrev memPrev">${merges.map(m=>`<span class="k">합쳐서</span><span><b>${esc(m.into?.title||'')}</b>${m.into?.key?` <span class="chip key">key ${esc(m.into.key)}</span>`:''}</span><pre>${esc(m.into?.text||'')}</pre><span class="k">대신</span><span class="note" style="margin:0">${esc((m.from||[]).join(' · '))}</span>`).join('')}${drops.length?`<span class="k">지움</span><span class="note" style="margin:0">${esc(drops.join(' · '))}</span>`:''}<span class="k"></span><span class="note" style="margin:0">지우는 파일은 기억 폴더의 .compacted에 남아요. 고정한 기억은 건드리지 않아요.</span></div>`}
+ if(/routine_save$/.test(tool))return `<div class="botPrev"><span class="k">이름</span><span>${esc(input.name||'')}</span>${input.inputs?.length?`<span class="k">입력</span><span>${esc(input.inputs.join(', '))}</span>`:''}<span class="k">할 수 있는 일</span><span>${esc(TOOLS_KO[input.tools||'read']||input.tools)}</span><span class="k">단계</span><span></span><pre>${esc((input.steps||[]).map((x,i)=>`${i+1}. ${x}`).join('\n'))}</pre></div>`;const rows=[['이름',input.name],['맡은 일',input.job],['폴더',input.cwd||'~'],['말투',input.tone]].filter(([,v])=>v);
  return `<div class="botPrev">${rows.map(([k,v])=>`<span class="k">${k}</span><span>${esc(v)}</span>`).join('')}${input.instructions?`<span class="k">일하는 방식</span><span></span><pre>${esc(input.instructions)}</pre>`:''}</div>`}
 // Paths in what bisu wants to run, as the person thinks of them: ./ for the chat's folder, ~ for home.
 const relPaths=t=>{t=String(t??'');if(cur?.cwd)t=t.split(cur.cwd+'/').join('./').split(cur.cwd).join('.');return t.replace(/\/Users\/[^/\s'"]+/g,'~')};
@@ -1337,8 +1341,8 @@ function render(ev){
   case 'tool_result':{const el=toolEls[ev.id];if(!el)break;const st=el.querySelector('.st');st.textContent=ev.error?'오류':'완료';st.classList.toggle('e',ev.error);
    el.querySelector('details').insertAdjacentHTML('beforeend',`<pre>${esc(ev.text||'(no output)')}</pre>`)}break;
   case 'approval':live=null;{const what=String(ev.description||toolSummary(ev.tool,ev.input)||'').slice(0,90);const el=add(`<div class="ask" data-id="${esc(ev.request_id)}" data-what="${esc(what)}"><div class="q">${ev.via?`<span class="tag blush">${esc(ev.via.bot)}</span> `:''}${esc(askQ(ev.tool))}${ev.description?` <span class="note" style="font-weight:400">${esc(ev.description)}</span>`:''}</div>${askBody(ev.tool,ev.input)}
-   <div class="btns">${isBotTool(ev.tool)?`<button class="primary" data-a="allow">${/routine_save$/.test(ev.tool)?'저장하기':/create$/.test(ev.tool)?'만들기':'바꾸기'}</button><button class="danger" data-a="deny">다시 할게요</button>`:`<button class="primary" data-a="allow">허용</button><button class="danger" data-a="deny">거절</button><button class="linkish" data-a="always">이 대화에선 묻지 않기</button>`}</div></div>`,null);
-   if(isBotTool(ev.tool))el.querySelector('.q').textContent=/routine_save$/.test(ev.tool)?'이 루틴을 저장할까요?':/create$/.test(ev.tool)?'이렇게 만들까요?':'이렇게 바꿀까요?';
+   <div class="btns">${isBotTool(ev.tool)?`<button class="primary" data-a="allow">${/routine_save$/.test(ev.tool)?'저장하기':/memory_compact$/.test(ev.tool)?'정리하기':/create$/.test(ev.tool)?'만들기':'바꾸기'}</button><button class="danger" data-a="deny">다시 할게요</button>`:`<button class="primary" data-a="allow">허용</button><button class="danger" data-a="deny">거절</button><button class="linkish" data-a="always">이 대화에선 묻지 않기</button>`}</div></div>`,null);
+   if(isBotTool(ev.tool))el.querySelector('.q').textContent=/routine_save$/.test(ev.tool)?'이 루틴을 저장할까요?':/memory_compact$/.test(ev.tool)?'기억을 이렇게 정리할까요?':/create$/.test(ev.tool)?'이렇게 만들까요?':'이렇게 바꿀까요?';
    for(const b of el.querySelectorAll('button'))b.onclick=()=>answer(ev.request_id,b.dataset.a,el);
    for(const pr of el.querySelectorAll('pre')){if(pr.scrollHeight>pr.clientHeight+4)pr.classList.add('long');pr.onclick=()=>pr.classList.add('open')}setMood('waiting','확인이 필요해요')}break;
   case 'handoff':{let el=wrap().querySelector(`.handoffLine[data-id="${CSS.escape(ev.id)}"]`);
@@ -1531,6 +1535,8 @@ function renderMemory(){
    ${e.text?`<div class="b">${esc(e.text)}</div>`:''}</div>`).join('')
   :'<p class="note">비어 있어요. 대화 중에 덱 인턴이 스스로 저장하거나, 위에서 직접 추가할 수 있어요.</p>';
  $('memDigest').textContent=m.digest||'(비어 있어요 — 아직 전달되는 게 없어요)';
+ // Tidying is the assistant's proposal in a chat (memory_compact), approved on a card: nothing changes here.
+ const tidy=$('memTidy');if(tidy){tidy.hidden=m.entries.length<2;tidy.classList.toggle('primary',cut.length>0);tidy.textContent=cut.length?`정리 · ${cut.length}개 넘침`:'정리'}
  for(const row of $('memList').querySelectorAll('.mem')){
   const e=m.entries.find(x=>x.id===row.dataset.id);if(!e)continue;
   row.querySelector('[data-a=pin]').onclick=async()=>{try{mem=await post('/api/memory'+mb(),{id:e.id,pin:!e.pin});renderMemory()}catch(er){alert(er.message)}};
@@ -1604,6 +1610,7 @@ async function writeMemory(b){
 $('memForm').onsubmit=e=>{e.preventDefault();saveMemory()};
 $('memCancel').onclick=()=>{memForm(null);$('memFormSec').hidden=true};
 $('memNew').onclick=()=>{memForm(null);$('memFormSec').scrollIntoView({block:'nearest'})};
+$('memTidy').onclick=async()=>{await startChat({});if(!cur)return;$('input').value='기억을 정리해 줘. 같은 주제는 하나로 합치고, 이제 안 맞는 건 지워 줘.';sendMsg()};
 
 // ---- what bisu brings without being asked ----
 // The engine runs the suggestion on its own schedule; this only shows whatever is waiting, and asking

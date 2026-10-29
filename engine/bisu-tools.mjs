@@ -67,6 +67,26 @@ export const BISU_TOOLS = {
       return ok(`Forgot "${hit.title}".`);
     },
   },
+  // Fewer, fuller memories. The assistant reads the whole folder and says which memories are about one
+  // thing; kind 'bot' means the card always asks, so the person sees the result before anything is
+  // written. ui/memory.mjs compact() keeps the old files under .compacted/ and never touches a pinned one.
+  memory_compact: {
+    description: 'Tidy memory when it has grown or when they ask (기억 정리): merge the memories that are about one subject into one each, and drop those that are out of date. Read every memory first (the Memory block, and the folder when some did not fit). Each merge: from (the titles or ids of the memories it replaces) and into {title, text, key?} holding every fact from them that still holds, in their language, no longer than needed. drop: titles or ids that are plainly superseded. Pinned memories stay as they are. The person sees the result on a card and decides.',
+    parameters: {type: 'object', properties: {
+      merge: {type: 'array', items: {type: 'object', properties: {
+        from: {type: 'array', items: {type: 'string'}, description: 'titles or ids of the memories this one replaces'},
+        into: {type: 'object', properties: {title: {type: 'string'}, text: {type: 'string'}, key: {type: 'string'}}, required: ['title', 'text']},
+      }, required: ['from', 'into']}},
+      drop: {type: 'array', items: {type: 'string'}, description: 'titles or ids of memories that are out of date'},
+    }},
+    kind: 'bot',
+    run(ctx, {merge = [], drop = []} = {}) {
+      try {
+        const r = memory.compact({merge, drop});
+        return ok(`Compacted: ${r.compacted.retired.length} memories became ${r.compacted.wrote.length} (${r.entries.length} in all, ${r.used} of ${r.budget} characters sent). The old files are kept in ${r.compacted.backup.replace(process.env.HOME || '', '~')}. It applies from the next conversation.`);
+      } catch (e) { return err(`Could not compact: ${e.message}`) }
+    },
+  },
   // Only the default bot (the assistant) is given this (engine/cli.mjs, ui/cu/server.mjs): the other bots
   // see their own memory in their prompt and nothing of each other's, and workers have no memory tools.
   bot_memory: {

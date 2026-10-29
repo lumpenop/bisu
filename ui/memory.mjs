@@ -261,6 +261,61 @@ export function remove(id) {
   return snapshot();
 }
 
+// Fewer, fuller memories. The assistant says which memories are about one thing (memory_compact in
+// engine/bisu-tools.mjs), the person approves on the card, and this applies it: each merge writes one
+// new memory and retires the ones it was made from; drop retires memories that are simply out of date.
+// Retired files are moved to .compacted/<time>/ under the folder, not deleted, so a wrong merge can be
+// put back by hand. A pinned memory is never retired: pinning is the person saying "keep this as it is".
+// Memories are named by id or, since the digest shows titles, by exact title.
+const bad = (msg, status = 400) => Object.assign(Error(msg), { status });
+export function compact({ merge = [], drop = [] } = {}) {
+  const all = list();
+  const find = ref => {
+    const r = String(ref ?? '').trim();
+    const hits = all.filter(e => e.id === r);
+    if (!hits.length) hits.push(...all.filter(e => e.title.normalize('NFC').trim() === r.normalize('NFC')));
+    if (!hits.length) throw bad(`no such memory: ${r}`, 404);
+    if (hits.length > 1) throw bad(`“${r}” names ${hits.length} memories; use the id`);
+    return hits[0];
+  };
+  const retire = new Map();
+  const take = ref => {
+    const e = find(ref);
+    if (e.pin) throw bad(`“${e.title}” is pinned, so it stays as it is`);
+    if (retire.has(e.id)) throw bad(`“${e.title}” is named twice`);
+    retire.set(e.id, e);
+    return e;
+  };
+  const plans = [];
+  for (const m of Array.isArray(merge) ? merge : []) {
+    const from = (Array.isArray(m?.from) ? m.from : []).map(take);
+    if (!from.length) throw bad('a merge needs the memories it is made from');
+    const into = m.into || {};
+    const title = String(into.title ?? '').trim().slice(0, 100);
+    const text = String(into.text ?? into.body ?? '').trim();
+    if (!title) throw bad('a merged memory needs a title');
+    const key = topicKey(into.key ?? from.find(e => e.key)?.key ?? '') || null;
+    plans.push({ title, text, key, from });
+  }
+  for (const ref of Array.isArray(drop) ? drop : []) take(ref);
+  if (!retire.size) throw bad('nothing to compact');
+  // A key still names one memory: a merge may take a key over only from a memory it retires.
+  const keys = new Set();
+  for (const p of plans) {
+    if (!p.key) continue;
+    if (keys.has(p.key)) throw bad(`two merged memories claim key “${p.key}”`);
+    keys.add(p.key);
+    const holder = all.find(e => e.key === p.key && !retire.has(e.id));
+    if (holder) throw bad(`key “${p.key}” is already used by “${holder.title}”`, 409);
+  }
+  const backup = path.join(DIR, '.compacted', new Date().toISOString().replace(/[:.]/g, '-'));
+  fs.mkdirSync(backup, { recursive: true, mode: 0o700 });
+  for (const id of retire.keys()) fs.renameSync(path.join(DIR, id + '.md'), path.join(backup, id + '.md'));
+  const wrote = [];
+  for (const p of plans) { const id = uniqueId(p.title); write(id, p.title, p.text, false, p.key); wrote.push(id) }
+  return { ...snapshot(), compacted: { wrote, retired: [...retire.keys()], backup } };
+}
+
 // ---- command line, for launch.zsh ----
 function main(argv) {
   const mode = argv[0];
