@@ -139,15 +139,21 @@ export async function route(userText, {recent = '', folder = ''} = {}) {
       {type: 'choice', name: 'route', instructions: 'Which single kind of request is this, judged by what the assistant must do to answer well?', choices: Object.entries(ROUTES).map(([value, description]) => ({value, description}))},
       {type: 'predicate', name: 'hard', instructions: 'Does doing this well need careful multi-step reasoning, debugging, or substantial code or writing (not a lookup or a small edit)?',
         yes: 'Careful multi-step reasoning, debugging, or substantial code or writing.', no: 'A lookup, a short answer, a reminder or a small edit.'},
+      {type: 'predicate', name: 'split', instructions: 'Does this bundle several independent pieces of work that could each be done on its own by a different person (different files or goals, "A하고 B도"), rather than one job, however many steps it takes?',
+        yes: 'Several independent pieces of work, each doable on its own.', no: 'One job, even if it has many steps.'},
     ]);
   if (!a?.route) return null;
-  return {route: a.route.choice, confidence: a.route.p[a.route.choice] ?? a.route.confidence ?? 0, p: a.route.p, hard: a.hard ?? null};
+  return {route: a.route.choice, confidence: a.route.p[a.route.choice] ?? a.route.confidence ?? 0, p: a.route.p, hard: a.hard ?? null, split: a.split ?? null};
 }
 
 // What a route means for the turn: who answers, with which tools, how much reasoning, and a one-line
 // hint for the system prompt.
 // - GLM-5.3, the assistant, takes conversation and everything around it: memory, schedules, the web,
 //   past conversations, the Mac, and anything the judge could not place.
+// - Work that bundles several independent pieces (the judge's `split`) also goes to the assistant,
+//   but only to plan: a line naming the parts, one delegate per part, and the reports checked when
+//   they come back. One job, however large, skips that and goes straight to Flash: the extra GLM-5.3
+//   call is only paid where there is something to split.
 // - Flash takes the work in the folder, small or large. Measured, not assumed: asked "서울 사는 사람 몇
 //   명이야?" next to a users.csv, GLM-5.3 at low effort answered with Seoul's population three times out
 //   of three, even when told to look at the files; Flash read the file and said 2 every time, at a
@@ -164,16 +170,25 @@ export const HINTS = {
   calendar: 'This is about their calendar or reminders: use the calendar and reminder tools. Look before changing (calendar_list, reminders_list) and use the ids they show. Take dates from the Now section and confirm with the weekday. "~에 알려줘" is a reminder with that time (reminder_add), not a scheduled job.',
   remember: 'This asks you to remember or forget something: update memory (remember) if that tool is available.',
   mac: 'This is about the Mac outside the folder (apps, screen, clipboard): use the Mac tools if available; otherwise say what you would need.',
+  split: 'This request has several independent parts. First write one line naming the parts, then hand each part to a worker with delegate in this same turn (one complete brief each: the files, the goal, what done looks like), tell the person in a line that the parts are under way, and end your turn: do not do the work yourself. When the reports come back, check each against the request, send_back what is wrong or missing, and only then tell the person what was done.',
 };
 export const WORK_ROUTES = new Set(['work', 'build']);
+// Work the judge puts at or above this is several jobs, so the assistant splits it (judge-bench.mjs
+// prints what each cut-off would have done).
+export const SPLIT_ACT = 0.7;
 export function planTurn(r, {model, workModel, tools}) {
   const force = process.env.BISU_THINKING;
   const think = wanted => force === 'on' ? true : force === 'off' ? false : wanted;
-  const plan = {model, tools, thinking: think(true), hint: '', heavy: false};
+  const plan = {model, tools, thinking: think(true), hint: '', heavy: false, split: false};
   if (!r) return plan;
   if (r.route === 'chat' && r.confidence >= 0.7) { plan.tools = []; plan.thinking = think(false); return plan }
   // Only the kind of request decides who answers: a hard question about past work is still the assistant's.
   if (WORK_ROUTES.has(r.route)) {
+    // Several independent pieces, and workers to give them to: the assistant plans and delegates.
+    if ((r.split ?? 0) >= SPLIT_ACT && Array.isArray(tools) && tools.includes('delegate')) {
+      plan.split = true; plan.heavy = true; plan.hint = HINTS.split;
+      return plan;
+    }
     plan.model = workModel;
     plan.heavy = r.route === 'build' || (r.hard ?? 0) >= 0.7;
     plan.thinking = think(plan.heavy);

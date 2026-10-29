@@ -57,7 +57,9 @@ const preAllowed = new Set(String(flags.allowedTools || flags['allowed-tools'] |
 
 // Two GLM models with separate jobs, and Decisions choosing between them for each message
 // (judge.planTurn says which and why):
-// - GLM-5.3 is the assistant: conversation, memory, schedules, the web, past conversations, the Mac.
+// - GLM-5.3 is the assistant: conversation, memory, schedules, the web, past conversations, the Mac,
+//   and the planning of work that bundles several independent pieces (a line naming the parts, one
+//   delegate per part, the reports checked when they come back).
 // - GLM-5.3-Flash does the work in the folder, and every background worker: on bisu's benchmark it
 //   passed every hands-on task, faster and far cheaper than GLM-5.3 (engine/eval/bench.mjs).
 // The roles saved for the Claude Code engine (OpenRouter slugs) are not this engine's: it has its own.
@@ -367,12 +369,13 @@ async function turn(text, {team = false} = {}) {
   turnNo++;
   await compactIfLong();
   const t0 = Date.now();
-  // What kind of request this is decides who answers (GLM-5.3, or Flash for work in the folder),
-  // whether tools are offered, and a one-line hint.
+  // What kind of request this is decides who answers (GLM-5.3, or Flash for work in the folder;
+  // GLM-5.3 again when the work is several jobs, to split it), whether tools are offered, and a
+  // one-line hint.
   const recent = messages.slice(-6).filter(m => m.role !== 'tool').map(m => `${m.role === 'user' ? '사람' : 'bisu'}: ${String(m.content || '').slice(0, 200)}`).join('\n');
   const r = team ? null : await judge.route(text, {recent, folder: judge.folderSummary(cwd)});
-  const {model, tools, thinking, hint} = team ? {model: MODEL, tools: wanted, thinking: true, hint: TEAM_HINT} : judge.planTurn(mentioned(r), {model: MODEL, workModel: WORK_MODEL, tools: wanted});
-  if (r) out({type: 'system', subtype: 'bisu_judgment', kind: 'route', route: r.route, confidence: r.confidence, hard: r.hard, model, session_id: sessionId});
+  const {model, tools, thinking, hint, split} = team ? {model: MODEL, tools: wanted, thinking: true, hint: TEAM_HINT} : judge.planTurn(mentioned(r), {model: MODEL, workModel: WORK_MODEL, tools: wanted});
+  if (r) out({type: 'system', subtype: 'bisu_judgment', kind: 'route', route: r.route, confidence: r.confidence, hard: r.hard, split: r.split, planned: !!split, model, session_id: sessionId});
   messages.push({role: 'user', content: text});
   transcript.user(text);
   abort = new AbortController();
