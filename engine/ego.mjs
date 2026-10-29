@@ -77,10 +77,11 @@ export function priceList(body, cands, bare = true) {
   // An item's picture and title often link with the same words: twice is still one item; three or more is a button.
   // So is a line the page repeats between items (「Add to basket」 under each), even when the actions list has it once;
   // a title repeated on lines right after one another (picture, link, text) is still one item.
-  const lines = String(body || '').split('\n').map(l => l.trim()).filter(Boolean), apart = new Map();
-  lines.forEach((l, i) => { if (lines[i - 1] !== l) apart.set(l, (apart.get(l) || 0) + 1) });
+  const lines = String(body || '').split('\n').map(l => l.trim()).filter(Boolean), apart = new Map(), priced = new Map();
+  lines.forEach((l, i) => { if (lines[i - 1] !== l) apart.set(l, (apart.get(l) || 0) + 1); if (lines[i - 1] !== l && lines.slice(i + 1, i + 3).some(x => PRICE.test(x) || (bare && BARE.test(x)))) priced.set(l, (priced.get(l) || 0) + 1) });
   // (a price repeated between items is still each item's price: four potions at 4.99)
-  const each = l => (count.get(l) || 0) >= 3 || (apart.get(l) || 0) >= 3 && !items0.has(l) && !PRICE.test(l) && !(bare && BARE.test(l));
+  // (three books cut to the same 「Harry Potter and the ...」, each with its own price right under it, are three items)
+  const each = l => ((count.get(l) || 0) >= 3 || (apart.get(l) || 0) >= 3 && !items0.has(l) && !PRICE.test(l) && !(bare && BARE.test(l))) && priced.get(l) !== apart.get(l);
   const items0 = new Set(cands.filter(c => c.kind === 'click').map(c => String(c.label || c.name || '').trim()).filter(l => (apart.get(l) || 0) < 3));
   const items = new Map(cands.filter(c => c.kind === 'click' && !PAGING.test(String(c.label || '').trim())).map(c => [String(c.label || c.name || '').trim(), c]).filter(([l]) => l && !each(l)).reverse());
   const runs = [[]]; let cur = null, prevPrice = false, n = 0;
@@ -138,6 +139,54 @@ export function sweepAnswer(goal, pages) {
   if (top.length < n || (by[n] && by[n].price === top[n - 1].price) || top.some(x => /(\.\.\.|…)$/.test(x.name))) return null;
   const word = most ? '비싼' : '싼';
   return `${pages.length}쪽 ${all.length}개 중 가장 ${word} ${n > 1 ? `${n}개: ` : '것: '}${top.map((x, i) => `${n > 1 ? `${i + 1}. ` : ''}${x.name} ${x.raw}`).join(', ')}`;
+}
+// The answer to a goal that compares the items it opened one by one (「재고가 가장 많은 책」, 「가장 먼저 태어난 사람」),
+// checked against the items' own pages: the value the goal compares is read off each item's note, and the answer has
+// to carry the winner's. Only for stock counts, dates and prices, only when every item has one and there is no tie.
+// Returns null (nothing to check), {ok:true}, or {ok:false, hint} — the hint is the table, for asking again.
+const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+const VALUE = {
+  stock: {goal: /재고|수량|stock|available/i, read: t => { const m = /\((\d+)\s*available\)|재고[^\d\n]{0,8}(\d+)|(\d+)\s*(?:left in stock|in stock)/i.exec(t); return m ? {v: Number(m[1] ?? m[2] ?? m[3]), say: String(m[1] ?? m[2] ?? m[3]), re: n => new RegExp(`(?<![\\d.,])${n}(?![\\d.,])`)} : null }},
+  date: {goal: /태어난|출생|생년|born|날짜|date|언제/i, read: t => {
+    let m = new RegExp(`(${MONTHS.join('|')})\\s+(\\d{1,2}),?\\s+(\\d{4})`, 'i').exec(t);
+    if (m) { const y = +m[3], mo = MONTHS.indexOf(m[1].toLowerCase()), d = +m[2]; return {v: Date.UTC(y, mo, d), say: String(y), re: n => new RegExp(`(?<!\\d)${n}(?!\\d)`)} }
+    m = /(\d{4})\s*(?:년|[-./])\s*(\d{1,2})\s*(?:월|[-./])\s*(\d{1,2})/.exec(t);
+    return m ? {v: Date.UTC(+m[1], +m[2] - 1, +m[3]), say: m[1], re: n => new RegExp(`(?<!\\d)${n}(?!\\d)`)} : null }},
+  price: {goal: /가격|비싼|싼|price|cheap|expensive/i, read: t => { const m = PRICE.exec(t); return m ? {v: amount(m[0]), say: String(amount(m[0])), re: n => new RegExp(String(n).replace('.', '[.,]'))} : null }},
+};
+const MOST_ANY = /가장\s*(많은|큰|높은|비싼|늦게|최근|나중에|새로운|긴)|최대|최고|most|latest|highest|largest|newest|longest|youngest/gi;
+const LEAST_ANY = /가장\s*(적은|작은|낮은|싼|먼저|일찍|오래된|이른|짧은)|최소|최저|least|earliest|lowest|smallest|oldest|cheapest|shortest/gi;
+export function checkCompare(goal, answer, notes) {
+  const g = String(goal || ''), tail = g.slice(g.search(/[,，]\s*[^,，]*$/) + 1 || 0);
+  const kind = ['stock', 'date', 'price'].find(k => VALUE[k].goal.test(tail));
+  // (answer null: only the table, to give the model before it answers)
+  if (!kind || (answer !== null && !answer) || notes.length < 2) return null;
+  const last = (re, t) => { let m, at = -1; re.lastIndex = 0; while ((m = re.exec(t))) at = m.index; return at };
+  const hi = last(MOST_ANY, tail), lo = last(LEAST_ANY, tail);
+  if (hi < 0 && lo < 0) return null;
+  const dir = hi > lo ? 1 : -1;
+  const vals = notes.map(n => ({n, x: VALUE[kind].read(n)}));
+  if (vals.some(v => !v.x)) return null;
+  const best = dir > 0 ? Math.max(...vals.map(v => v.x.v)) : Math.min(...vals.map(v => v.x.v)), win = vals.filter(v => v.x.v === best);
+  if (win.length !== 1) return null;
+  const w = win[0];
+  if (vals.some(v => v !== w && v.x.say === w.x.say)) return null;
+  // (an item's name: its page title, or — where every page has the same title — the first line no other note has)
+  const titles = vals.map(v => String(v.n).split(':')[0]), same = new Set(titles).size < titles.length;
+  const parts = vals.map(v => String(v.n).slice(String(v.n).indexOf(':') + 1).split(' / ').map(x => x.trim()).filter(Boolean));
+  const name = n => { const i = vals.findIndex(v => v.n === n); return (same ? parts[i].find(x => x.length > 2 && !parts.some((p, j) => j !== i && p.includes(x))) : titles[i] || '').slice(0, 80) };
+  const hint = {ok: false, hint: `(${answer === null ? '비교표' : '검산'} — 연 항목마다 목표가 비교하는 값: ${vals.map(v => `「${name(v.n)}」 ${v.x.say}`).join(', ')} · 목표 기준으로 고르면 「${name(w.n)}」(${w.x.say}). 그 항목 쪽의 메모에서 답을 써요.)`};
+  if (answer === null) return hint;
+  // Which item the answer names as the winner: the first one named after its last 「가장 …」 (with none, before its first
+  // bracket). A list of every item with its value carries the winner's value whatever it concludes, so the value alone
+  // proves nothing.
+  // (an item counts as named by any word of four letters or more in its name that no other item's name has: 「Nietzsche」)
+  const words = n => name(n).replace(/\s*\|.*$/, '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(x => x.length >= 4);
+  const own = vals.map(v => words(v.n).filter(x => !vals.some(o => o !== v && words(o.n).includes(x))));
+  const A = String(answer), sup = Math.max(last(MOST_ANY, A), last(LEAST_ANY, A)), said = (sup >= 0 ? A.slice(sup) : A.split(/[(（]/)[0]).toLowerCase();
+  const first = vals.map((v, i) => ({v, at: Math.min(...own[i].map(x => said.indexOf(x)).filter(k => k >= 0), Infinity)})).filter(x => x.at < Infinity).sort((a, b) => a.at - b.at)[0];
+  if (first && first.v !== w) return hint;
+  return w.x.re(w.x.say).test(A) ? {ok: true} : hint;
 }
 // 「가장 비싼 책과 가장 싼 책의 가격 차이」: the difference worked out from the page, when nothing narrows the choice.
 export function priceSpread(goal, body, cands, names = []) {
@@ -366,7 +415,7 @@ function candidates(view, inputs, last, canBack = true, goal = '') {
     // (a name may start with a figure — 「10% Happier」 — and still be a name: only a line that is all figure is not)
     const figure = l => NUMBERED.test(l) && !/\p{L}{3,}/u.test(l.replace(new RegExp(NUMBERED.source, 'g'), ''));
     const items = lines.filter((l, i) => !figure(l) && lines.slice(i + 1, i + 4).some(x => NUMBERED.test(x))).map(l => l.slice(0, 24).toLowerCase());
-    const isItem = c => items.some(t => String(c.label || '').toLowerCase().startsWith(t.slice(0, Math.min(24, String(c.label || '').length))) && String(c.label || '').length >= 4);
+    const isItem = c => items.some(t => String(c.label || '').toLowerCase().startsWith(t.slice(0, Math.min(24, String(c.label || '').length))) && String(c.label || '').length >= 2);
     const score = c => (PAGING.test(String(c.label || '').trim()) ? 3 : 0) + (c.kind !== 'click' ? 2 : 0) + (words.some(w => String(c.label || '').toLowerCase().includes(w)) ? 2 : 0) + (isItem(c) ? 2 : 0);
     const keep = new Set([...rest].sort((a, b) => score(b) - score(a)).slice(0, 70));
     out = [...rest.filter(c => keep.has(c)), ...fixed];
@@ -740,7 +789,10 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
         if (ticked.size === targets.length && WANTS_ANSWER(goal) && !(OPENS.test(goal) && (itemsOf.size ? itemsOf.size < targets.length : listy(view) && !itemPage)) && !eachTried.has(pageSig(view))) {
           eachTried.add(pageSig(view));
           // (this page's own note too: the notes passed along are of the pages before it)
-          const ask = () => review(goal, view, cands, [...hist, ...(seen.get(pageKey(view)) ? [`(이 페이지 메모 — ${seen.get(pageKey(view))})`] : [])], ins, null, 'done-without-answer', seen);
+          // (where the compared values can be read off the items' pages, the table goes with the question: the model names
+          // the winner instead of comparing 1844 with 1879 itself, which it got wrong three times in four)
+          const table = checkCompare(goal, null, [...(seen.pinned || [])].map(k => seen.get(k)).filter(Boolean))?.hint;
+          const ask = () => review(goal, view, cands, [...hist, ...(seen.get(pageKey(view)) ? [`(이 페이지 메모 — ${seen.get(pageKey(view))})`] : []), ...(table ? [table] : [])], ins, null, 'done-without-answer', seen);
           let r = await ask();
           reviews.n++; reviews.why['each-done'] = (reviews.why['each-done'] || 0) + 1;
           // (every item of a goal that opens one of each is open: the answer is in the notes now, and nothing later will
@@ -769,7 +821,8 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
           const ls = [...listText.split('\n'), ...parse(view.snap).els.map(e => e.name), ...(view.fulls || [])], at = x => x && {label: x.c.label, name: fullName(x.c, cands, ls), raw: x.raw, price: x.price};
           sw.pages.set(pageKey(view), {url: view.url, max: at(extreme(run, 1)), min: at(extreme(run, -1)), items: run.map(x => at({c: x.c, raw: x.raw, price: x.price}))});
           const next = cands.find(c => c.kind === 'click' && NEXT.test(String(c.label || '').trim()));
-          if (next && !deadNext.has(pageKey(view)) && sw.pages.size < 10) { sweepTodo = [next]; log({sweep: 'next', list: lid, pages: sw.pages.size}) }
+          // (a page of the list met again — page 1 under another address, after a step back — ends the paging here)
+          if (next && !deadNext.has(pageKey(view)) && sw.pages.size < 10 && (visits.get(pageKey(view)) || 0) < 2) { sweepTodo = [next]; log({sweep: 'next', list: lid, pages: sw.pages.size}) }
           else if (sw.pages.size > 1) {
             sw.done = true;
             const key = nextExt(goal, doneExt) === 'min' ? 'min' : 'max', dir = key === 'max' ? 1 : -1;
@@ -858,6 +911,14 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
         else if (hub && view.url !== hub) { steered++; between = true; log({each: 'not-yet-hub', left}); view = await driver.goto(hub); hist.push(...(view.did || []), `(남은 것: ${left.join(', ')})`); continue }
       }
       if (!todo.length) {
+      // (a goal over several named things answers from all of their notes, not from a pick that read this page alone)
+      if (stopping && targets?.length >= 2 && WANTS_ANSWER(goal) && !left.length && !eachTried.has('final#' + pageSig(view))) {
+        eachTried.add('final#' + pageSig(view));
+        const table = checkCompare(goal, null, [...(seen.pinned || [])].map(k => seen.get(k)).filter(Boolean))?.hint;
+        const r = await review(goal, view, cands, [...hist, ...(seen.get(pageKey(view)) ? [`(이 페이지 메모 — ${seen.get(pageKey(view))})`] : []), ...(table ? [table] : [])], ins, null, 'done-without-answer', seen);
+        reviews.n++; reviews.why['each-done'] = (reviews.why['each-done'] || 0) + 1; log({review: 'each-final', answer: r.answer ? String(r.answer).slice(0, 160) : null});
+        if (r.answer) { answer = r.answer; answerAt = pageKey(view); status = 'done'; break }
+      }
       if (pick?.done) { if (pick.answer) answer = pick.answer; status = 'done'; break }
       if (!pick || !cands[pick.index]) { status = 'no-pick'; break }
       if (pick.answer) { answer = pick.answer; answerAt = pageKey(view) }
@@ -920,6 +981,19 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
       held = {kind, ref, role, own, nth, label, key, value, url: view.url};
       status = 'needs-approval';
       break;
+    }
+  }
+  // An answer comparing the items opened one by one, checked against their pages; asked again once with the table when
+  // it does not carry the winner's value.
+  if (status === 'done' && answer && targets?.length >= 2) {
+    const items = [...(seen.pinned || [])].map(k => seen.get(k)).filter(Boolean), c = checkCompare(goal, answer, items);
+    log({check: c ? (c.ok ? 'ok' : 'mismatch') : 'none'});
+    if (c && !c.ok) {
+      const cs = driver.candidates ? driver.candidates(view) : candidates(view, ins, last, true, goal);
+      const r = await review(goal, view, cs, [...hist, c.hint], ins, null, 'done-without-answer', seen);
+      reviews.n++; reviews.why.check = (reviews.why.check || 0) + 1;
+      const again = r.answer && checkCompare(goal, r.answer, items);
+      if (r.answer && (!again || again.ok)) { reviews.changed++; answer = r.answer }
     }
   }
   await driver.end?.(status);
