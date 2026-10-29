@@ -493,6 +493,14 @@ input.switch:focus-visible{outline:none;box-shadow:var(--glow)}
 #panelStart.onboarding .ccStatus,#panelStart.onboarding .cc,#panelStart.onboarding .ccFoot{display:none}
 /* keeping the Mac awake: a mode, and its time when it has one */
 .awakeRow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.keysList{display:flex;flex-direction:column}
+.keyRow{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line);font-size:13px}
+.keyRow:first-child{border-top:0}
+.keyRow .name{flex:1;min-width:0}
+.keyChip{min-width:80px;padding:4px 10px;border-radius:8px;border:1px solid var(--line);background:var(--chip);color:var(--ink);font:inherit;font-size:12px;letter-spacing:.04em;cursor:pointer}
+.keyChip[data-rec="1"]{border-color:var(--accent);box-shadow:var(--glow);letter-spacing:0}
+.keyBack{background:none;border:0;color:var(--muted);font:inherit;font-size:12px;cursor:pointer}
+.keysFoot{justify-content:space-between;margin-top:8px}.keysFoot .note{margin:0}
 .awakeRow>span{display:inline-flex;gap:8px;align-items:center}
 #alMinCustom{width:5.5em}
 .mem .awk{margin-top:6px;font-size:12.5px}
@@ -1015,6 +1023,12 @@ body.panel #panelStart .row{margin-top:2px}
    <div class="k">전체 창이 열려 있을 때</div><div><select id="iconOpens"><option value="panel">아이콘을 누르면 패널</option><option value="full">아이콘을 누르면 전체 창</option></select></div></div>
   <p class="note">패널 위쪽(얼굴이나 대화 제목)을 끌면 아무 데나 옮길 수 있고, 디스플레이마다 따로 기억해요. 옮기면 「마지막으로 옮긴 곳」으로 바뀌고, 화면 밖으로 나간 위치는 화면 안으로 당겨서 열어요.</p>
  </section>
+ <section id="keysSec" hidden>
+  <h2>단축키</h2>
+  <div id="keysList" class="keysList"></div>
+  <p class="note" id="keysMsg" hidden></p>
+  <div class="awakeRow keysFoot"><span class="note">편집 단축키(복사·붙여넣기 등)는 시스템 그대로예요. 눌러서 새 키를 정하고, Esc는 취소, ⌫는 없애기예요.</span><button type="button" id="keysReset" hidden>모두 기본값으로</button></div>
+ </section>
  <details class="adv" id="advBox"><summary>고급 · 컴퓨터 조작 시험</summary>
  <section id="cuSec">
   <h2>컴퓨터 조작 시험</h2>
@@ -1180,7 +1194,7 @@ function show(v){if(!$(v+'View'))v='chat';curView=v;for(const b of document.quer
  if(v==='jobs'){renderSugSettings();loadSuggestions();loadJobs();loadBrief()}
  if(v==='routines')loadRoutines();
  if(v==='connect'){loadTg();loadAlerts();loadCalendar()}
- if(v==='settings'){loadAccount();loadRoles();loadRoutes();if(prefs.engine==='native')loadNative();loadCu();loadPanelPlace()}
+ if(v==='settings'){loadAccount();loadRoles();loadRoutes();if(prefs.engine==='native')loadNative();loadCu();loadPanelPlace();loadKeys()}
  heroes();try{localStorage.setItem('bisu.view',v)}catch{}}
 for(const b of document.querySelectorAll('.side button[data-view]'))b.onclick=()=>show(b.dataset.view);
 
@@ -2028,6 +2042,16 @@ async function loadPanelPlace(){if(!HOST?.panelPlace){$('panelSec').hidden=true;
  try{$('iconOpens').value=HOST.iconOpens?await HOST.iconOpens():'panel'}catch{}}
 $('iconOpens').addEventListener('change',async()=>{try{$('iconOpens').value=await HOST.iconOpens($('iconOpens').value)}catch{}});
 $('panelPlace').addEventListener('change',async()=>{try{const r=await HOST.panelPlace($('panelPlace').value);$('panelPlace').value=r.place}catch{}});
+// 설정 → 단축키: the shell catches the next key press itself (so ⌘O is recorded, not run) and says who has keys already in use.
+async function loadKeys(){if(!HOST?.shortcuts){$('keysSec').hidden=true;return}$('keysSec').hidden=false;try{drawKeys(await HOST.shortcuts())}catch{}}
+function drawKeys(r){const list=$('keysList');list.textContent='';
+ for(const k of r.rows){const row=document.createElement('div');row.className='keyRow';const name=document.createElement('span');name.className='name';name.textContent=k.label;row.append(name);
+  if(k.changed){const back=document.createElement('button');back.type='button';back.className='keyBack';back.textContent='기본값';back.onclick=async()=>{try{drawKeys(await HOST.shortcutReset(k.id))}catch{}};row.append(back)}
+  const chip=document.createElement('button');chip.type='button';chip.className='keyChip';chip.textContent=k.keys||'없음';chip.setAttribute('aria-label',`${k.label} 단축키: ${k.keys||'없음'}`);
+  chip.onclick=async()=>{if(chip.dataset.rec==='1'){HOST.shortcutRecord('');return}for(const c of list.querySelectorAll('.keyChip[data-rec="1"]'))c.dataset.rec='';chip.dataset.rec='1';chip.textContent='키를 누르세요';try{drawKeys(await HOST.shortcutRecord(k.id))}catch{loadKeys()}};
+  row.append(chip);list.append(row)}
+ $('keysMsg').textContent=r.message||'';$('keysMsg').hidden=!r.message;$('keysReset').hidden=!r.rows.some(k=>k.changed)}
+$('keysReset').onclick=async()=>{try{drawKeys(await HOST.shortcutReset('all'))}catch{}};
 $('panelReset').onclick=async()=>{try{const r=await HOST.panelPlace('',true);$('panelPlace').value=r.place;$('panelReset').textContent='초기화했어요 ✓';setTimeout(()=>{$('panelReset').textContent='위치 초기화'},1600)}catch{}};
 // ---- bots (ui/bots.mjs): the list, the current one, its details, and making one ----
 let bots=[],curBot='bisu';try{curBot=localStorage.getItem('bisu.bot')||'bisu'}catch{}

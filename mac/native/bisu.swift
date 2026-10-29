@@ -409,6 +409,9 @@ let shimJS = """
     move: (x, y) => post('move', {x, y}),
     panelPlace: (place, reset) => call('panelPlace', {place: place || '', reset: !!reset}),
     iconOpens: value => call('iconOpens', {value: value || ''}),
+    shortcuts: () => call('shortcuts'),
+    shortcutRecord: id => call('shortcutRecord', {id: id || ''}),
+    shortcutReset: id => call('shortcutReset', {id}),
     teachStart: () => call('teachStart'),
     teachStop: () => call('teachStop'),
     teachState: () => call('teachState'),
@@ -503,6 +506,134 @@ final class Dialogs: NSObject, WKUIDelegate {
 
 // MARK: - the shell
 
+// MARK: - shortcuts
+
+/// A key combination as macOS menus show it (⌃⌥⇧⌘, then the key). `code` is the key's virtual code, which the
+/// global key needs; `key` is the character a menu item needs.
+struct Combo: Equatable {
+  var code: UInt16
+  var mods: NSEvent.ModifierFlags
+  var key: String
+
+  private static func fn(_ v: Int) -> String { String(Character(UnicodeScalar(UInt32(v))!)) }
+  /// Keys that are not a character, with the name a menu gives them.
+  static let special: [UInt16: (key: String, label: String)] = {
+    var m: [UInt16: (key: String, label: String)] = [
+      49: (" ", "Space"), 36: ("\r", "↩"), 48: ("\t", "⇥"), 51: ("\u{8}", "⌫"), 117: ("\u{7f}", "⌦"), 53: ("\u{1b}", "⎋"),
+      123: (fn(NSLeftArrowFunctionKey), "←"), 124: (fn(NSRightArrowFunctionKey), "→"),
+      125: (fn(NSDownArrowFunctionKey), "↓"), 126: (fn(NSUpArrowFunctionKey), "↑"),
+    ]
+    for (i, code) in [122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111].enumerated() {
+      m[UInt16(code)] = (fn(NSF1FunctionKey + i), "F\(i + 1)")
+    }
+    return m
+  }()
+  /// The US layout, for a key whose character the current layout does not give as plain ASCII.
+  private static let us: [UInt16: String] = [0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x", 8: "c", 9: "v", 11: "b",
+    12: "q", 13: "w", 14: "e", 15: "r", 16: "y", 17: "t", 18: "1", 19: "2", 20: "3", 21: "4", 22: "6", 23: "5", 24: "=", 25: "9",
+    26: "7", 27: "-", 28: "8", 29: "0", 30: "]", 31: "o", 32: "u", 33: "[", 34: "i", 35: "p", 37: "l", 38: "j", 39: "'", 40: "k",
+    41: ";", 42: "\\", 43: ",", 44: "/", 45: "n", 46: "m", 47: ".", 50: "`"]
+
+  init(code: UInt16, mods: NSEvent.ModifierFlags, key: String) {
+    self.code = code
+    self.mods = mods.intersection([.command, .option, .control, .shift])
+    self.key = key
+  }
+
+  /// The combination a key press makes; nil for a key a menu cannot show.
+  init?(event e: NSEvent) {
+    if let s = Combo.special[e.keyCode] { self.init(code: e.keyCode, mods: e.modifierFlags, key: s.key); return }
+    let typed = e.characters(byApplyingModifiers: [])?.lowercased() ?? ""
+    let plain = typed.count == 1 && typed.unicodeScalars.allSatisfy { $0.value > 0x20 && $0.value < 0x7f }
+    guard let key = plain ? typed : Combo.us[e.keyCode] else { return nil }
+    self.init(code: e.keyCode, mods: e.modifierFlags, key: key)
+  }
+
+  init?(json j: [String: Any]) {
+    guard let code = j["code"] as? Int, let mods = j["mods"] as? Int, let key = j["key"] as? String, !key.isEmpty else { return nil }
+    self.init(code: UInt16(code), mods: NSEvent.ModifierFlags(rawValue: UInt(mods)), key: key)
+  }
+
+  var json: [String: Any] { ["code": Int(code), "mods": Int(mods.rawValue), "key": key] }
+
+  var label: String {
+    var s = ""
+    if mods.contains(.control) { s += "⌃" }
+    if mods.contains(.option) { s += "⌥" }
+    if mods.contains(.shift) { s += "⇧" }
+    if mods.contains(.command) { s += "⌘" }
+    return s + (Combo.special[code]?.label ?? key.uppercased())
+  }
+
+  var carbonMods: UInt32 {
+    (mods.contains(.command) ? UInt32(cmdKey) : 0) | (mods.contains(.option) ? UInt32(optionKey) : 0)
+      | (mods.contains(.control) ? UInt32(controlKey) : 0) | (mods.contains(.shift) ? UInt32(shiftKey) : 0)
+  }
+
+  /// Typing stays typing: a shortcut has ⌘, ⌃ or ⌥, unless it is a function key.
+  var usable: Bool { !mods.isDisjoint(with: [.command, .option, .control]) || Combo.special[code]?.label.hasPrefix("F") == true }
+
+  static func == (a: Combo, b: Combo) -> Bool { a.code == b.code && a.mods == b.mods }
+}
+
+/// 설정 → 단축키. The defaults are the keys bisu always had; desktop.json keeps only what someone changed
+/// ("shortcuts": {id: combo, or {} for none}). Text editing, hide, quit, minimize and close keep the system's keys.
+enum Shortcuts {
+  struct Command { let id: String; let label: String; let def: Combo?; let global: Bool }
+  static let commands = [
+    Command(id: "talk", label: "덱 인턴 부르기 (어느 앱에서나)", def: Combo(code: 49, mods: .option, key: " "), global: true),
+    Command(id: "settings", label: "설정…", def: Combo(code: 43, mods: .command, key: ","), global: false),
+    Command(id: "full", label: "전체 창 열기", def: Combo(code: 31, mods: .command, key: "o"), global: false),
+    Command(id: "suggest", label: "지금 제안 받기", def: nil, global: false),
+  ]
+  static let fixed: [(Combo, String)] = [
+    (Combo(code: 12, mods: .command, key: "q"), "종료"), (Combo(code: 4, mods: .command, key: "h"), "가리기"),
+    (Combo(code: 4, mods: [.command, .option], key: "h"), "기타 가리기"), (Combo(code: 6, mods: .command, key: "z"), "실행 취소"),
+    (Combo(code: 6, mods: [.command, .shift], key: "z"), "실행 복귀"), (Combo(code: 7, mods: .command, key: "x"), "오려두기"),
+    (Combo(code: 8, mods: .command, key: "c"), "복사하기"), (Combo(code: 9, mods: .command, key: "v"), "붙여넣기"),
+    (Combo(code: 9, mods: [.command, .option, .shift], key: "v"), "붙여넣기 및 스타일 일치"), (Combo(code: 0, mods: .command, key: "a"), "모두 선택"),
+    (Combo(code: 46, mods: .command, key: "m"), "최소화"), (Combo(code: 13, mods: .command, key: "w"), "닫기"),
+  ]
+
+  static func saved() -> [String: Any] { readState()["shortcuts"] as? [String: Any] ?? [:] }
+
+  static func combo(_ id: String) -> Combo? {
+    if let v = saved()[id] as? [String: Any] { return Combo(json: v) }
+    return commands.first { $0.id == id }?.def
+  }
+
+  /// Who already has these keys, other than `id` itself.
+  static func owner(of c: Combo, except id: String) -> String? {
+    if let f = fixed.first(where: { $0.0 == c }) { return f.1 }
+    return commands.first { $0.id != id && combo($0.id) == c }?.label
+  }
+
+  static func set(_ id: String, _ c: Combo?) {
+    var s = saved()
+    if c == commands.first(where: { $0.id == id })?.def { s.removeValue(forKey: id) } else { s[id] = c?.json ?? [String: Any]() }
+    saveState(["shortcuts": s])
+  }
+
+  static func reset(_ id: String) {
+    var s = saved()
+    if id == "all" { s = [:] } else { s.removeValue(forKey: id) }
+    saveState(["shortcuts": s])
+  }
+
+  static func rows() -> [[String: Any]] {
+    commands.map { ["id": $0.id, "label": $0.label, "keys": combo($0.id)?.label ?? "", "changed": saved()[$0.id] != nil, "global": $0.global] }
+  }
+}
+
+extension NSMenuItem {
+  /// Shows (and answers to) `combo`, or no keys.
+  func keys(_ combo: Combo?) -> NSMenuItem {
+    keyEquivalent = combo?.key ?? ""
+    keyEquivalentModifierMask = combo?.mods ?? []
+    return self
+  }
+}
+
 final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, WKNavigationDelegate, UNUserNotificationCenterDelegate {
   private var statusItem: NSStatusItem!
   /// The screen the full window should open on ("settings" from the menu or the panel); empty for the last one.
@@ -525,7 +656,11 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
   private var showCount = 0
   private var axMenuItem: NSMenuItem?
 
-  private let shortcutLabel = "⌥Space"
+  private var shortcutLabel: String { Shortcuts.combo("talk")?.label ?? "단축키 없음" }
+  /// 설정 → 단축키 while a row waits for its keys: the key watcher, the page's answer, and the 15-second limit.
+  private var keyMonitor: Any?
+  private var keyReply: ((Any?) -> Void)?
+  private var keyTimer: Timer?
   private var quitting = false
   /// What the chats are doing, for the menu bar icon: "" (nothing), "working", or "waiting" (an
   /// approval nobody has answered). Polled from the engine, because the panel's page stops
@@ -548,6 +683,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     // terminationHandler runs on a background queue; everything it leads to touches AppKit.
     engine.onExit = { [weak self] in DispatchQueue.main.async { self?.engineExited() } }
     buildStatusItem()
+    buildMainMenu()
     buildPanel()
     registerHotKey()
     setUpNotifications()
@@ -810,6 +946,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     menu.addItem(.separator())
 
     let show = NSMenuItem(title: panel?.isVisible == true ? "덱 인턴 숨기기" : "덱 인턴에게 말하기", action: #selector(toggleFromMenu), keyEquivalent: "")
+      .keys(Shortcuts.combo("talk"))
     show.target = self
     menu.addItem(show)
     menu.addItem(.separator())
@@ -824,14 +961,17 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       menu.addItem(ax)
     }
     let ask = NSMenuItem(title: "지금 제안 받기", action: #selector(askForSuggestion), keyEquivalent: "")
+      .keys(Shortcuts.combo("suggest"))
     ask.target = self
     menu.addItem(ask)
     menu.addItem(.separator())
 
-    let full = NSMenuItem(title: "전체 창 열기", action: #selector(openFullFromMenu), keyEquivalent: "o")
+    let full = NSMenuItem(title: "전체 창 열기", action: #selector(openFullFromMenu), keyEquivalent: "")
+      .keys(Shortcuts.combo("full"))
     full.target = self
     menu.addItem(full)
-    let settings = NSMenuItem(title: "설정…", action: #selector(openSettingsFromMenu), keyEquivalent: ",")
+    let settings = NSMenuItem(title: "설정…", action: #selector(openSettingsFromMenu), keyEquivalent: "")
+      .keys(Shortcuts.combo("settings"))
     settings.target = self
     menu.addItem(settings)
     let quit = NSMenuItem(title: "bisu 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -898,13 +1038,24 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       return noErr
     }, 1, &spec, selfPtr, nil)
 
+    applyHotKey()
+  }
+
+  /// Registers the global key from 설정 → 단축키 (⌥Space unless changed), or `combo` to try another one.
+  /// False when it could not be registered, which is usually another app holding the same keys.
+  @discardableResult
+  private func applyHotKey(_ combo: Combo? = Shortcuts.combo("talk")) -> Bool {
+    if let h = hotKey { UnregisterEventHotKey(h); hotKey = nil }
+    guard let combo else { return true }
     let hotKeyID = EventHotKeyID(signature: OSType(0x62697375), id: 1) // 'bisu'
-    let status = RegisterEventHotKey(UInt32(kVK_Space), UInt32(optionKey), hotKeyID,
+    let status = RegisterEventHotKey(UInt32(combo.code), combo.carbonMods, hotKeyID,
                                     GetApplicationEventTarget(), 0, &hotKey)
     if status != noErr {
       log("hot key could not be registered (\(status))")
-      statusItem?.button?.toolTip = "bisu · \(shortcutLabel) is taken by another app"
+      statusItem?.button?.toolTip = "bisu · \(combo.label) is taken by another app"
+      return false
     }
+    return true
   }
 
   // MARK: panel
@@ -1269,6 +1420,140 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     log("page failed (provisional):", error.localizedDescription)
   }
 
+  // MARK: app menu and 설정 → 단축키
+
+  /// The app's own menu. bisu shows no menu bar (it is an accessory app), but macOS still sends a window's key
+  /// equivalents through it: without 편집 the panel's text box ignored ⌘C ⌘V ⌘A ⌘Z. Changes in 설정 → 단축키
+  /// rebuild it.
+  func buildMainMenu() {
+    func item(_ title: String, _ action: Selector, _ key: String, _ mods: NSEvent.ModifierFlags = .command,
+              target: AnyObject? = nil) -> NSMenuItem {
+      let i = NSMenuItem(title: title, action: action, keyEquivalent: key)
+      i.keyEquivalentModifierMask = mods
+      i.target = target
+      return i
+    }
+    func mine(_ title: String, _ action: Selector, _ id: String) -> NSMenuItem {
+      let i = NSMenuItem(title: title, action: action, keyEquivalent: "").keys(Shortcuts.combo(id))
+      i.target = self
+      return i
+    }
+    func top(_ title: String, _ items: [NSMenuItem]) -> NSMenuItem {
+      let menu = NSMenu(title: title)
+      items.forEach(menu.addItem)
+      let i = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+      i.submenu = menu
+      return i
+    }
+    let main = NSMenu()
+    main.addItem(top("덱 인턴", [
+      mine("설정…", #selector(openSettingsFromMenu), "settings"),
+      mine("전체 창 열기", #selector(openFullFromMenu), "full"),
+      mine("지금 제안 받기", #selector(askForSuggestion), "suggest"),
+      .separator(),
+      item("덱 인턴 가리기", #selector(NSApplication.hide(_:)), "h"),
+      item("기타 가리기", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
+      .separator(),
+      item("덱 인턴 종료", #selector(NSApplication.terminate(_:)), "q"),
+    ]))
+    main.addItem(top("편집", [
+      item("실행 취소", Selector(("undo:")), "z"),
+      item("실행 복귀", Selector(("redo:")), "z", [.command, .shift]),
+      .separator(),
+      item("오려두기", #selector(NSText.cut(_:)), "x"),
+      item("복사하기", #selector(NSText.copy(_:)), "c"),
+      item("붙여넣기", #selector(NSText.paste(_:)), "v"),
+      item("붙여넣기 및 스타일 일치", #selector(NSTextView.pasteAsPlainText(_:)), "v", [.command, .option, .shift]),
+      item("모두 선택", #selector(NSText.selectAll(_:)), "a"),
+    ]))
+    main.addItem(top("윈도우", [
+      item("최소화", #selector(NSWindow.performMiniaturize(_:)), "m"),
+      item("닫기", #selector(closeKeyWindow), "w", target: self),
+    ]))
+    NSApp.mainMenu = main
+  }
+
+  /// ⌘W: the panel hides (it has no close button); any other window closes.
+  @objc private func closeKeyWindow() {
+    guard let w = NSApp.keyWindow else { return }
+    if w === panel { hidePanel() } else { w.performClose(nil) }
+  }
+
+  private func shortcutRows(_ message: String = "") -> [String: Any] { ["rows": Shortcuts.rows(), "message": message] }
+
+  /// Waits for the next key press and makes it `id`'s keys, answering the page when it comes, after 15 seconds, or
+  /// when cancelled. The press is caught here, not in the page, so ⌘O is recorded instead of opening the window;
+  /// the global key is let go meanwhile so pressing it records it instead of hiding the panel.
+  private func recordShortcut(_ id: String, reply: @escaping (Any?) -> Void) {
+    endRecording("")
+    guard let command = Shortcuts.commands.first(where: { $0.id == id }) else { reply(shortcutRows()); return }
+    keyReply = reply
+    if let h = hotKey { UnregisterEventHotKey(h); hotKey = nil }
+    keyTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in self?.endRecording("") }
+    keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
+      guard let self else { return e }
+      let bare = e.modifierFlags.isDisjoint(with: [.command, .option, .control, .shift])
+      if bare && e.keyCode == 53 { self.endRecording(""); return nil }
+      if bare && (e.keyCode == 51 || e.keyCode == 117) {
+        Shortcuts.set(id, nil)
+        self.endRecording("「\(command.label)」 단축키를 없앴어요.")
+        return nil
+      }
+      guard let c = Combo(event: e) else { return nil }
+      if !c.usable { self.endRecording("⌘·⌃·⌥ 중 하나와 함께 눌러 주세요."); return nil }
+      if let by = Shortcuts.owner(of: c, except: id) { self.endRecording("\(c.label)는 「\(by)」에서 쓰고 있어요."); return nil }
+      if command.global && !self.applyHotKey(c) { self.endRecording("\(c.label)는 다른 앱이 이미 쓰고 있어요."); return nil }
+      Shortcuts.set(id, c)
+      self.endRecording("「\(command.label)」 → \(c.label)")
+      return nil
+    }
+  }
+
+  private func endRecording(_ message: String) {
+    guard keyMonitor != nil || keyReply != nil else { return }
+    if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+    keyTimer?.invalidate()
+    keyTimer = nil
+    applyHotKey()
+    buildMainMenu()
+    refreshTray()
+    let reply = keyReply
+    keyReply = nil
+    reply?(shortcutRows(message))
+  }
+
+  /// `bisu --shortcut-test`: the menu answers ⌘C ⌘V ⌘A ⌘Z … with the standard actions, keys are named the way
+  /// menus name them, and taken keys are refused. Reads desktop.json; writes nothing.
+  func shortcutSelfTest() -> Bool {
+    buildMainMenu()
+    var ok = true
+    func check(_ good: Bool, _ what: String) { if !good { ok = false; print("FAIL", what) } }
+    let items = NSApp.mainMenu?.items.flatMap { $0.submenu?.items ?? [] } ?? []
+    func has(_ key: String, _ mods: NSEvent.ModifierFlags, _ action: String) -> Bool {
+      items.contains { $0.keyEquivalent == key && $0.keyEquivalentModifierMask == mods && $0.action.map(NSStringFromSelector) == action }
+    }
+    for (key, action) in [("c", "copy:"), ("v", "paste:"), ("x", "cut:"), ("a", "selectAll:"), ("z", "undo:"), ("q", "terminate:"),
+                          ("h", "hide:"), ("m", "performMiniaturize:"), ("w", "closeKeyWindow")] {
+      check(has(key, .command, action), "⌘\(key.uppercased()) → \(action)")
+    }
+    check(has("z", [.command, .shift], "redo:"), "⇧⌘Z → redo:")
+    let press = { (code: UInt16, chars: String, mods: NSEvent.ModifierFlags) in
+      Combo(event: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: mods, timestamp: 0, windowNumber: 0, context: nil,
+                                    characters: chars, charactersIgnoringModifiers: chars, isARepeat: false, keyCode: code)!)
+    }
+    check(press(17, "t", [.command, .shift])?.label == "⇧⌘T", "⇧⌘T")
+    check(press(49, " ", .option)?.label == "⌥Space", "⌥Space")
+    check(press(33, "[", [.command, .control])?.label == "⌃⌘[", "⌃⌘[")
+    check(press(122, "", .command)?.label == "⌘F1", "⌘F1")
+    check(press(17, "t", .shift)?.usable == false && press(122, "", [])?.usable == true, "⌘⌃⌥ or a function key")
+    check(Shortcuts.owner(of: Combo(code: 8, mods: .command, key: "c"), except: "full") == "복사하기", "⌘C is taken")
+    let defs = Shortcuts.commands.compactMap(\.def)
+    check(Set(defs.map { "\($0.code)/\($0.mods.rawValue)" }).count == defs.count && !defs.contains { d in Shortcuts.fixed.contains { $0.0 == d } },
+          "defaults are distinct")
+    print(ok ? "shortcut test passed" : "shortcut test failed")
+    return ok
+  }
+
   // MARK: bridge commands
 
   func handle(cmd: String, args: [String: Any], id: Int?, from view: WKWebView? = nil) {
@@ -1399,6 +1684,19 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       if !NSWorkspace.shared.open(pane) {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.notifications")!)
       }
+    case "shortcuts":
+      reply(shortcutRows())
+    case "shortcutRecord":
+      // An empty id stops a recording the page gave up on (its row was pressed again).
+      let id = args["id"] as? String ?? ""
+      if id.isEmpty { endRecording(""); reply(shortcutRows()) } else { recordShortcut(id, reply: reply) }
+    case "shortcutReset":
+      let id = args["id"] as? String ?? ""
+      if id == "all" || Shortcuts.commands.contains(where: { $0.id == id }) { Shortcuts.reset(id) }
+      applyHotKey()
+      buildMainMenu()
+      refreshTray()
+      reply(shortcutRows())
     case "suggest":
       // How many suggestions are waiting unread, for the dot on the menu bar icon. The page reports
       // it after every poll, so nothing here has to know about the engine's schedule.
@@ -1567,6 +1865,7 @@ final class Panel: NSPanel {
 
 let app = NSApplication.shared
 let shell = Shell()
+if CommandLine.arguments.contains("--shortcut-test") { exit(shell.shortcutSelfTest() ? 0 : 1) }
 app.delegate = shell
 app.setActivationPolicy(.accessory)
 app.run()
