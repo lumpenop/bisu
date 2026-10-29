@@ -577,7 +577,8 @@ struct Combo: Equatable {
 }
 
 /// 설정 → 단축키. The defaults are the keys bisu always had; desktop.json keeps only what someone changed
-/// ("shortcuts": {id: combo, or {} for none}). Text editing, hide, quit, minimize and close keep the system's keys.
+/// ("shortcuts": {id: combo, or {} for none}). 창 닫기 and 종료 can be changed too; text editing, hide and minimize
+/// keep the system's keys.
 enum Shortcuts {
   struct Command { let id: String; let label: String; let def: Combo?; let global: Bool }
   static let commands = [
@@ -585,14 +586,16 @@ enum Shortcuts {
     Command(id: "settings", label: "설정…", def: Combo(code: 43, mods: .command, key: ","), global: false),
     Command(id: "full", label: "전체 창 열기", def: Combo(code: 31, mods: .command, key: "o"), global: false),
     Command(id: "suggest", label: "지금 제안 받기", def: nil, global: false),
+    Command(id: "close", label: "창 닫기", def: Combo(code: 13, mods: .command, key: "w"), global: false),
+    Command(id: "quit", label: "덱 인턴 종료", def: Combo(code: 12, mods: .command, key: "q"), global: false),
   ]
   static let fixed: [(Combo, String)] = [
-    (Combo(code: 12, mods: .command, key: "q"), "종료"), (Combo(code: 4, mods: .command, key: "h"), "가리기"),
+    (Combo(code: 4, mods: .command, key: "h"), "가리기"),
     (Combo(code: 4, mods: [.command, .option], key: "h"), "기타 가리기"), (Combo(code: 6, mods: .command, key: "z"), "실행 취소"),
     (Combo(code: 6, mods: [.command, .shift], key: "z"), "실행 복귀"), (Combo(code: 7, mods: .command, key: "x"), "오려두기"),
     (Combo(code: 8, mods: .command, key: "c"), "복사하기"), (Combo(code: 9, mods: .command, key: "v"), "붙여넣기"),
     (Combo(code: 9, mods: [.command, .option, .shift], key: "v"), "붙여넣기 및 스타일 일치"), (Combo(code: 0, mods: .command, key: "a"), "모두 선택"),
-    (Combo(code: 46, mods: .command, key: "m"), "최소화"), (Combo(code: 13, mods: .command, key: "w"), "닫기"),
+    (Combo(code: 46, mods: .command, key: "m"), "최소화"),
   ]
 
   static func saved() -> [String: Any] { readState()["shortcuts"] as? [String: Any] ?? [:] }
@@ -974,7 +977,8 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       .keys(Shortcuts.combo("settings"))
     settings.target = self
     menu.addItem(settings)
-    let quit = NSMenuItem(title: "bisu 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+    let quit = NSMenuItem(title: "덱 인턴 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+      .keys(Shortcuts.combo("quit"))
     menu.addItem(quit)
     return menu
   }
@@ -1433,9 +1437,9 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       i.target = target
       return i
     }
-    func mine(_ title: String, _ action: Selector, _ id: String) -> NSMenuItem {
+    func mine(_ title: String, _ action: Selector, _ id: String, target: AnyObject? = nil) -> NSMenuItem {
       let i = NSMenuItem(title: title, action: action, keyEquivalent: "").keys(Shortcuts.combo(id))
-      i.target = self
+      i.target = target ?? self
       return i
     }
     func top(_ title: String, _ items: [NSMenuItem]) -> NSMenuItem {
@@ -1454,7 +1458,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       item("덱 인턴 가리기", #selector(NSApplication.hide(_:)), "h"),
       item("기타 가리기", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
       .separator(),
-      item("덱 인턴 종료", #selector(NSApplication.terminate(_:)), "q"),
+      mine("덱 인턴 종료", #selector(NSApplication.terminate(_:)), "quit", target: NSApp),
     ]))
     main.addItem(top("편집", [
       item("실행 취소", Selector(("undo:")), "z"),
@@ -1468,7 +1472,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     ]))
     main.addItem(top("윈도우", [
       item("최소화", #selector(NSWindow.performMiniaturize(_:)), "m"),
-      item("닫기", #selector(closeKeyWindow), "w", target: self),
+      mine("닫기", #selector(closeKeyWindow), "close"),
     ]))
     NSApp.mainMenu = main
   }
@@ -1532,10 +1536,19 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     func has(_ key: String, _ mods: NSEvent.ModifierFlags, _ action: String) -> Bool {
       items.contains { $0.keyEquivalent == key && $0.keyEquivalentModifierMask == mods && $0.action.map(NSStringFromSelector) == action }
     }
-    for (key, action) in [("c", "copy:"), ("v", "paste:"), ("x", "cut:"), ("a", "selectAll:"), ("z", "undo:"), ("q", "terminate:"),
-                          ("h", "hide:"), ("m", "performMiniaturize:"), ("w", "closeKeyWindow")] {
+    for (key, action) in [("c", "copy:"), ("v", "paste:"), ("x", "cut:"), ("a", "selectAll:"), ("z", "undo:"),
+                          ("h", "hide:"), ("m", "performMiniaturize:")] {
       check(has(key, .command, action), "⌘\(key.uppercased()) → \(action)")
     }
+    // 창 닫기 and 종료 answer to whatever 설정 → 단축키 gave them (⌘W and ⌘Q unless changed).
+    for (id, action) in [("close", "closeKeyWindow"), ("quit", "terminate:")] {
+      let c = Shortcuts.combo(id)
+      check(c.map { has($0.key, $0.mods, action) } ?? !items.contains { $0.action.map(NSStringFromSelector) == action && !$0.keyEquivalent.isEmpty },
+            "\(id) → \(action)")
+    }
+    check(Shortcuts.commands.first { $0.id == "quit" }?.def?.label == "⌘Q" && Shortcuts.commands.first { $0.id == "close" }?.def?.label == "⌘W",
+          "창 닫기 ⌘W and 종료 ⌘Q by default")
+    check(Shortcuts.owner(of: Combo(code: 46, mods: .command, key: "m"), except: "quit") == "최소화", "⌘M stays 최소화")
     check(has("z", [.command, .shift], "redo:"), "⇧⌘Z → redo:")
     let press = { (code: UInt16, chars: String, mods: NSEvent.ModifierFlags) in
       Combo(event: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: mods, timestamp: 0, windowNumber: 0, context: nil,
