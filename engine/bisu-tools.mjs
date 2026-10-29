@@ -10,6 +10,7 @@ import {DIR as JOBS_DIR, parseCron, nextRun} from '../ui/jobs.mjs';
 import * as goals from '../ui/goals.mjs';
 import * as bots from '../ui/bots.mjs';
 import * as routines from '../ui/routines.mjs';
+import * as R from './routes.mjs';
 
 const ok = text => ({text});
 const err = text => ({text, error: true});
@@ -20,18 +21,42 @@ export const BISU_TOOLS = {
     description: 'Search the web for current information. Returns titles, links, dates and snippets; read a promising page with web_fetch.',
     parameters: {type: 'object', properties: {query: {type: 'string'}, count: {type: 'integer', description: 'results, default 6, at most 10'}}, required: ['query']},
     kind: 'net',
+    // Z.AI's search engine first, with every Z.AI key in the person's order. A key that is out of money or refused rests
+    // like any model call (engine/routes.mjs) and the search goes to OpenRouter's Perplexity Sonar instead (about
+    // $0.006 a search), with the OpenRouter keys bisu already has.
     async run(ctx, {query, count = 6}) {
-      const base = (process.env.GLM_BASE_URL || 'https://api.z.ai').replace(/\/$/, '') + '/api/paas/v4';
-      const r = await fetch(base + '/web_search', {
-        method: 'POST', signal: AbortSignal.any([AbortSignal.timeout(20_000), ...(ctx.signal ? [ctx.signal] : [])]),
-        headers: {authorization: 'Bearer ' + (process.env.GLM_API_KEY || ''), 'content-type': 'application/json'},
-        body: JSON.stringify({search_engine: 'search-prime', search_query: String(query).slice(0, 300), count: Math.min(10, Math.max(1, count | 0 || 6))}),
-      });
-      const j = await r.json().catch(() => null);
-      if (!r.ok) return err(`Search failed (${r.status}): ${j?.error?.message || ''}`);
-      const items = j?.search_result || [];
-      if (!items.length) return ok(`No results for "${query}".`);
-      return ok(items.map((x, i) => `${i + 1}. ${x.title || '(untitled)'}${x.publish_date ? ` · ${x.publish_date}` : ''}\n   ${x.link}\n   ${String(x.content || '').replace(/\s+/g, ' ').slice(0, 300)}`).join('\n'));
+      const q = String(query).slice(0, 300), n = Math.min(10, Math.max(1, count | 0 || 6)), failed = [];
+      const signal = () => AbortSignal.any([AbortSignal.timeout(30_000), ...(ctx.signal ? [ctx.signal] : [])]);
+      const post = (k, p, body) => fetch(k.base.replace(/\/$/, '') + p, {method: 'POST', signal: signal(), headers: {authorization: 'Bearer ' + k.key, 'content-type': 'application/json'}, body: JSON.stringify(body)})
+        .then(async r => ({r, j: await r.json().catch(() => null)}), e => ({r: {ok: false, status: 0}, j: {error: {message: e.message}}}));
+      const zai = async k => {
+        const {r, j} = await post(k, '/api/paas/v4/web_search', {search_engine: 'search-prime', search_query: q, count: n});
+        if (!r.ok) return {r, j};
+        const items = j?.search_result || [];
+        return {r, text: items.length ? items.map((x, i) => `${i + 1}. ${x.title || '(untitled)'}${x.publish_date ? ` · ${x.publish_date}` : ''}\n   ${x.link}\n   ${String(x.content || '').replace(/\s+/g, ' ').slice(0, 300)}`).join('\n') : `No results for "${query}".`};
+      };
+      const sonar = async k => {
+        const {r, j} = await post(k, '/api/v1/chat/completions', {model: 'perplexity/sonar', max_tokens: 700, messages: [
+          {role: 'system', content: 'Search the web and report what you find: the key facts with their dates, in the language of the query. No preamble.'},
+          {role: 'user', content: q}]});
+        if (!r.ok) return {r, j};
+        const m = j?.choices?.[0]?.message || {}, seen = new Set(), src = [];
+        for (const a of m.annotations || []) { const c = a?.url_citation; if (c?.url && !seen.has(c.url)) { seen.add(c.url); src.push({title: c.title, url: c.url, text: c.content}) } }
+        for (const u of j?.citations || []) if (typeof u === 'string' && !seen.has(u)) { seen.add(u); src.push({url: u}) }
+        const summary = String(m.content || '').trim().slice(0, 2000);
+        return {r, text: !summary && !src.length ? `No results for "${query}".` : `${summary}${src.length ? '\n\nSources:\n' + src.slice(0, n).map((x, i) => `${i + 1}. ${x.title || x.url}\n   ${x.url}${x.text ? '\n   ' + String(x.text).replace(/\s+/g, ' ').slice(0, 300) : ''}`).join('\n') : ''}`};
+      };
+      // Keys that are resting are tried only after every other one.
+      const all = [...R.keys().filter(k => k.site === R.ZAI_SITE).map(k => ({k, go: zai, label: 'Z.AI'})), ...R.routes('openrouter').map(k => ({k, go: sonar, label: 'OpenRouter'}))]
+        .map(x => ({...x, resting: R.resting(x.k.name)}));
+      for (const {k, go, label} of [...all.filter(x => !x.resting), ...all.filter(x => x.resting)]) {
+        const {r, j, text} = await go(k);
+        if (text != null) { R.rest(k.name, 0); return ok(text) }
+        const why = j?.error?.message || '';
+        failed.push(`${label} ${r.status} ${why}`.trim());
+        if (R.failover(r.status) || !r.status) R.rest(k.name, R.restFor(r.status, why));
+      }
+      return err(failed.length ? `Search failed: ${failed.join('; ')}` : 'Search failed: no Z.AI or OpenRouter key. Save one in Dec.');
     },
   },
   remember: {
