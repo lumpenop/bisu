@@ -24,9 +24,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 import { randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+const require_ = createRequire(import.meta.url);
 import * as proactive from './proactive.mjs';
 import * as routines from './routines.mjs';
 import { holdsSchedule, releaseSchedule } from './lock.mjs';
@@ -120,7 +122,7 @@ function parseJob(file) {
   const slug = path.basename(file, '.md');
   let st = null, text = '';
   try { st = fs.statSync(file); text = fs.readFileSync(file, 'utf8') } catch (e) { return { slug, file, error: e.message } }
-  const job = { slug, file, mtime: st.mtimeMs, hash: createHash('sha256').update(text).digest('hex'), name: slug, schedule: null, cron: null, at: null, cwd: os.homedir(), tools: 'read', enabled: true, awake: false, bot: 'bisu', model: null, timeoutMin: 10, prompt: '', error: null };
+  const job = { slug, file, mtime: st.mtimeMs, hash: createHash('sha256').update(text).digest('hex'), name: slug, schedule: null, cron: null, at: null, cwd: os.homedir(), tools: 'read', enabled: true, awake: false, cu: false, bot: 'bisu', model: null, timeoutMin: 10, prompt: '', error: null };
   try {
     const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
     if (!m) throw Error('the file needs a frontmatter block (--- … ---) and the request below it');
@@ -135,6 +137,8 @@ function parseJob(file) {
       else if (k === 'tools') { if (!(v in TOOLS)) throw Error(`tools: "${v}" — use read, edit or full`); job.tools = v }
       else if (k === 'enabled') job.enabled = !/^(false|no|off|0)$/i.test(v);
       else if (k === 'awake') job.awake = /^(true|yes|on|1)$/i.test(v);
+      // Computer use (cu_* tools: look at and press things in other apps), for jobs that watch another app.
+      else if (k === 'cu') job.cu = /^(true|yes|on|1)$/i.test(v);
       // Which bot it runs as (ui/bots.mjs); a job without one belongs to the default bot.
       else if (k === 'bot' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(v)) job.bot = v;
       else if (k === 'routine' && routines.validSlug(v)) job.routine = v;
@@ -155,6 +159,7 @@ function parseJob(file) {
     if (!job.cron && !job.at) throw Error('needs a `schedule:` (cron, five fields) or an `at:` (one time)');
     if (!job.prompt) throw Error('the request below the frontmatter is empty');
     if (!fs.statSync(job.cwd, { throwIfNoEntry: false })?.isDirectory()) throw Error(`cwd: ${job.cwd} is not a folder`);
+    if (job.cu && job.tools !== 'full') throw Error('cu: true needs tools: full (it presses things in other apps)');
     if (job.tools !== 'read') {
       const cwd = path.resolve(job.cwd);
       const inside = (a, b) => a === b || a.startsWith(b + path.sep);
@@ -245,7 +250,7 @@ function runClaude(job, models) {
       models?.dev || process.env.BISU_DEV_MODEL || 'deepseek/deepseek-v4.1-flash', path.join(root, 'agents.json'), '-p', prompt, '--output-format', 'json'];
     if (job.tools === 'edit') args.push('--permission-mode', 'acceptEdits');
     if (job.tools === 'full') args.push('--dangerously-skip-permissions');
-    const env = { ...process.env, BISU_PROMPT: path.join(root, 'prompt-job.md'), BISU_CU: '0', BISU_EFFORT: '', BISU_BOT: job.bot || 'bisu' };
+    const env = { ...process.env, BISU_PROMPT: path.join(root, 'prompt-job.md'), BISU_CU: job.cu ? '1' : '0', BISU_EFFORT: '', BISU_BOT: job.bot || 'bisu' };
     if (TOOLS[job.tools]) env.BISU_TOOLS = TOOLS[job.tools]; else delete env.BISU_TOOLS;
     const proc = spawn('zsh', args, { cwd: job.cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
     child = proc;
@@ -289,18 +294,48 @@ export async function run(slug, { reason = 'timer', force = false } = {}) {
   const card = { id: randomUUID(), at: Date.now(), kind: 'job', job: job.slug, title: job.name, cwd: job.cwd, status: 'new', seen: false };
   try {
     const out = await runClaude(job, ctx.models);
-    record(job.slug, { lastRun: Date.now(), lastError: null, lastSession: out.session, lastResult: clean(out.text, 200) });
+    const { body, done, quiet } = markers(out.text);
+    record(job.slug, { lastRun: Date.now(), lastError: null, lastSession: out.session, lastResult: clean(body, 200) || (quiet ? '(조용)' : '') });
     running = null;
-    proactive.push({ ...card, body: out.text.trim().slice(0, 2000), sessionId: out.session });
-    return { ok: true, text: out.text, session: out.session, cost: out.cost };
+    if (done) finish(job);
+    if (!quiet || done) {
+      proactive.push({ ...card, title: done ? `${job.name} — 끝` : job.name, body: body.slice(0, 2000), sessionId: out.session });
+      notify(done ? `${job.name} — 끝` : job.name, body);
+    }
+    return { ok: true, text: out.text, session: out.session, cost: out.cost, done, quiet };
   } catch (e) {
     // A failure counts as the run: the next slot is the next try, and the card says what happened.
     const why = String(e.message || e).slice(0, 300);
     record(job.slug, { lastRun: Date.now(), lastError: why, lastSession: e.session || null });
     running = null;
     proactive.push({ ...card, title: `${job.name} — 실패`, body: why, sessionId: e.session || null, error: why });
+    notify(`${job.name} — 실패`, why);
     return { error: why };
   }
+}
+
+// What a run may end its answer with (prompt-job.md): [끝] — the job is finished and retires itself;
+// [조용] — nothing worth telling, so no card and no notification. Either on a line of its own.
+export function markers(text) {
+  let t = String(text ?? '');
+  const done = /^\s*\[(끝|DONE)\]\s*$/mi.test(t), quiet = /^\s*\[(조용|QUIET)\]\s*$/mi.test(t);
+  t = t.replace(/^\s*\[(끝|DONE|조용|QUIET)\]\s*$/gmi, '').trim();
+  return { body: t, done, quiet: quiet && !done };
+}
+// A finished job is moved to jobs/.done/, never deleted: the file is the person's.
+function finish(job) {
+  try {
+    const dir = path.join(DIR, '.done');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.renameSync(job.file, path.join(dir, `${job.slug}.${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '')}.md`));
+    fresh(); delete state.approved[job.slug]; save();
+  } catch (e) { console.error('bisu jobs: cannot retire', job.slug, e.message) }
+}
+// A macOS notification (Notification Center banner, no dialog). BISU_NOTIFY=0 turns it off.
+export function notify(title, body) {
+  if (process.env.BISU_NOTIFY === '0' || process.platform !== 'darwin') return;
+  const q = s => JSON.stringify(String(s).replace(/\s+/g, ' ').trim().slice(0, 180));
+  execFile('/usr/bin/osascript', ['-e', `display notification ${q(body || ' ')} with title "Dec Intern" subtitle ${q(title)}`], () => {});
 }
 
 // Enabling, disabling and deleting edit the person's file, since the file is the job.
@@ -384,6 +419,24 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     else if (out.skipped === 'approval') process.stdout.write(`bisu: ${arg} may change things and waits for approval in Settings (bisu ui)\n`);
     else if (out.skipped) process.stdout.write(`bisu: not now (${out.skipped})\n`);
     else process.stdout.write(`${out.text.trim()}\n\n(session ${out.session}${out.cost ? `, $${out.cost.toFixed(4)}` : ''})\n`);
+  } else if (mode === 'tick') {
+    // One look at the schedule, for launchd (`agent install`): runs only while no engine holds the schedule.
+    // launchd starts it bare every minute; only when a job is due does it start again through dec-secret,
+    // which turns the dec:// names into one-time tokens. Most minutes nothing runs and nothing is logged.
+    const secret = process.env.BISU_DEC_SECRET;
+    if (secret && /^dec:\/\//.test(process.env.OPENROUTER_API_KEY || '')) {
+      const now = Date.now();
+      const due = !running && holdsSchedule() && (fresh(), list().some(j => { const at = nextAt(j, now); return at !== null && at <= now }));
+      releaseSchedule();
+      if (due) {
+        const p = spawn(process.execPath, [secret, 'run', '--', process.execPath, fileURLToPath(import.meta.url), 'tick'], { stdio: 'inherit', env: { ...process.env, BISU_DEC_SECRET: '' } });
+        process.exitCode = await new Promise(res => p.on('close', c => res(c ?? 1)));
+      }
+    } else {
+      try { await tick() } finally { releaseSchedule() }
+    }
+  } else if (mode === 'agent') {
+    process.stdout.write(agent(arg) + '\n');
   } else if (mode === 'next' && arg) {
     const t = nextRun(parseCron(arg));
     process.stdout.write(`${t ? new Date(t).toString() : 'never'}\n`);
@@ -395,4 +448,47 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       if (j.lastRun) process.stdout.write(`    last ${when(j.lastRun)}: ${j.lastError ? `failed — ${j.lastError}` : j.lastResult || 'ok'}\n`);
     }
   }
+}
+
+// launchd: the schedule keeps running when the menu bar app is closed. Every minute launchd runs
+// `jobs.mjs tick`, which goes through dec-secret (keys by name only) when a job is due; while the app
+// or `bisu ui` is open, the scheduler lock is theirs and the tick does nothing.
+function agent(cmd) {
+  const label = 'com.bisu.jobs', plist = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
+  const uid = process.getuid(), run = (...a) => { try { return require_('child_process').execFileSync('/bin/launchctl', a, { encoding: 'utf8', stdio: 'pipe' }) } catch (e) { return String(e.stderr || e.message) } };
+  if (cmd === 'remove') { run('bootout', `gui/${uid}/${label}`); try { fs.unlinkSync(plist) } catch {} return 'removed' }
+  if (cmd !== 'install') return /state = running|last exit code/.test(run('print', `gui/${uid}/${label}`)) ? `installed (${plist})` : 'not installed';
+  const node = fs.realpathSync(process.execPath);
+  const secret = [path.join(os.homedir(), 'Library', 'Application Support', 'bisu', 'dec', 'sdk', 'dec-secret.mjs'), path.join(os.homedir(), 'Desktop', 'dec-browser-workbench', 'sdk', 'dec-secret.mjs')].find(f => fs.existsSync(f));
+  const args = [node, fileURLToPath(import.meta.url), 'tick'];
+  const logf = path.join(os.homedir(), 'Library', 'Logs', 'bisu-jobs.log');
+  const x = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const PATHS = [path.dirname(node), '/opt/homebrew/bin', '/usr/local/bin', path.join(os.homedir(), '.local', 'bin'), '/usr/bin', '/bin', '/usr/sbin', '/sbin'].join(':');
+  // Keys by name only, as the app passes them (mac/main.cjs): dec-secret swaps each dec:// for a one-time
+  // token. OpenAI only when dec holds it (computer use's decision model); a missing name stops dec-secret.
+  const env = { PATH: PATHS };
+  if (secret) {
+    env.BISU_DEC_SECRET = secret;
+    env.OPENROUTER_API_KEY = 'dec://OPENROUTER_API_KEY';
+    let names = '';
+    try { names = require_('child_process').execFileSync(node, [secret, 'list'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 6000 }) } catch {}
+    if (/dec:\/\/OPENAI_API_KEY\b/.test(names)) env.OPENAI_API_KEY = 'dec://OPENAI_API_KEY';
+  }
+  fs.mkdirSync(path.dirname(plist), { recursive: true });
+  fs.writeFileSync(plist, `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>${label}</string>
+<key>ProgramArguments</key><array>${args.map(a => `<string>${x(a)}</string>`).join('')}</array>
+<key>WorkingDirectory</key><string>${x(root)}</string>
+<key>EnvironmentVariables</key><dict>${Object.entries(env).map(([k, v]) => `<key>${k}</key><string>${x(v)}</string>`).join('')}</dict>
+<key>StartInterval</key><integer>60</integer>
+<key>RunAtLoad</key><true/>
+<key>ProcessType</key><string>Background</string>
+<key>StandardOutPath</key><string>${x(logf)}</string><key>StandardErrorPath</key><string>${x(logf)}</string>
+</dict></plist>
+`);
+  run('bootout', `gui/${uid}/${label}`);
+  const out = run('bootstrap', `gui/${uid}`, plist);
+  return out.trim() ? `launchctl: ${out.trim()}` : `installed (${plist})`;
 }
