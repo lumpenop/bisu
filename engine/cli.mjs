@@ -16,7 +16,7 @@ import {runTurn} from './loop.mjs';
 import {TOOLS, insideCwd, resolvePath} from './tools.mjs';
 import {Transcript, loadMessages} from './store.mjs';
 import * as judge from './judge.mjs';
-import {BISU_TOOLS} from './bisu-tools.mjs';
+import {BISU_TOOLS, isDefaultBot} from './bisu-tools.mjs';
 import {CALENDAR_TOOLS, nowLines} from './calendar.mjs';
 import {BROWSER_TOOLS} from './browser.mjs';
 import {connect as connectMcp} from './mcp.mjs';
@@ -51,7 +51,7 @@ let wanted = flags.tools && flags.tools !== 'default'
   : [...Object.keys(TOOLS), 'web_search', 'delegate'];
 // A run that may change files (a chat, an edit job) also gets memory, scheduling, bots and the calendar;
 // one that only reads (a read job, like a morning summary) may still read the calendar.
-if (wanted.includes('write_file')) wanted.push('remember', 'forget', 'schedule_job', 'goal_add', 'goal_list', 'bot_create', 'bot_update', 'routine_save', 'bot_handoff', ...Object.keys(CALENDAR_TOOLS), ...Object.keys(BROWSER_TOOLS));
+if (wanted.includes('write_file')) wanted.push('remember', 'forget', ...(isDefaultBot() ? ['bot_memory'] : []), 'schedule_job', 'goal_add', 'goal_list', 'bot_create', 'bot_update', 'routine_save', 'bot_handoff', ...Object.keys(CALENDAR_TOOLS), ...Object.keys(BROWSER_TOOLS));
 else if (wanted.includes('read_file')) wanted.push('calendar_list', 'reminders_list');
 const preAllowed = new Set(String(flags.allowedTools || flags['allowed-tools'] || '').split(',').map(t => NAME[t.trim()] || plain(t)).filter(Boolean));
 

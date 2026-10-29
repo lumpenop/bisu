@@ -12,6 +12,7 @@ import * as routines from '../ui/routines.mjs';
 
 const ok = text => ({text});
 const err = text => ({text, error: true});
+export const isDefaultBot = () => !process.env.BISU_BOT || process.env.BISU_BOT === bots.DEFAULT;
 
 export const BISU_TOOLS = {
   web_search: {
@@ -64,6 +65,32 @@ export const BISU_TOOLS = {
       if (!hit) return err(`No memory matches ${key ? `key "${key}"` : `"${title}"`}. Saved: ${all.map(e => e.title).join(', ') || 'none'}.`);
       memory.remove(hit.id);
       return ok(`Forgot "${hit.title}".`);
+    },
+  },
+  // Only the default bot (the assistant) is given this (engine/cli.mjs, ui/cu/server.mjs): the other bots
+  // see their own memory in their prompt and nothing of each other's, and workers have no memory tools.
+  bot_memory: {
+    description: 'What another of the person\'s bots has saved to remember (its memory): read it when they ask about that bot or when what it knows bears on the task. Give the bot\'s name or id; with none, lists the bots and how much each has saved. Read only.',
+    parameters: {type: 'object', properties: {bot: {type: 'string', description: 'the bot\'s name or id; omit for the list'}}},
+    kind: 'memory',
+    run(ctx, {bot} = {}) {
+      if (!isDefaultBot()) return err('Only the default bot reads other bots\' memories.');
+      const others = () => bots.list().filter(b => !b.default);
+      if (!bot) {
+        const rows = others().map(b => { const n = bots.memoryCount(b.id); return `${b.name} (${b.id}) · ${n ? `${n} saved` : 'nothing saved'}` });
+        return ok(rows.length ? rows.join('\n') : 'The person has no other bots.');
+      }
+      const r = bots.memoryOf(bot);
+      if (!r) return err(`No bot named "${bot}". Bots: ${others().map(b => `${b.name} (${b.id})`).join(', ') || 'none'}.`);
+      if (r.bot.default) return err('That is this bot: its memory is the "Memory (기억)" block in your prompt.');
+      if (!r.entries.length) return ok(`${r.bot.name} has saved nothing to remember.`);
+      let text = `${r.bot.name} (${r.bot.id}) remembers, pinned first then newest:\n\n`;
+      for (const e of r.entries) {
+        const block = `### ${e.title}\n${e.text || '(no detail)'}\n\n`;
+        if (text.length + block.length > 4000) { text += `(${r.entries.length} in all; the rest are in ${memory.dirFor(r.bot.id).replace(process.env.HOME || '', '~')})`; break }
+        text += block;
+      }
+      return ok(text.trimEnd());
     },
   },
   // Bots (ui/bots.mjs): bisu for one job. Writing a bot file always waits for the person: kind 'bot' is

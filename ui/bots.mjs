@@ -129,6 +129,17 @@ export function remove(id) {
   return { removed: id };
 }
 
+// What another bot has saved to remember, for the default bot only (engine/bisu-tools.mjs bot_memory):
+// a bot is given its own memory in its prompt and nothing of the others', and a delegated worker has no
+// memory tools at all. Reading only; nothing here writes into another bot's folder.
+export function memoryOf(who) {
+  const q = String(who || '').trim();
+  const all = list();
+  const bot = all.find(b => b.id === q || b.name === q) || (q ? all.find(b => b.name.includes(q) || q.includes(b.name)) : null);
+  return bot ? { bot, entries: memory.inBot(bot.id, () => memory.list()) } : null;
+}
+export const memoryCount = id => memory.inBot(id, () => memory.list()).length;
+
 // What a run of this bot is told, after bisu's own prompt.
 export function block(id, { maker = false } = {}) {
   const bot = resolve(id);
@@ -143,7 +154,7 @@ export function block(id, { maker = false } = {}) {
   }
   // Who else there is, for handing work over (bot_handoff); "@이름" in a message means that bot.
   const others = list().filter(b => b.id !== bot.id);
-  if (others.length && !maker) parts.push(`## 다른 봇 (handing work over)\nThe person's other bots: ${others.map(b => `${b.name} (${b.id})${b.job ? ' — ' + b.job : ''}`).join('; ')}.\nWhen the person writes @ and a bot's name, or a task plainly belongs to another bot's job, hand it over with bot_handoff (one complete brief), say in one line who is on it, and end your turn; its report comes back here as a message — check it and tell the person. Handing over is only the bot_handoff call: never say a bot has the task unless that call returned "Handed to".`);
+  if (others.length && !maker) parts.push(`## 다른 봇 (handing work over)\nThe person's other bots: ${others.map(b => `${b.name} (${b.id})${b.job ? ' — ' + b.job : ''}`).join('; ')}.\nWhen the person writes @ and a bot's name, or a task plainly belongs to another bot's job, hand it over with bot_handoff (one complete brief), say in one line who is on it, and end your turn; its report comes back here as a message — check it and tell the person. Handing over is only the bot_handoff call: never say a bot has the task unless that call returned "Handed to".${bot.default ? '\nbot_memory with a bot\'s name shows what that bot has saved to remember (read only); the bots do not see yours or each other\'s.' : ''}`);
   if (maker) parts.push(MAKER);
   return parts.filter(Boolean).join('\n');
 }
