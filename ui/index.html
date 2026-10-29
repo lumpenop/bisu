@@ -1112,7 +1112,7 @@ function setMood(state,text){clearTimeout(moodTimer);mood={state,text};
 // What is promised about asking first, as the chosen engine and mode really behave: bisu's own engine,
 // by default, runs what its judge clears and asks for the rest.
 const askPromise=()=>prefs.engine==='native'&&prefs.approve!=='always'?'지우기·보내기·설치처럼 되돌리기 어려운 일은 하기 전에 꼭 물어볼게요.':'파일을 고치거나 명령을 실행하기 전엔 꼭 물어볼게요.';
-const helloHTML=()=>`<div class="hello"><span class="bisu live"></span><b>안녕하세요, bisu예요</b><span>아래에 바로 말하면 돼요. 파일 일은 왼쪽에 적힌 폴더에서 해요.<br><span class="promise">${askPromise()}</span></span></div>`;
+const helloHTML=()=>`<div class="hello"><span class="bisu live"></span><b>안녕하세요, bisu예요</b><span>아래에 바로 말하면 돼요. 파일 일은 아래에 적힌 폴더에서 해요.<br><span class="promise">${askPromise()}</span></span></div>`;
 // Developer detail (tool calls, steps, cost, model names): off by default, one switch in Settings.
 // Kept by the engine (/api/prefs), not in this page's storage: the menu bar app gets a new port, and
 // so a new, empty origin, on every launch.
