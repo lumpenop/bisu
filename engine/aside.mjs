@@ -103,7 +103,8 @@ export function driver() {
     act: cs => call(cs.map(step).join(' ')),
     goto: url => call(step({kind: 'goto', url})),
     acceptAlert: () => call(''),
-    wait: () => call('await page.waitForTimeout(1500);'),
+    // (Aside's page has no waitForTimeout)
+    wait: () => call('await new Promise(r => setTimeout(r, 1500));'),
     async end() { try { await r.run('await closeTab(page)', 15_000) } catch {} r.close() },
   };
 }

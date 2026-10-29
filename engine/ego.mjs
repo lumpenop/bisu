@@ -42,14 +42,18 @@ const WANTS_ALL = goal => /전체\s*(메일|선택)|모든\s*메일|메일함\s*
 // at a time and does not compare twenty prices; GLM, given the whole page, does.
 const COMPARE = goal => /가장|제일|최저|최고|최신|최소|최대|비싼|저렴|cheapest|most|least|highest|lowest|best|latest|newest|oldest/i.test(goal);
 // A page listing things to compare: five or more lines with a price, a count or a score on them.
-const NUMBERED = /[£$€₩¥]\s?\d|\d[\d,.]*\s*(원|달러|개|명|점|%|권|건|회)/;
+const NUMBERED = /[£$€₩¥]\s?\d|\d[\d,.]*\s*(원|달러|개|명|점|%|권|건|회|€)|^\s*\d{1,3}(?:[.,\s]\d{3})*[.,]\d{2}\s*$/;
 const listy = view => String(view.body || parse(view.snap).rows.join('\n')).split('\n').filter(l => NUMBERED.test(l)).length >= 5;
 // 「가장 비싼 책」, "the cheapest hub": the item a plain price superlative means, read off the page text. The list is the
 // longest run of three or more items (click candidates whose label is a line of the page) each followed by a price
 // before the next item; buttons repeated on every item (「Add to basket」, three or more alike) are skipped. Anything else is GLM's: a goal
 // that narrows the choice before its superlative (재고 있는 것 중, refurbished, under ₩30,000), a price written before
 // its item's name, items without a price inside the list, or a tie.
-const PRICE = /[£$€₩¥]\s?\d[\d,]*(?:\.\d+)?|\d[\d,]*(?:\.\d+)?\s?(?:원|달러|엔)/;
+// A price: a currency sign before or after the number (£51.77, $1,799, 24,500원, 91,99 €). On a list a goal compares by
+// price, a line that is only a number with cents counts too (「24.99」). 「91,99」 and 「1.299,00」 are read as cents.
+const PRICE = /[£$€₩¥]\s?\d[\d.,]*|\d[\d.,]*\s?(?:원|달러|엔|€|EUR|USD|GBP)(?![a-z])/i;
+const BARE = /^\d{1,3}(?:[.,\s]\d{3})*[.,]\d{2}$/;
+const amount = raw => { let t = String(raw).replace(/[^\d.,]/g, ''); const k = Math.max(t.lastIndexOf('.'), t.lastIndexOf(',')); t = k >= 0 && t.length - k - 1 === 2 ? t.slice(0, k).replace(/[.,]/g, '') + '.' + t.slice(k + 1) : t.replace(/[.,]/g, ''); return Number(t) };
 const MOST = /비싼|최고가|가장\s*높은\s*가격|most expensive|priciest|highest[- ]priced?/i;
 const LEAST = /(?<!비)싼|저렴|최저가|가장\s*낮은\s*가격|cheapest|lowest[- ]priced?|least expensive/i;
 const NARROWS = /재고|품절|중고|리퍼|새\s*(상품|제품)|정품|평점|리뷰|별점|배송|할인|쿠폰|이상|이하|미만|초과|사이|in stock|sold out|refurb|used|new\b|rating|review|shipping|discount|sale|under|over|between|below|above/i;
@@ -67,7 +71,7 @@ const nextExt = (goal, done) => { const g = String(goal), m = MOST.exec(g), l = 
 const OPENS = /열어|열고|\bopen\b/i;
 const extreme = (run, dir) => { const best = dir > 0 ? Math.max(...run.map(x => x.price)) : Math.min(...run.map(x => x.price)), win = run.filter(x => x.price === best); return win.length === 1 ? win[0] : null };
 // The priced items of a list page, in page order, or null when the page does not plainly have one.
-export function priceList(body, cands) {
+export function priceList(body, cands, bare = true) {
   const count = new Map();
   for (const c of cands) { const l = String(c.label || c.name || '').trim(); count.set(l, (count.get(l) || 0) + 1) }
   // An item's picture and title often link with the same words: twice is still one item; three or more is a button.
@@ -75,7 +79,8 @@ export function priceList(body, cands) {
   // a title repeated on lines right after one another (picture, link, text) is still one item.
   const lines = String(body || '').split('\n').map(l => l.trim()).filter(Boolean), apart = new Map();
   lines.forEach((l, i) => { if (lines[i - 1] !== l) apart.set(l, (apart.get(l) || 0) + 1) });
-  const each = l => (count.get(l) || 0) >= 3 || (apart.get(l) || 0) >= 3 && !items0.has(l);
+  // (a price repeated between items is still each item's price: four potions at 4.99)
+  const each = l => (count.get(l) || 0) >= 3 || (apart.get(l) || 0) >= 3 && !items0.has(l) && !PRICE.test(l) && !(bare && BARE.test(l));
   const items0 = new Set(cands.filter(c => c.kind === 'click').map(c => String(c.label || c.name || '').trim()).filter(l => (apart.get(l) || 0) < 3));
   const items = new Map(cands.filter(c => c.kind === 'click' && !PAGING.test(String(c.label || '').trim())).map(c => [String(c.label || c.name || '').trim(), c]).filter(([l]) => l && !each(l)).reverse());
   const runs = [[]]; let cur = null, prevPrice = false, n = 0;
@@ -89,8 +94,8 @@ export function priceList(body, cands) {
       if (cur && cur.price == null) runs.push([]);       // an item without a price ends the run
       cur = {c: items.get(line), price: null, at: n, last: n}; runs.at(-1).push(cur); prevPrice = false; continue;
     }
-    const m = PRICE.exec(line);
-    if (m && cur && cur.price == null) { cur.price = Number(m[0].replace(/[^\d.]/g, '')); cur.raw = m[0].replace(/\s+/g, ''); cur.priceAt = n; prevPrice = false; continue }
+    const m = PRICE.exec(line) || (bare && BARE.test(line) ? [line] : null);
+    if (m && cur && cur.price == null) { cur.price = amount(m[0]); cur.raw = m[0].replace(/\s+/g, ' ').trim(); cur.priceAt = n; prevPrice = false; continue }
     prevPrice = !!m && (!cur || cur.price != null) && !/[가-힣a-z]{3,}/i.test(line.replace(PRICE, ''));
   }
   const raw = runs.map(r => ({r, p: r.filter(x => x.price != null && Number.isFinite(x.price))})).filter(x => x.p.length >= 3).sort((a, b) => b.p.length - a.p.length)[0];
@@ -99,17 +104,19 @@ export function priceList(body, cands) {
   // A list that ends on an item without a price, right after the last price: the prices may come first.
   const tail = raw.r.at(-1), before = raw.r.at(-2);
   if (tail && tail.price == null && before && tail.at === before.priceAt + 1) return null;
-  // Each price must sit no further from its own item than from the next one (a price-first layout shifts every price
-  // by one item; its first price, before the first item, is caught above).
-  for (let i = 0; i + 1 < run.length; i++) if (!(run[i].priceAt - run[i].last <= run[i + 1].at - run[i].priceAt)) return null;
+  // (A price-first layout is caught at its two ends: a price before the first item, an item without one after the last
+  // price. Between them a description may sit between a name and its price, so distances say nothing.)
   return run;
 }
 // A list shortens long titles (「The Road to Little ...」); the picture's link often has the whole one.
 const fullName = (c, cands, lines = []) => { const l = String(c.label || c.name || '').trim(), stem = l.replace(/\s*(\.\.\.|…)$/, ''); return stem === l ? l : [...cands.map(x => String(x.label || x.name || '').trim()), ...lines.map(x => String(x).trim().replace(/^\[|\]$/g, ''))].filter(x => x.startsWith(stem) && x.length > l.length && !/(\.\.\.|…)$/.test(x)).sort((a, b) => b.length - a.length)[0] || l };
 // What a list page says about a comparing goal, for the notes of pages visited: its cheapest and dearest item.
 export function listNote(body, cands, names = []) {
-  const run = priceList(body, cands), lo = run && extreme(run, -1), hi = run && extreme(run, 1), ls = [...String(body || '').split('\n'), ...names];
-  return run ? [lo && `가장 싼: ${fullName(lo.c, cands, ls)} ${lo.raw}`, hi && `가장 비싼: ${fullName(hi.c, cands, ls)} ${hi.raw}`].filter(Boolean).join(' · ') + ` (${run.length}개 중)` : '';
+  const run = priceList(body, cands), ls = [...String(body || '').split('\n'), ...names];
+  if (!run) return '';
+  // three each way: a goal may want the three cheapest of a whole category
+  const by = [...run].sort((a, b) => a.price - b.price), say = x => `${fullName(x.c, cands, ls)} ${x.raw}`;
+  return `가장 싼 순: ${by.slice(0, 3).map(say).join(' / ')} · 가장 비싼 순: ${by.slice(-3).reverse().map(say).join(' / ')} (${run.length}개 중)`;
 }
 // 「가장 비싼 책과 가장 싼 책의 가격 차이」: the difference worked out from the page, when nothing narrows the choice.
 export function priceSpread(goal, body, cands, names = []) {
@@ -132,6 +139,11 @@ export function eachTargets(goal, cands) {
   return t.length >= 2 && t.length <= 8 ? t : [];
 }
 // The page a goal asks for (「1쪽」, "page 2") and the one a list is on (its address; none means the first).
+// A goal that keeps to one page of a list (「첫 페이지에서」, 「이 페이지의」, "page 2"): no reading the pages after it.
+const ONE_PAGE = /첫\s*(페이지|쪽|화면)|이\s*(페이지|쪽)|현재\s*(페이지|쪽)|first page|this page/i;
+const NEXT = /^(next|다음|›|»|>|next\s*[»›>]|[»›>]\s*next|다음\s*(페이지|쪽)?\s*[»›>]?)$/i;
+// The list a page belongs to: its address without the page number (…/romance_8/page-2.html, …/products?page=3).
+const listOf = url => String(url || '').replace(/([?&])(page|p|pg)=\d+&?/i, '$1').replace(/[?&]$/, '').replace(/\/page[-_/]?\d+(\.html?)?\/?$/i, '/').replace(/\/index\.html?$/i, '/');
 const goalPage = goal => { const m = /(\d+)\s*(?:쪽|페이지)|page\s*(\d+)/i.exec(goal); return m ? Number(m[1] || m[2]) : null };
 const pageOf = url => { const m = /page[-=_]?(\d+)/i.exec(String(url || '')); return m ? Number(m[1]) : 1 };
 const named = (label, goal) => { const l = String(label || '').trim().toLowerCase(); return l.length >= 3 && String(goal).toLowerCase().includes(l) };
@@ -508,12 +520,23 @@ async function answers(goal, answer) {
 
 const json = text => { const s = String(text || ''); try { return JSON.parse(s.slice(s.indexOf('{'), s.lastIndexOf('}') + 1)) } catch { return null } };
 const glmUse = {usd: 0, calls: 0};
+// GLM is the second opinion: when it cannot answer (an error, an empty balance), the run goes on with Decisions' pick.
+// An account out of credit is not asked again for ten minutes (each ask would wait out its retries first).
+let glmDownUntil = 0;
 async function glm(content, maxTokens = 3000) {
-  const r = await complete({model: GLM_MODEL(), thinking: false, temperature: 0, maxTokens, messages: [
-    {role: 'system', content: 'You drive or review a browser agent. Reply with one JSON object and nothing else.'}, {role: 'user', content}]});
-  glmUse.calls++; glmUse.usd += r.cost || 0;
-  return json(r.text);
+  if (Date.now() < glmDownUntil) return null;
+  try {
+    const r = await complete({model: GLM_MODEL(), thinking: false, temperature: 0, maxTokens, messages: [
+      {role: 'system', content: 'You drive or review a browser agent. Reply with one JSON object and nothing else.'}, {role: 'user', content}]});
+    glmUse.calls++; glmUse.usd += r.cost || 0;
+    return json(r.text);
+  } catch (e) {
+    glmUse.failures = (glmUse.failures || 0) + 1; glmUse.lastError = String(e.message || e).slice(0, 160);
+    if (/balance|recharge|quota|credit|402/i.test(glmUse.lastError)) glmDownUntil = Date.now() + 10 * 60_000;
+    return null;
+  }
 }
+export const glmStatus = () => ({...glmUse, down: Date.now() < glmDownUntil});
 
 // GLM's second look (pair mode): agree, overrule with its own pick, or reject a "done" that is not done.
 async function review(goal, view, cands, hist, inputs, pick, why, seen) {
@@ -591,8 +614,8 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
   try { return await loop() } catch (e) { await driver.end?.('error').catch?.(() => {}); throw e }
   async function loop() {
   let view = await driver.open(url, ins, goal);
-  let opened = null, targets = null, answerAt = null, last = null, answer = null, held = null, status = 'budget', steps = 0, repeats = 0, prevSig = '';
-  const noScroll = new Set(), eachTried = new Set(), doneExt = new Set(), ticked = new Set(), seen = new Map(), visits = new Map(), tried = new Set(), compared = new Set(), reviews = {n: 0, changed: 0, why: {}};
+  let sweepOpen = null, opened = null, targets = null, answerAt = null, last = null, answer = null, held = null, status = 'budget', steps = 0, repeats = 0, prevSig = '';
+  const sweeps = new Map(), deadNext = new Set(), noScroll = new Set(), eachTried = new Set(), doneExt = new Set(), ticked = new Set(), seen = new Map(), visits = new Map(), tried = new Set(), compared = new Set(), reviews = {n: 0, changed: 0, why: {}};
   // The same control, not the same words: three "LinkedIn 메일 선택" boxes are three different steps.
   const sigOf = c => `${c.kind}|${c.role || ''}|${c.own ?? c.label ?? ''}|${c.nth ?? ''}|${c.value || ''}|${c.dir || ''}`;
   // Where the page stands: the same action again is a repeat only if nothing moved since (scrolling on is not).
@@ -668,6 +691,45 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
           if (r.answer) { answer = r.answer; answerAt = pageKey(view); status = 'done'; break }
         }
       }
+      // A superlative over a list that runs to several pages, the goal naming none: every page is read before choosing.
+      // "next" is taken without asking the picker, each page leaving its cheapest and dearest in the notes; on the last
+      // page (no next, or a next that changed nothing) GLM answers from the notes, or for a goal that opens the item, the
+      // page that held it is opened again and the item clicked.
+      let sweepTodo = null;
+      // (only on the list the goal means: where the goal names links — 「Fiction, Mystery, Romance」 — a page whose title or
+      // address has one of them, not the front page's list of everything)
+      const namedHere = cands.filter(c => c.kind === 'click' && named(c.label, goal)).map(c => String(c.label).trim().toLowerCase());
+      const where = `${view.title} ${decodeURIComponent(String(view.url || ''))}`.toLowerCase().replace(/[-_]/g, ' ');
+      const onTarget = !namedHere.length || namedHere.some(l => where.includes(l));
+      if (COMPARE(goal) && goalPage(goal) == null && !ONE_PAGE.test(goal) && listText && !itemPage && onTarget) {
+        const lid = listOf(view.url), sw = sweeps.get(lid) || {pages: new Map(), done: false}; sweeps.set(lid, sw);
+        const run = !sw.done && priceList(listText, cands, true);
+        if (run) {
+          const ls = [...listText.split('\n'), ...parse(view.snap).els.map(e => e.name), ...(view.fulls || [])], at = x => x && {label: x.c.label, name: fullName(x.c, cands, ls), raw: x.raw, price: x.price};
+          sw.pages.set(pageKey(view), {url: view.url, max: at(extreme(run, 1)), min: at(extreme(run, -1))});
+          const next = cands.find(c => c.kind === 'click' && NEXT.test(String(c.label || '').trim()));
+          if (next && !deadNext.has(pageKey(view)) && sw.pages.size < 10) { sweepTodo = [next]; log({sweep: 'next', list: lid, pages: sw.pages.size}) }
+          else if (sw.pages.size > 1) {
+            sw.done = true;
+            const key = nextExt(goal, doneExt) === 'min' ? 'min' : 'max', dir = key === 'max' ? 1 : -1;
+            const best = [...sw.pages.values()].filter(p => p[key]).sort((a, b) => dir * (b[key].price - a[key].price))[0];
+            log({sweep: 'end', pages: sw.pages.size, best: best && `${best[key].name} ${best[key].raw}`});
+            hist.push(`(이 목록의 ${sw.pages.size}쪽을 모두 확인함)`);
+            if (OPENS.test(goal) && best) {
+              if (best.url !== view.url) { view = await driver.goto(best.url); hist.push(...(view.did || [])); sweepOpen = best[key].label; doneExt.add(key); continue }
+              const c = cands.find(x => x.kind === 'click' && x.label === best[key].label);
+              if (c) { sweepTodo = [c]; doneExt.add(key) }
+            } else if (WANTS_ANSWER(goal) && !targets?.length) {
+              const r = await review(goal, view, cands, [...hist, ...(seen.get(pageKey(view)) ? [`(이 페이지 메모 — ${seen.get(pageKey(view))})`] : [])], ins, null, 'done-without-answer', seen);
+              reviews.n++; reviews.why['all-pages'] = (reviews.why['all-pages'] || 0) + 1;
+              if (r.answer) { answer = r.answer; answerAt = pageKey(view); status = 'done'; break }
+            }
+          }
+        }
+      }
+      // Back on the page that held the winner: open it.
+      if (!sweepTodo && sweepOpen) { const c = cands.find(x => x.kind === 'click' && x.label === sweepOpen); if (c) sweepTodo = [c]; sweepOpen = null }
+      if (sweepTodo) todo = sweepTodo; else {
       let pick = await decisionsPick(goal, view, cands, hist, ins, seen, itemPage);
       if (!pick || !cands[pick.index]) pick = null;
       if (!pick && mode !== 'rescue') { status = 'no-pick'; break }
@@ -721,6 +783,7 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
           if (!todo.length) { status = 'done'; break }
         } else { status = 'done'; break }
       } else todo = [c];
+      }
     }
     // Run up to the first step that must wait for the person.
     let stop = null;
@@ -739,6 +802,8 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
       for (let w = 0; w < 2 && lastKind === 'click' && driver.wait && !view.ended && !view.waiting && contentOf(view) === before; w++) { const v = await driver.wait(); if (!v) break; view = {...v, did: [...view.did, ...(v.did || [])]} }
       // A scroll that brought nothing new (the snapshot already held the whole page): no more scrolling here.
       if (/^scroll/.test(lastKind) && contentOf(view) === before) noScroll.add(pageKey(view));
+      // A "next" that changed nothing: this is the list's last page (its 「>」 stays, leading nowhere).
+      if (lastKind === 'click' && NEXT.test(String(now.at(-1).label || '').trim()) && contentOf(view) === before) deadNext.add(pageKey(view));
       hist.push(...view.did);
       failed = view.did.some(d => d.startsWith('error: '));
       const there = siteOf(view.url);

@@ -155,7 +155,7 @@ export async function task({goal, url, inputs = [], readOnly = false, budget, wa
 const esc = t => JSON.stringify(String(t ?? ''));
 const origin = u => { try { return new URL(u).origin } catch { return '' } };
 export function directDriver({readText = true, tab = null} = {}) {
-  let tabId = tab, runId = null, lastReq = null, viewNow = null;
+  let tabId = tab, runId = null, lastReq = null, viewNow = null, lastIns = [], lastGoal = '';
   // Stop at the person: a login handed to them, a step dec wants them to confirm, the tab taken over.
   const pending = async (waitMs = 120_000) => {
     const t0 = Date.now();
@@ -202,6 +202,7 @@ export function directDriver({readText = true, tab = null} = {}) {
     readPage: async () => String((await api('POST', `/v1/tabs/${tabId}/content`, {limit: 20000})).text || ''),
     // One tab per conversation: the last task's tab goes to the new page; a new tab only when there is none.
     async open(url, ins = [], goal = '') {
+      lastIns = ins; lastGoal = goal;
       // dec lets a run work only on the sites its tab was opened for: another site gets a tab of its own, and the
       // last one is closed so they do not pile up.
       let moved = false;
@@ -244,7 +245,8 @@ export function directDriver({readText = true, tab = null} = {}) {
       viewNow = {...viewNow, body: text, snap: lines.map(t => `text ${esc(t)}`).join('\n'), did: ['(waited for the page to fill in)']};
       return viewNow;
     },
-    async goto(url) { const c = viewNow?.cands.find(x => x.kind === 'back'); return c ? this.act([c]) : viewNow },
+    // Another page of the site: the tab goes there and dec is asked again (a run is for the page it started on).
+    async goto(url) { if (url && /^https?:/.test(url)) { await stop(); return this.open(url, lastIns, lastGoal) } const c = viewNow?.cands.find(x => x.kind === 'back'); return c ? this.act([c]) : viewNow },
     acceptAlert: () => viewNow,
     // The loop is done: end dec's run and keep the tab, for reading it and for the next task.
     async end(status) {
