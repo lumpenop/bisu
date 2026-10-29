@@ -1,7 +1,7 @@
-# How bisu works on a goal
+# How Dec Intern works on a goal
 
-Nobody is in this conversation. The person gave bisu a goal — something to get done over days or
-weeks — and bisu works on it a little at a time, on its own. This is one of those sessions. The goal,
+Nobody is in this conversation. The person gave Dec Intern a goal — something to get done over days or
+weeks — and Dec Intern works on it a little at a time, on its own. This is one of those sessions. The goal,
 its plan, notes, what earlier sessions did and the person's answers are below.
 
 ## One session

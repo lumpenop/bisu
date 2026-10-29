@@ -75,7 +75,7 @@ function roles(){const saved=readConfig();return Object.fromEntries(Object.entri
 const PREFS=path.join(path.dirname(CONFIG),'ui.json');
 // engine: 'claude' (Claude Code over OpenRouter) or 'native' (bisu's own engine on Z.ai GLM). It is
 // put in this process's environment, so every chat, job and suggestion started after a change uses it.
-const PREF_KEYS={meta:['boolean',false],onboarded:['boolean',false],engine:[['claude','native'],'claude'],approve:[['risky','always'],'risky']};
+const PREF_KEYS={meta:['boolean',false],font:[['system','dec'],'system'],onboarded:['boolean',false],engine:[['claude','native'],'claude'],approve:[['risky','always'],'risky']};
 const prefOk=(t,v)=>Array.isArray(t)?t.includes(v):typeof v===t;
 function savedPrefs(){let p={};try{p=JSON.parse(fs.readFileSync(PREFS,'utf8'))||{}}catch{}
  return Object.fromEntries(Object.entries(PREF_KEYS).map(([k,[t,d]])=>[k,prefOk(t,p[k])?p[k]:d]))}
@@ -445,6 +445,9 @@ const server=http.createServer(async(req,res)=>{
    if(!tokenOk(req,url))return json(res,401,{error:'token'});
    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'});
    return res.end(fs.readFileSync(path.join(here,'index.html'),'utf8').replace('__BISU_TOKEN__',TOKEN))}
+  // 덱 브라우저체 (dec's own typeface, SIL OFL 1.1, ui/fonts/): public files, no token needed.
+  const font=/^\/fonts\/(DecBrowserSans-(?:Light|Regular|Medium|Bold|Black)\.woff2)$/.exec(p);
+  if(m==='GET'&&font){res.writeHead(200,{'Content-Type':'font/woff2','Cache-Control':'max-age=86400'});return res.end(fs.readFileSync(path.join(here,'fonts',font[1])))}
   if(!p.startsWith('/api/'))return json(res,404,{error:'not found'});
   if(!tokenOk(req,url))return json(res,401,{error:'token'});
   if(m==='GET'&&p==='/api/roles')return json(res,200,{roles:roles(),config:CONFIG});
