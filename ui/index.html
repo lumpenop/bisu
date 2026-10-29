@@ -735,6 +735,16 @@ form>label.sw+.kv,section>label.sw+.kv{margin-top:12px}
 body:not(.panel) #chatView>aside:first-child{order:3;border-right:0;border-left:1px solid var(--line)}
 body:not(.panel) #chatView>.chat{order:1}
 body:not(.panel) #chatView>#botDlg{order:4}
+/* review 10-29 (3): the full window's top — the chat's header and its list's header are one line of the
+   same height, with buttons of one size, and no band of a different colour across the chat */
+body:not(.panel) .chathead,body:not(.panel) .listHead{height:56px;box-sizing:border-box;flex:none;border-bottom:0;background:transparent}
+body:not(.panel) .chathead{padding:0 16px}
+body:not(.panel) .listHead{padding:0 12px 0 14px}
+body:not(.panel) .listHead b{font-size:14.5px}
+body:not(.panel) #chatView>aside .filter{margin:0 12px 8px}
+body:not(.panel) .chathead:not([hidden])~#msgs{border-top:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
+.chathead button{height:32px;padding:0 13px;font-size:13px;border-radius:999px;box-shadow:none}
+.chathead .iconbtn,.listHead .iconbtn{width:32px;min-width:32px;height:32px;padding:0;display:grid;place-items:center;border-radius:999px;font-size:15px;box-shadow:none}
 </style>
 </head>
 <body>
