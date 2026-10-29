@@ -66,11 +66,13 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
 
 // One request, retried on 429 and 5xx (and on a dropped connection before anything streamed).
 // onText/onReasoning get each fragment; nothing is retried once text has been shown.
-export async function complete({model, messages, tools, thinking = true, maxTokens, temperature, signal, onText, onReasoning, onToolStart}) {
+export async function complete({model, messages, tools, thinking = true, effort, maxTokens, temperature, signal, onText, onReasoning, onToolStart}) {
   const body = {model, messages, stream: true, tool_stream: !!tools?.length};
   if (tools?.length) body.tools = tools;
   // Flash can switch reasoning off; GLM-5.3 always reasons and takes an effort level instead.
-  if (!thinking) { if (ALWAYS_THINKS.has(model)) body.reasoning_effort = 'low'; else body.thinking = {type: 'disabled'} }
+  // (effort: how hard a model that always reasons does — 「보통」 unless the caller says otherwise: at 「낮음」 GLM-5.3 got
+  // simple comparisons wrong, and its tokens are cheap)
+  if (!thinking) { if (ALWAYS_THINKS.has(model)) body.reasoning_effort = effort || 'medium'; else body.thinking = {type: 'disabled'} }
   if (maxTokens) body.max_tokens = maxTokens;
   if (temperature != null) body.temperature = temperature;
   let attempt = 0, at = 0;
@@ -87,7 +89,7 @@ export async function complete({model, messages, tools, thinking = true, maxToke
     } catch (e) {
       if (signal?.aborted) throw e;
       if (e instanceof GLMError && e.status === 400 && /cannot be disabled/.test(e.message) && body.thinking?.type === 'disabled') {
-        ALWAYS_THINKS.add(model); delete body.thinking; body.reasoning_effort = 'low'; attempt--; continue;
+        ALWAYS_THINKS.add(model); delete body.thinking; body.reasoning_effort = effort || 'medium'; attempt--; continue;
       }
       // This key failed before anything was shown: the next key takes the same request (and this one rests).
       const status = e instanceof GLMError ? e.status : 0;

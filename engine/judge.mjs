@@ -1,6 +1,6 @@
 // bisu's judgments, made by OpenAI's Decisions API (gpt-6-luna): GLM talks and acts, this decides.
-// BISU_DECISION_PROVIDER=jev asks TypeSafe's Jev the same questions instead, and =glm the assistant's
-// own GLM, to compare them (engine/eval/judge-bench.mjs); Decisions stays the default. Measured
+// BISU_DECISION_PROVIDER=jev asks TypeSafe's Jev the same questions instead (engine/eval/judge-bench.mjs);
+// Decisions stays the default. GLM no longer judges: it talks, acts and reviews, and judging was taken from it. Measured
 // 2026-10-28 on the labeled examples, twice each, each at its own cut-offs:
 // - Decisions: routes 60/63, 19/20 safe commands cleared and no risky one, 18/20 stuck turns caught,
 //   claims 13/13 with none sent back wrongly; median 0.37 s, $0.00006 a judgment, the same both runs.
@@ -55,36 +55,6 @@ const PROVIDERS = {
     answers: j => j?.answers && typeof j.answers === 'object' ? Object.fromEntries(Object.entries(j.answers).map(([name, a]) => [name,
       a.type === 'noul' && typeof a.noul === 'number' ? a.noul
       : a.type === 'choice' ? {choice: a.choice, confidence: a.confidence ?? null, p: a.probabilities || {}} : undefined]).filter(([, v]) => v !== undefined)) : null,
-  },
-  // GLM judging for itself, with no second service: it is asked for the same probabilities as JSON,
-  // so they are what it says rather than what was measured. Flash without reasoning by default.
-  glm: {
-    key: () => R.routes('glm')[0]?.key || '',
-    model: () => process.env.BISU_GLM_JUDGE_MODEL || 'glm-5.3-flash',
-    timeoutMs: 30000,
-    async ask(model, text, questions, signal) {
-      const spec = questions.map(q => q.type === 'choice'
-        ? `"${q.name}" (choose one): ${q.instructions}\n${q.choices.map(c => `  - ${c.value}: ${c.description}`).join('\n')}`
-        : `"${q.name}" (yes or no): ${q.instructions}`).join('\n\n');
-      const r = await complete({model, thinking: false, maxTokens: 4000, temperature: 0, signal, messages: [
-        {role: 'system', content: 'You make judgments for an assistant. Reply with one JSON object and nothing else. For a choose-one question give the probability of every option, summing to 1: {"name": {"option": 0.7, "other": 0.3}}. For a yes-or-no question give the probability of yes: {"name": 0.2}.'},
-        {role: 'user', content: `${text}\n\nQuestions:\n${spec}\n\nFill in this JSON with your probabilities:\n${JSON.stringify(Object.fromEntries(questions.map(q => [q.name, q.type === 'choice' ? Object.fromEntries(q.choices.map(c => [c.value, 0])) : 0])))}`}]});
-      let j = null;
-      try { j = JSON.parse(String(r.text).slice(String(r.text).indexOf('{'), String(r.text).lastIndexOf('}') + 1)) } catch {}
-      const out = {};
-      for (const q of questions) {
-        const v = j?.[q.name];
-        if (q.type === 'choice' && v && typeof v === 'object') {
-          const p = Object.fromEntries(q.choices.map(c => [c.value, Math.max(0, Number(v[c.value]) || 0)]));
-          const sum = Object.values(p).reduce((a, b) => a + b, 0);
-          if (!sum) continue;
-          for (const k in p) p[k] /= sum;
-          const choice = Object.keys(p).reduce((a, b) => p[b] > p[a] ? b : a);
-          out[q.name] = {choice, confidence: p[choice], p};
-        } else if (q.type !== 'choice' && v != null && Number.isFinite(Number(v))) out[q.name] = Math.min(1, Math.max(0, Number(v)));
-      }
-      return {out, inputTokens: r.usage?.prompt_tokens || 0, usd: r.cost || 0, error: clip(r.text, 200)};
-    },
   },
 };
 export const provider = () => PROVIDERS[process.env.BISU_DECISION_PROVIDER] ? process.env.BISU_DECISION_PROVIDER : 'decisions';

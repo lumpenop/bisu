@@ -6,7 +6,6 @@
 // Who picks the next step (BISU_WEB_PICKER, default rescue; engine/eval/web-bench.mjs compares them on the same
 // pretend sites):
 //   decisions — OpenAI Decisions picks one of the numbered actions read off the snapshot, like dec's fast mode.
-//   glm       — GLM reads the snapshot the way the skill shows an agent and answers with a few actions at once.
 //   pair      — Decisions picks; GLM looks again only where a wrong pick costs something: a risky step, a
 //               low-confidence pick, a select-all, and "done" (dec's own combination, app/chromium/pair-decider.cjs).
 //   rescue    — Decisions alone until one of three things: it slows down (back on a page it already left twice,
@@ -20,8 +19,11 @@ import * as judge from './judge.mjs';
 import {complete} from './glm.mjs';
 
 const EGO = process.env.BISU_EGO_BIN || 'ego-browser';
+// GLM-5.3 thinks at 「보통」 here: at 「낮음」 it named the wrong winner of three dates once in six on the same task (and three
+// times in four in dec), at 「보통」 never, in the same time (11-14 s a task). BISU_WEB_GLM_EFFORT changes it.
 const GLM_MODEL = () => process.env.BISU_WEB_GLM || 'glm-5.3';
-export const picker = () => ['decisions', 'glm', 'pair', 'rescue'].includes(process.env.BISU_WEB_PICKER) ? process.env.BISU_WEB_PICKER : 'rescue';
+// (GLM never picks the steps itself: it reviews and writes answers. GLM alone mode is gone.)
+export const picker = () => ['decisions', 'pair', 'rescue'].includes(process.env.BISU_WEB_PICKER) ? process.env.BISU_WEB_PICKER : 'rescue';
 
 // The site a page belongs to (news.daum.net and m.daum.net are one site; so are a.co.kr and b.co.kr's parents).
 export function siteOf(u) {
@@ -617,7 +619,7 @@ async function glm(content, maxTokens = 3000) {
   // GLM answers a look in 1.5-3 s, but now and then a provider queue holds one for 25-30 s: an answer not back in 6 s
   // gets the same ask sent again, the first back wins, and after 30 s the loop goes on without it.
   const asks = [], wait = ms => new Promise(r => setTimeout(r, ms).unref?.());
-  const ask = () => { const c = new AbortController(); asks.push(c); return complete({model: GLM_MODEL(), thinking: false, temperature: 0, maxTokens, signal: c.signal, messages: [
+  const ask = () => { const c = new AbortController(); asks.push(c); return complete({model: GLM_MODEL(), thinking: false, effort: process.env.BISU_WEB_GLM_EFFORT || 'medium', temperature: 0, maxTokens, signal: c.signal, messages: [
     {role: 'system', content: 'You drive or review a browser agent. Reply with one JSON object and nothing else.'}, {role: 'user', content}]}) };
   try {
     const first = ask();
@@ -665,20 +667,6 @@ const boxLine = view => {
   return view.boxes?.length === boxes.length && boxes.length ? `Checkboxes and radios in view: ${boxes.map((e, i) => `${e.ref} ${e.name || e.role} ${view.boxes[i] ? '[checked]' : '[ ]'}`).join(', ')}\n` : '';
 };
 
-// GLM alone, the way the skill has an agent work: read the snapshot, act a few steps at once.
-async function glmPlan(goal, view, hist, inputs, seen) {
-  const sel = (view.selects || []).map(s => `select "${s.label}": options ${s.options.join(' | ')} (now ${s.value})`).join('\n');
-  const r = await glm(`You operate a web page for this goal: ${goal}
-${inputs.length ? `Texts you may type: ${inputs.map(([k, v]) => `@${k} = "${v}"`).join(', ')}\n` : ''}${hist.length ? `Done so far:\n${hist.slice(-10).join('\n')}\n` : ''}${seenText(seen, pageKey(view)) ? `Seen on pages visited before:\n${seenText(seen, pageKey(view))}\n` : ''}Page: ${view.title} (${view.url}), scrolled ${view.y}/${view.maxY}px
-Snapshot (accessibility tree; [ref=N] marks what you can act on, written @N):
-${String(view.snap).slice(0, 12000)}
-${sel ? sel + '\n' : ''}${boxLine(view)}
-Plan the next 1-4 actions you can take on THIS page before it changes (stop the list after any click that opens another page).
-Actions: {"do":"click","ref":"@N"} · {"do":"fill","ref":"@N","text":"..."} · {"do":"select","ref":"@N","option":"..."} · {"do":"press","ref":"@N","key":"Enter"} · {"do":"scroll","dir":"down"|"up"} · {"do":"back"}
-Rules: type only the texts given above or plain words from the goal; never passwords or card numbers. Never click a select-all unless the goal asks for everything. If the goal is achieved (or its answer is on the page), return no actions and done true.
-Reply: {"actions":[...],"done":true|false,"answer":"<what the goal asks to report, from the page, or empty>"}`);
-  return r;
-}
 
 // ---- a whole task ----
 
@@ -735,24 +723,7 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
     // Arrivals, not looks: filling a form is many steps on one page, coming back to a page is the loop.
     if (pageKey(view) !== prevUrl) visits.set(pageKey(view), (visits.get(pageKey(view)) || 0) + 1);
     prevUrl = pageKey(view);
-    if (mode === 'glm') {
-      const plan = await glmPlan(goal, view, hist, ins, seen);
-      if (!plan) { status = 'no-pick'; break }
-      if (plan.answer) answer = plan.answer;
-      if (plan.done || !plan.actions?.length) { status = 'done'; break }
-      const els = parse(view.snap).els;
-      for (const a of plan.actions.slice(0, 4)) {
-        const e = els.find(x => x.ref === a.ref);
-        const label = e?.name || a.ref;
-        const at = e ? {ref: e.ref, role: e.role, own: e.own, nth: e.nth, label} : {ref: a.ref, label};
-        if (a.do === 'click') todo.push({kind: 'click', ...at});
-        else if (a.do === 'fill' && !SECRET_FIELD.test(label)) todo.push({kind: 'type', ...at, value: String(a.text ?? '')});
-        else if (a.do === 'select') todo.push({kind: 'select', ...at, value: String(a.option ?? '')});
-        else if (a.do === 'press') todo.push({kind: 'key', ...at, key: a.key || 'Enter', label: a.key || 'Enter'});
-        else if (a.do === 'scroll') todo.push({kind: 'scroll', dir: a.dir === 'up' ? 'up' : 'down'});
-        else if (a.do === 'back') todo.push({kind: 'back'});
-      }
-    } else {
+    {
       let cands = driver.candidates ? driver.candidates(view) : candidates(view, ins, last, visits.size > 1, goal);
       if (noScroll.has(pageKey(view))) cands = cands.filter(c => !/^scroll/.test(c.kind)).map((c, i) => ({...c, index: i}));
       // Already on the page of the list the goal names (「1쪽」 on page 1): its "next" only leads away.
@@ -791,7 +762,7 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
           // (this page's own note too: the notes passed along are of the pages before it)
           // (where the compared values can be read off the items' pages, the table goes with the question: the model names
           // the winner instead of comparing 1844 with 1879 itself, which it got wrong three times in four)
-          const table = checkCompare(goal, null, [...(seen.pinned || [])].map(k => seen.get(k)).filter(Boolean))?.hint;
+          const table = process.env.BISU_COMPARE_TABLE === '0' ? null : checkCompare(goal, null, [...(seen.pinned || [])].map(k => seen.get(k)).filter(Boolean))?.hint;
           const ask = () => review(goal, view, cands, [...hist, ...(seen.get(pageKey(view)) ? [`(이 페이지 메모 — ${seen.get(pageKey(view))})`] : []), ...(table ? [table] : [])], ins, null, 'done-without-answer', seen);
           let r = await ask();
           reviews.n++; reviews.why['each-done'] = (reviews.why['each-done'] || 0) + 1;
@@ -914,7 +885,7 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
       // (a goal over several named things answers from all of their notes, not from a pick that read this page alone)
       if (stopping && targets?.length >= 2 && WANTS_ANSWER(goal) && !left.length && !eachTried.has('final#' + pageSig(view))) {
         eachTried.add('final#' + pageSig(view));
-        const table = checkCompare(goal, null, [...(seen.pinned || [])].map(k => seen.get(k)).filter(Boolean))?.hint;
+        const table = process.env.BISU_COMPARE_TABLE === '0' ? null : checkCompare(goal, null, [...(seen.pinned || [])].map(k => seen.get(k)).filter(Boolean))?.hint;
         const r = await review(goal, view, cands, [...hist, ...(seen.get(pageKey(view)) ? [`(이 페이지 메모 — ${seen.get(pageKey(view))})`] : []), ...(table ? [table] : [])], ins, null, 'done-without-answer', seen);
         reviews.n++; reviews.why['each-done'] = (reviews.why['each-done'] || 0) + 1; log({review: 'each-final', answer: r.answer ? String(r.answer).slice(0, 160) : null});
         if (r.answer) { answer = r.answer; answerAt = pageKey(view); status = 'done'; break }
@@ -985,7 +956,8 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
   }
   // An answer comparing the items opened one by one, checked against their pages; asked again once with the table when
   // it does not carry the winner's value.
-  if (status === 'done' && answer && targets?.length >= 2) {
+  // (whatever ended the run: a run that ran out of steps can still have written an answer)
+  if (answer && targets?.length >= 2) {
     const items = [...(seen.pinned || [])].map(k => seen.get(k)).filter(Boolean), c = checkCompare(goal, answer, items);
     log({check: c ? (c.ok ? 'ok' : 'mismatch') : 'none'});
     if (c && !c.ok) {
