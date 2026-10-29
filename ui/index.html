@@ -601,9 +601,13 @@ nav.side{position:relative}
 .iconbtn{padding:3px 10px;min-width:30px;font-size:15px;line-height:1.2;border-radius:10px}
 .filter{margin:0 12px 6px;width:auto!important;font-size:13px!important;padding:6px 10px!important}
 body:not(.panel) aside .newchat,body:not(.panel) #botHead{display:none}
+.loadNote{text-align:center;margin:28px 0}
+.htag{display:inline-block;font-size:10.5px;font-weight:700;color:var(--muted);background:color-mix(in srgb,var(--muted) 14%,transparent);border-radius:999px;padding:0 7px;margin-right:5px;vertical-align:1px}
 .ci .flag{display:inline-block;font-size:10.5px;font-weight:700;color:var(--blush-ink);background:var(--blush-soft);border-radius:999px;padding:0 7px;margin-right:4px}
 .folderLine{max-width:820px;margin:0 auto 6px;display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--muted)}
 .folderLine[hidden]{display:none}
+.folderLine .lbl{flex:none;white-space:nowrap}.folderLine .note{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#folderChip{min-width:0;max-width:min(420px,60%);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chipbtn{padding:2px 10px;font-size:12px;border-radius:999px;box-shadow:none}
 .folderLine input{font-size:12.5px!important;padding:4px 10px!important;width:min(360px,60%)}
 #backBtn{display:none}body.panel #backBtn{display:inline-block;font-size:20px;padding:0 10px}
@@ -733,7 +737,7 @@ body.panel #panelStart .row{margin-top:2px}
   </div></div>
   <div id="msgs"><div class="wrap"></div></div>
   <div id="sug" hidden></div>
-  <div class="compose" id="compose" hidden><div class="chips" id="chips" hidden></div><div class="otherBar" id="otherBar" hidden></div><div class="folderLine" id="folderLine" hidden>폴더 <button type="button" class="chipbtn mono" id="folderChip">~</button><span class="note" style="margin:0">새 대화는 여기서 일해요</span></div><div class="tasks" id="tasks"></div><div class="row">
+  <div class="compose" id="compose" hidden><div class="chips" id="chips" hidden></div><div class="otherBar" id="otherBar" hidden></div><div class="folderLine" id="folderLine" hidden><span class="lbl">폴더</span><button type="button" class="chipbtn mono" id="folderChip">~</button><span class="note" style="margin:0">새 대화는 여기서 일해요</span></div><div class="tasks" id="tasks"></div><div class="row">
    <textarea id="input" rows="1" placeholder="덱 인턴에게 말하기"></textarea>
    <button class="primary" id="sendBtn">보내기</button>
   </div></div>
@@ -1102,6 +1106,11 @@ const usd=(v,d=2)=>v==null||isNaN(v)?'—':'$'+Number(v).toFixed(v>0&&v<0.01?4:d
 const per1M=v=>v?'$'+(v*1e6).toFixed(v*1e6<1?3:2):'free';
 const tok=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1e3)+'k':String(n);
 const short=p=>p?p.replace(/^\/Users\/[^/]+/,'~'):'';
+// Work another bot handed over is titled "<bot>에게서 · <task>"; lists show the task and a small tag instead,
+// so several handed-over chats do not all read the same.
+const HANDED=/^[^·\n]{1,30}에게서 · /;
+const ctitle=c=>String(c.title||'').replace(HANDED,'')||'새 대화';
+const ctag=c=>c.from||HANDED.test(c.title||'')?'<span class="htag">받은 일</span>':'';
 // A folder as a line has room for: a long path keeps its last two names.
 const place=p=>{const s=short(p),parts=s.split('/');return s.length>34&&parts.length>3?'…/'+parts.slice(-2).join('/'):s};
 const api=async(p,o={})=>{const r=await fetch(p,{...o,headers:{'X-Bisu-Token':TOKEN,...(o.body?{'Content-Type':'application/json'}:{}),...o.headers}});const j=await r.json().catch(()=>({}));if(!r.ok){const e=Error(j.error||r.status);if(j.holder)e.holder=j.holder;throw e}return j};
@@ -1127,7 +1136,9 @@ function setMood(state,text){clearTimeout(moodTimer);mood={state,text};
 // What is promised about asking first, as the chosen engine and mode really behave: bisu's own engine,
 // by default, runs what its judge clears and asks for the rest.
 const askPromise=()=>prefs.engine==='native'&&prefs.approve!=='always'?'지우기·보내기·설치처럼 되돌리기 어려운 일은 하기 전에 꼭 물어볼게요.':'파일을 고치거나 명령을 실행하기 전엔 꼭 물어볼게요.';
-const helloHTML=()=>`<div class="hello"><span class="bisu live"></span><b>안녕하세요, 덱 인턴이에요</b><span>아래에 바로 말하면 돼요. 파일 일은 아래에 적힌 폴더에서 해요.<br><span class="promise">${askPromise()}</span></span></div>`;
+// The empty chat greets as the bot it belongs to, with its job when it has one of its own.
+const iyeyo=n=>{const k=String(n).charCodeAt(String(n).length-1)-0xAC00;return n+(k>=0&&k<11172&&k%28===0?'예요':'이에요')};
+const helloHTML=()=>{const b=(()=>{try{return curBotInfo()}catch{}})(),nm=b?.name||'덱 인턴';return `<div class="hello"><span class="bisu live"></span><b>안녕하세요, ${esc(iyeyo(nm))}</b><span>${b&&!b.default&&b.job?esc(b.job)+'<br>':''}아래에 바로 말하면 돼요. 파일 일은 아래에 적힌 폴더에서 해요.<br><span class="promise">${askPromise()}</span></span></div>`};
 // Developer detail (tool calls, steps, cost, model names): off by default, one switch in Settings.
 // Kept by the engine (/api/prefs), not in this page's storage: the menu bar app gets a new port, and
 // so a new, empty origin, on every launch.
@@ -1357,27 +1368,27 @@ function renderTasks(){const box=$('tasks');if(!box)return;
   return `<div class="task${asking?' ask':''}"><span class="spin"></span><b>${esc(t.type==='local_agent'?agentName(t.agent):'명령')}</b><span class="d">${esc(t.description)}${t.step?' · '+esc(t.step):''}</span><span class="e" data-t="${t.started}">${elapsed(t.started)}</span>${t.stoppable?`<button class="tx" data-stop="${esc(t.id)}" title="이 담당만 멈추기">✕</button>`:''}</div>`}).join('')}
 $('tasks')?.addEventListener('click',e=>{const b=e.target.closest('[data-stop]');if(!b||!cur)return;b.disabled=true;post(`/api/chats/${cur.id}/stoptask`,{task_id:b.dataset.stop}).catch(()=>{b.disabled=false})});
 setInterval(()=>{for(const el of document.querySelectorAll('.task .e'))el.textContent=elapsed(Number(el.dataset.t))},1000);
-function chatUI(){const c=cur;$('chatHead').hidden=!c;if(c||!PANEL)$('chips').hidden=true;$('folderLine').hidden=!!c||PANEL;if(!c&&!PANEL)$('folderChip').textContent=short($('cwd').value||curBotInfo()?.cwd||'~');$('compose').hidden=false;if(c)document.body.classList.remove('onboarding');
+function chatUI(){const c=cur,who=`${(()=>{try{return curBotInfo()?.name}catch{}})()||'덱 인턴'}에게 말하기`;$('stop').hidden=!c?.busy;$('input').placeholder=c?.busy?(PANEL?'답하는 중 — 보내도 돼요':'답하는 중이에요 — 지금 보내도 이어서 읽어요'):(PANEL?who:who+'  (Enter 보내기 · Shift+Enter 줄바꿈)');$('chatHead').hidden=!c;if(c||!PANEL)$('chips').hidden=true;$('folderLine').hidden=!!c||PANEL;if(!c&&!PANEL){const d=short($('cwd').value||curBotInfo()?.cwd||'~');$('folderChip').textContent=place(d);$('folderChip').title=d}$('compose').hidden=false;if(c)document.body.classList.remove('onboarding');
  if(PANEL){$('panelStart').hidden=!!c;$('msgs').hidden=!c;if(!c)fillStartCwd()}
  if(!c){if(!wrap().children.length){wrap().innerHTML=helloHTML();mountBisu(wrap())}mountBisu();renderRecent();renderOnboard();return}
- $('chatTitle').textContent=c.title||'새 대화';$('chatSub').textContent=place(c.cwd);$('chatSub').title=short(c.cwd);
- $('stop').hidden=!c.busy;$('input').placeholder=c.busy?(PANEL?'답하는 중 — 보내도 돼요':'답하는 중이에요 — 지금 보내도 이어서 읽어요'):(PANEL?'덱 인턴에게 말하기':'덱 인턴에게 말하기  (Enter 보내기 · Shift+Enter 줄바꿈)');renderList()}
+ $('chatTitle').textContent=ctitle(c);$('chatSub').textContent=place(c.cwd);$('chatSub').title=short(c.cwd);
+ renderList()}
 function renderList(){const q=($('chatFilter')?.value||'').trim().toLowerCase(),list=myChats().filter(c=>!q||(c.title||'').toLowerCase().includes(q)).sort((a,b)=>(b.pending>0)-(a.pending>0));
- $('chatList').innerHTML=list.map(c=>`<div class="ci${cur&&c.id===cur.id?' on':''}" data-id="${c.id}"><div class="t">${c.pending?'<span class="flag">확인 필요</span>':''}${esc(c.title||'새 대화')}</div><div class="s" title="${esc(short(c.cwd))}"><span class="dot${c.pending?' wait':c.busy||c.tasks?' busy':''}"></span>${esc(place(c.cwd))}</div></div>`).join('')||'<p class="note" style="padding:0 12px">아직 대화가 없어요.</p>';
+ $('chatList').innerHTML=list.map(c=>`<div class="ci${cur&&c.id===cur.id?' on':''}" data-id="${c.id}"><div class="t">${c.pending?'<span class="flag">확인 필요</span>':''}${ctag(c)}${esc(ctitle(c))}</div><div class="s" title="${esc(short(c.cwd))}"><span class="dot${c.pending?' wait':c.busy||c.tasks?' busy':''}"></span>${esc(place(c.cwd))}</div></div>`).join('')||'<p class="note" style="padding:0 12px">아직 대화가 없어요.</p>';
  for(const el of $('chatList').querySelectorAll('.ci'))el.onclick=()=>open(el.dataset.id)}
 async function refreshChats(){try{const r=await api('/api/chats');chats=r.chats;
  if(cur){const c=chats.find(x=>x.id===cur.id);
   // Closed somewhere else: go back to the start instead of showing a chat that no longer exists.
   if(!c){detach();cur=null;wrap().innerHTML='';setMood('idle','듣고 있어요');chatUI()}
-  else{cur=c;$('chatTitle').textContent=c.title||'새 대화'}}
+  else{cur=c;$('chatTitle').textContent=ctitle(c)}}
  renderList();renderBots();renderStatus();if(!cur)renderRecent()}catch{}}
 function listen(id){
  es?.close();
  es=new EventSource(`/api/chats/${id}/events?token=${TOKEN}`);
  es.onerror=()=>{if(es&&es.readyState===2)refreshChats()};
- es.onmessage=e=>{const ev=JSON.parse(e.data);const stick=atBottom();if(ev.kind==='hello'){cur={...cur,...ev.chat}}render(ev);if(ev.kind==='hello'||stick)$('msgs').scrollTop=$('msgs').scrollHeight;if(['status','approval','approval_done','user','tasks'].includes(ev.kind))refreshChats()};
+ es.onmessage=e=>{const ev=JSON.parse(e.data);wrap().querySelector('.loadNote')?.remove();const stick=atBottom();if(ev.kind==='hello'){cur={...cur,...ev.chat}}render(ev);if(ev.kind==='hello'||stick)$('msgs').scrollTop=$('msgs').scrollHeight;if(['status','approval','approval_done','user','tasks'].includes(ev.kind))refreshChats()};
 }
-function open(id){const c=chats.find(x=>x.id===id);if(!c)return;if(!c.maker&&(c.bot||'bisu')!==curBot){curBot=c.bot||'bisu';try{localStorage.setItem('bisu.bot',curBot)}catch{};renderBots()}cur=c;wrap().innerHTML='';chatUI();listen(id);
+function open(id){const c=chats.find(x=>x.id===id);if(!c)return;if(!c.maker&&(c.bot||'bisu')!==curBot){curBot=c.bot||'bisu';try{localStorage.setItem('bisu.bot',curBot)}catch{};renderBots()}cur=c;wrap().innerHTML='<p class="note loadNote">불러오는 중…</p>';chatUI();listen(id);
  try{localStorage.setItem('bisu.chat',id)}catch{};$('input').focus()}
 // The stream is what keeps Claude Code running, so it is dropped when the panel goes away: a hidden
 // panel should not hold a few hundred megabytes of idle process. Reopening replays from the chat's
@@ -1403,7 +1414,7 @@ const fresh=c=>Date.now()-(c.lastAt||c.created||0)<FRESH_MS;
 // The panel's way back to an earlier conversation: its start card lists the recent ones.
 function renderRecent(){const el=$('recent');if(!el)return;if(!PANEL||cur){el.innerHTML='';return}
  renderHome();const list=myChats().filter(c=>!c.busy&&!c.pending).slice(0,3);
- el.innerHTML=list.length?`<div class="rh">최근</div>`+list.map(c=>`<div class="ri" data-id="${esc(c.id)}"><span class="dot${c.pending?' wait':c.busy||c.tasks?' busy':''}"></span><span class="t">${esc(c.title||'새 대화')}</span><span class="w">${c.lastAt||c.created?ago(c.lastAt||c.created):''}</span></div>`).join(''):'';
+ el.innerHTML=list.length?`<div class="rh">최근</div>`+list.map(c=>`<div class="ri" data-id="${esc(c.id)}"><span class="dot${c.pending?' wait':c.busy||c.tasks?' busy':''}"></span><span class="t">${ctag(c)}${esc(ctitle(c))}</span><span class="w">${c.lastAt||c.created?ago(c.lastAt||c.created):''}</span></div>`).join(''):'';
  for(const r of el.querySelectorAll('.ri'))r.onclick=()=>open(r.dataset.id)}
 
 // First run: three choices, kept as ordinary memories (and the suggestion cadence), shown once.
@@ -1437,7 +1448,7 @@ function renderOnboard(){
 // chat is open — including right after the engine restarts, which is when it matters most.
 function fillStartCwd(){const i=$('startCwd');if(!i||i.value)return;
  let last='';try{last=localStorage.getItem('bisu.cwd')||''}catch{}
- i.value=last||short(myChats()[0]?.cwd||curBotInfo()?.cwd||$('cwd').value||'')}
+ i.value=last||short(myChats()[0]?.cwd||curBotInfo()?.cwd||$('cwd').value||'');requestAnimationFrame(()=>{i.scrollLeft=i.scrollWidth})}
 function startFromPanel(){const cwd=$('startCwd').value.trim();try{localStorage.setItem('bisu.cwd',cwd)}catch{}
  startChat({cwd},$('startErr'))}
 $('startNew').onclick=startFromPanel;
@@ -1997,6 +2008,7 @@ function renderBots(){const el=$('botList');
 function setBot(id){if(id===curBot)return;curBot=id;try{localStorage.setItem('bisu.bot',id)}catch{}
  // A conversation belongs to one bot: switching leaves it, and the list shows the new bot's.
  if(cur&&!cur.maker&&(cur.bot||'bisu')!==id){detach();cur=null;wrap().innerHTML='';chatUI()}
+ else if(!cur){wrap().innerHTML='';chatUI()}
  renderBots();renderList();renderRecent();fillStartCwdFor();
  if(viewOn('memory'))loadMemory();if(viewOn('jobs'))renderJobs();heroes()}
 function fillStartCwdFor(){const b=curBotInfo();if(b&&!cur){for(const id of ['cwd','startCwd'])if($(id))$(id).value=short(b.cwd)}}
@@ -2097,7 +2109,7 @@ function palFill(){const q=$('palQ').value.trim().toLowerCase(),hit=t=>!q||Strin
  palItems=[
   ...[['새 대화','⌘N',()=>newChatHere()],['봇 만들기','',()=>$('botNew').click()],['설정','⌘,',()=>openSettings()]].filter(([t])=>hit(t)).map(([t,h,go])=>({k:'할 일',t,h,go})),
   ...bots.filter(b=>hit(b.name)||hit(b.job)).map(b=>({k:'봇',t:b.name,h:b.job||'',go:()=>{setBot(b.id);show('chat')}})),
-  ...chats.filter(c=>!c.maker&&hit(c.title||'')).slice(0,30).map(c=>({k:'대화',t:c.title||'새 대화',h:botName(c.bot),go:()=>{if((c.bot||'bisu')!==curBot)setBot(c.bot||'bisu');show('chat');open(c.id)}})),
+  ...chats.filter(c=>!c.maker&&hit(c.title||'')).slice(0,30).map(c=>({k:'대화',t:ctitle(c),h:botName(c.bot),go:()=>{if((c.bot||'bisu')!==curBot)setBot(c.bot||'bisu');show('chat');open(c.id)}})),
   ...(PANEL?[]:Object.entries(SCREENS).filter(([,t])=>hit(t)).map(([v,t])=>({k:'화면',t,h:'',go:()=>show(v)})))].slice(0,60);
  palAt=0;$('palList').innerHTML=palItems.map((it,i)=>`<div class="pi${i?'':' on'}" data-i="${i}" role="option"><span class="k">${esc(it.k)}</span><span>${esc(it.t)}</span><span class="h">${esc(it.h)}</span></div>`).join('')||'<p class="note" style="margin:8px">찾는 게 없어요.</p>';
  for(const el of $('palList').querySelectorAll('.pi')){el.onmousemove=()=>palMark(+el.dataset.i);el.onclick=()=>palGo(+el.dataset.i)}}
@@ -2153,7 +2165,7 @@ if(!PANEL){const a=$('chatView').querySelector('aside');a.insertBefore($('sug'),
 // ---- the panel's start: what needs me, what is running, the latest few, things to ask ----
 let routineChips=[],routineChipsBot='';
 function renderHome(){if(!PANEL)return;const g=gstat(),box=$('nowBox');
- const row=(c,kind)=>`<button type="button" class="nowRow ${kind}" data-id="${esc(c.id)}"><span class="sd"></span><span class="rt">${esc(c.title||'새 대화')}</span><span class="rs">${kind==='wait'?'확인 필요':c.tasks?`일하는 중 · ${c.tasks}`:'답하는 중'}${(c.bot||'bisu')!==curBot?' · '+esc(bots.find(b=>b.id===c.bot)?.name||''):''}</span></button>`;
+ const row=(c,kind)=>`<button type="button" class="nowRow ${kind}" data-id="${esc(c.id)}"><span class="sd"></span><span class="rt">${ctag(c)}${esc(ctitle(c))}</span><span class="rs">${kind==='wait'?'확인 필요':c.tasks?`일하는 중 · ${c.tasks}`:'답하는 중'}${(c.bot||'bisu')!==curBot?' · '+esc(bots.find(b=>b.id===c.bot)?.name||''):''}</span></button>`;
  const busy=g.busy.filter(c=>!g.pend.includes(c));
  box.innerHTML=(g.pend.length?`<div class="nh">확인이 필요해요</div>`+g.pend.slice(0,3).map(c=>row(c,'wait')).join(''):'')+(busy.length?`<div class="nh">진행 중</div>`+busy.slice(0,3).map(c=>row(c,'busy')).join(''):'');
  for(const b of box.querySelectorAll('.nowRow'))b.onclick=()=>open(b.dataset.id);
