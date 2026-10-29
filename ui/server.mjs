@@ -241,7 +241,7 @@ function idleLater(c){
 function unwatched(c){clearTimeout(c.idle);if(c.proc&&!c.busy&&!c.pending.size&&!c.tasks?.size)idleLater(c)}
 // lastAt is the last time the person or bisu actually said something, which is what decides whether
 // the panel picks a conversation up again or starts fresh.
-function publicChat(c){return {id:c.id,bot:c.bot||bots.DEFAULT,maker:!!c.maker,cwd:c.cwd,title:c.title,busy:c.busy,alive:!!c.proc,sessionId:c.sessionId,pending:c.pending.size,tasks:c.tasks?.size||0,queued:c.queued?.length||0,created:c.created,lastAt:c.lastAt||c.created}}
+function publicChat(c){return {id:c.id,bot:c.bot||bots.DEFAULT,maker:!!c.maker,from:c.handoff?.from||null,cwd:c.cwd,title:c.title,busy:c.busy,alive:!!c.proc,sessionId:c.sessionId,pending:c.pending.size,tasks:c.tasks?.size||0,queued:c.queued?.length||0,created:c.created,lastAt:c.lastAt||c.created}}
 // A restored chat has no events until it is opened; its transcript is replayed into the stream then.
 async function hydrate(c){
  if(c.events.length||!c.sessionId)return;
@@ -300,7 +300,7 @@ function start(c){
  proc.on('error',e=>{clearTimeout(c.stall);if(c.proc!==proc)return;c.proc=null;push(c,{kind:'error',message:`bisu could not start: ${e.message}`});setBusy(c,false)});
  proc.on('close',code=>{clearTimeout(c.stall);if(c.proc!==proc)return;c.proc=null;for(const id of c.pending.keys())push(c,{kind:'approval_done',request_id:id,allow:false,reason:'stopped'});c.pending.clear();
   if(c.tasks.size){c.tasks.clear();pushTasks(c)}if(c.queued.length){c.queued=[];push(c,{kind:'queue',ids:[]})}
-  if(code&&code!==143){const msg=err.split('\n').filter(l=>l.trim()&&!/connectors are disabled/.test(l)).slice(-3).join('\n');push(c,{kind:'error',message:`bisu stopped (exit ${code})${msg?': '+msg:''}`})}
+  if(code&&code!==143){const msg=err.split('\n').filter(l=>l.trim()&&!/connectors are disabled/.test(l)).slice(-3).join('\n');push(c,{kind:'error',message:/No conversation found/i.test(msg)?'이 대화는 지금 엔진으로는 이어받을 수 없어요(엔진을 바꾸기 전에 시작한 대화예요). 새 대화로 시작해 주세요.':`bisu가 멈췄어요 (exit ${code})${msg?': '+msg:''}`})}
   setBusy(c,false)});
 }
 const send=(c,obj)=>{c.proc?.stdin.write(JSON.stringify(obj)+'\n')};
@@ -347,8 +347,14 @@ function handle(c,j){
   // bisu's own engine reports what it spent at Z.ai's prices; Claude Code's own figure uses Claude's.
   const total=j.bisu_native?(j.total_cost_usd??null):estimate(usage,priceNow()),cost=total==null?null:total-c.costSoFar;if(total!=null)c.costSoFar=total;
   c.lastAt=Date.now();saveChats();
+  // A turn that failed says why, in words the person can act on (a stop they asked for says nothing).
+  if(j.is_error&&!c.stopping&&typeof j.result==='string'&&j.result.trim())push(c,{kind:'error',message:whyFailed(j.result)});c.stopping=false;
   push(c,{kind:'result',error:!!j.is_error,subtype:j.subtype,turns:j.num_turns,ms:j.duration_ms,cost});setBusy(c,false);idleLater(c);handoffDone(c,j);return}
 }
+const whyFailed=t=>/429|insufficient balance|recharge|quota|credit/i.test(t)?(/GLM|z\.ai/i.test(t)?'Z.ai(GLM) 잔액이 부족해서 답하지 못했어요. Z.ai에서 충전하거나 설정에서 엔진을 Claude Code로 바꾸면 다시 돼요.':'쓸 수 있는 크레딧이 부족해서 답하지 못했어요. 충전한 뒤 다시 보내 주세요.')
+ :/401|unauthor|invalid api key|no key/i.test(t)?'키가 맞지 않아 답하지 못했어요. Dec에 저장한 키를 확인해 주세요.'
+ :/timeout|timed out|ETIMEDOUT|ECONNRESET|fetch failed/i.test(t)?'연결이 끊겨서 답하지 못했어요. 잠시 뒤 다시 보내 주세요.'
+ :`끝까지 하지 못했어요: ${t.slice(0,200)}`;
 // ---- one bot handing work to another (engine tool bot_handoff) ----
 // A chat's engine cannot reach this server (its token stays here), so it writes a request file with the chat's
 // own one-time key; the server checks the key, starts a chat of the other bot with the task, answers the file,
@@ -417,7 +423,7 @@ function decide(c,{request_id,allow,always,message}){
  if(allow&&always)c.allowTools.add(q.tool_name);
  send(c,{type:'control_response',response:{subtype:'success',request_id,response:allow?{behavior:'allow',updatedInput:q.input}:{behavior:'deny',message:message||'The person declined this on the bisu page.'}}});
  push(c,{kind:'approval_done',request_id,allow:!!allow,always:!!(allow&&always),tool:q.tool_name});handoffUp(c,{kind:'approval_done',request_id,allow:!!allow,tool:q.tool_name})}
-function stop(c){if(!c.proc)return;send(c,{type:'control_request',request_id:randomUUID(),request:{subtype:'interrupt'}});
+function stop(c){if(!c.proc)return;c.stopping=true;send(c,{type:'control_request',request_id:randomUUID(),request:{subtype:'interrupt'}});
  // A model that ignores the interrupt still gets stopped; the next message resumes the session.
  const p=c.proc;setTimeout(()=>{if(c.proc===p&&c.busy)p.kill('SIGTERM')},4000)}
 function close(c){clearTimeout(c.idle);c.proc?.kill('SIGTERM');for(const res of c.clients)res.end();chats.delete(c.id);saveChats()}
