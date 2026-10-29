@@ -710,6 +710,31 @@ form>label.sw+.kv,section>label.sw+.kv{margin-top:12px}
 .saveRoutine{margin:2px 0 0;padding:4px 11px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--muted)}
 .keyBack{color:var(--accent);font-weight:600;padding:4px 6px}
 .keyBack:hover:not(:disabled){transform:none;text-decoration:underline}
+/* review 10-29 (2): the panel's start on one left edge, the folder as one quiet field, the list on the right */
+.av,.botPill .av{font-family:"Dec Browser Sans UI",var(--display);font-weight:900}
+[data-gstatus][data-k=idle] .sd{background:var(--accent);opacity:.75}
+#panelStart #recent{gap:0;margin-top:2px}
+#panelStart #recent .rh,.nowBox .nh{font-size:11.5px;font-weight:700;color:var(--muted);margin:2px 2px 6px;font-family:var(--display)}
+#recent .rcard{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+#recent .rcard .ri{border-radius:0;padding:10px 12px;border:0;align-items:center}
+#recent .rcard .ri+.ri{border-top:1px solid var(--line)}
+#recent .rcard .ri:hover{background:color-mix(in srgb,var(--accent) 7%,var(--card))}
+#recent .rcard .ri .t{font-size:13.5px}
+#panelStart .startWrap>.row{display:flex;align-items:center;gap:8px;margin-top:10px!important;padding:3px 4px 3px 12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r)}
+#panelStart .startWrap>.row:focus-within{border-color:var(--accent);box-shadow:var(--glow)}
+#panelStart .startWrap>.row .lbl{flex:none;font-size:12px;font-weight:600;color:var(--muted);font-family:var(--display)}
+#panelStart .startWrap>.row input,#panelStart .startWrap>.row input:focus{flex:1;min-width:0;border:0;background:transparent;box-shadow:none;padding:7px 2px;font-size:13px}
+#panelStart #startPick{flex:none;padding:5px 11px;font-size:12px;font-weight:600;border:0;box-shadow:none;background:var(--chip);color:var(--ink)}
+.chips{margin:0 0 8px}.chips button{padding:5px 12px;font-size:12.5px}
+.ctxbar{gap:6px;margin:0 0 8px;font-size:12px}
+.ctxbar .lbl{color:var(--muted);font-weight:600}
+.ctxbar .c{padding:4px 11px;border-radius:999px;font-weight:600;font-size:12px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));background:var(--accent-soft);color:var(--ink)}
+.ctxbar .x{margin-left:0;width:22px;height:22px;display:grid;place-items:center;border-radius:50%;font-size:11px;color:var(--muted)}
+.ctxbar .x:hover{background:var(--chip);color:var(--ink)}
+/* the full window: menu on the left, the conversation in the middle, its list on the right */
+body:not(.panel) #chatView>aside:first-child{order:3;border-right:0;border-left:1px solid var(--line)}
+body:not(.panel) #chatView>.chat{order:1}
+body:not(.panel) #chatView>#botDlg{order:4}
 </style>
 </head>
 <body>
@@ -767,7 +792,7 @@ form>label.sw+.kv,section>label.sw+.kv{margin-top:12px}
    <p class="note"><span class="promise">파일을 고치거나 명령을 실행하기 전엔 꼭 물어볼게요.</span></p>
    <div class="row"><span class="lbl">폴더</span>
     <input type="text" id="startCwd" class="mono" list="cwdList" spellcheck="false" autocomplete="off" placeholder="~/Desktop/project">
-    <button id="startPick" hidden>고르기…</button>
+    <button type="button" id="startPick" hidden>고르기</button>
    </div>
    <button id="startNew" hidden>시작하기</button>
    <p class="err" id="startErr" hidden></p>
@@ -1261,7 +1286,7 @@ function setCtx(c){
  if(ctx.selection)bits.push(`선택한 글 ${ctx.selection.length}자`);
  if(ctx.clipboard)bits.push(`클립보드 ${ctx.clipboard.length}자`);
  bar.hidden=false;
- bar.innerHTML=`<span>함께 보낼 것</span>`+bits.map(b=>`<span class="c">${b}</span>`).join('')+`<button class="x" title="이번 메시지에는 붙이지 않기">✕</button>`;
+ bar.innerHTML=`<span class="lbl">함께 보내요</span>`+bits.map(b=>`<span class="c">${b}</span>`).join('')+`<button class="x" title="이번 메시지에는 붙이지 않기" aria-label="붙이지 않기">✕</button>`;
  bar.querySelector('.x').onclick=()=>{consumedAt=Date.now();setCtx(null);HOST?.consume?.()};
 }
 // Appended after the message so the chat title stays the person's own words; the page strips it
@@ -1491,7 +1516,7 @@ const fresh=c=>Date.now()-(c.lastAt||c.created||0)<FRESH_MS;
 // The panel's way back to an earlier conversation: its start card lists the recent ones.
 function renderRecent(){const el=$('recent');if(!el)return;if(!PANEL||cur){el.innerHTML='';return}
  renderHome();const list=myChats().filter(c=>!c.busy&&!c.pending).slice(0,3);
- el.innerHTML=list.length?`<div class="rh">최근</div>`+list.map(c=>`<div class="ri" data-id="${esc(c.id)}"><span class="dot${c.pending?' wait':c.busy||c.tasks?' busy':''}"></span><span class="t">${ctag(c)}${esc(ctitle(c))}</span><span class="w">${c.lastAt||c.created?ago(c.lastAt||c.created):''}</span></div>`).join(''):'';
+ el.innerHTML=list.length?`<div class="rh">최근 대화</div><div class="rcard">`+list.map(c=>`<div class="ri" data-id="${esc(c.id)}"><span class="t">${ctag(c)}${esc(ctitle(c))}</span><span class="w">${c.lastAt||c.created?ago(c.lastAt||c.created):''}</span></div>`).join('')+'</div>':'';
  for(const r of el.querySelectorAll('.ri'))r.onclick=()=>open(r.dataset.id)}
 
 // First run: three choices, kept as ordinary memories (and the suggestion cadence), shown once.
@@ -2091,14 +2116,16 @@ const curBotInfo=()=>bots.find(b=>b.id===curBot);
 // A bot's conversations; the bot-making chat shows only while it is the open one.
 const myChats=()=>chats.filter(c=>c.maker?cur?.id===c.id:(c.bot||'bisu')===curBot);
 const mb=()=>'?bot='+encodeURIComponent(curBot);
-const initial=n=>String(n||'b').trim().slice(0,1).toUpperCase();
+const initial=n=>{const s=String(n||'').trim();return !s||/^덱\s*인턴$/.test(s)?'d':s.slice(0,1).toUpperCase()};
+// 덱 인턴 is written the way the brand writes it: dec's own mark, then 인턴.
+const nameHTML=n=>{const s=String(n||'');return /^덱\s/.test(s)?'<span class="decmark">dec</span>'+esc(s.slice(1)):esc(s)};
 async function loadBots(){try{const r=await api('/api/bots');bots=r.bots;if(!curBotInfo())curBot='bisu';renderBots()}catch{}}
 function renderBots(){const el=$('botList');
  el.innerHTML=bots.map(b=>botRow(b)).join('');
  for(const v of el.querySelectorAll('[data-view]')){v.classList.toggle('on',v.dataset.view===curView);v.onclick=()=>show(v.dataset.view)}
  for(const b of el.querySelectorAll('[data-bot]'))b.onclick=()=>{if(b.dataset.bot===curBot){if(!PANEL&&curView==='chat')toggleDetail();else show('chat')}else{setBot(b.dataset.bot);show('chat')}};
- if($('listTitle'))$('listTitle').textContent=`${(curBotInfo()||{name:'덱 인턴'}).name}의 대화`;
- const me=curBotInfo()||{name:'덱 인턴',job:''};$('botHeadName').textContent=me.name;$('botHeadJob').textContent=me.job||'';$('botHeadAv').textContent=initial(me.name);
+ if($('listTitle'))$('listTitle').innerHTML=`${nameHTML((curBotInfo()||{name:'덱 인턴'}).name)}의 대화`;
+ const me=curBotInfo()||{name:'덱 인턴',job:''};$('botHeadName').innerHTML=nameHTML(me.name);$('botHeadJob').textContent=me.job||'';$('botHeadAv').textContent=initial(me.name);
  const pick=$('botPick');pick.innerHTML=bots.map(b=>`<option value="${esc(b.id)}">${esc(b.name)}</option>`).join('');pick.value=curBot;$('botPickRow').hidden=!PANEL||bots.length<2;
  for(const [hero,name] of [['memoryHero','기억'],['jobsHero','예약 작업']]){const h=$(hero)?.querySelector('.ht');if(h)h.textContent=name+(bots.length>1?` · ${me.name}`:'')}
  if(typeof detailOpen==='function'&&detailOpen()&&detailBot!==curBot)openBot();
@@ -2234,7 +2261,7 @@ setInterval(renderStatus,3000);
 const BOT_SCREENS=[['chat','대화'],['routines','루틴'],['memory','기억'],['jobs','예약']];
 const BOT_ICONS={"chat": "<svg viewBox=\"0 0 20 20\"><path d=\"M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14h-6.5L6 16.8V14H4a1.5 1.5 0 0 1-1.5-1.5V6A1.5 1.5 0 0 1 4 4.5z\"/></svg>", "routines": "<svg viewBox=\"0 0 20 20\"><path d=\"M4 6h9M4 10h7M4 14h5\"/><path d=\"M14 12.5l2.5 2-2.5 2\"/></svg>", "memory": "<svg viewBox=\"0 0 20 20\"><path d=\"M6 3.5h8A1.5 1.5 0 0 1 15.5 5v12L10 13.8 4.5 17V5A1.5 1.5 0 0 1 6 3.5z\"/></svg>", "jobs": "<svg viewBox=\"0 0 20 20\"><circle cx=\"10\" cy=\"10.5\" r=\"6.5\"/><path d=\"M10 7v3.7l2.4 1.6M7.5 2.8h5\"/></svg>"};
 function botRow(b){const mine=chats.filter(c=>(c.bot||'bisu')===b.id&&!c.maker),dot=mine.some(c=>c.pending>0)?'wait':mine.some(c=>c.busy||c.tasks>0)?'busy':'';
- return `<button type="button" data-bot="${esc(b.id)}" class="${b.id===curBot?'on':''}" title="${esc(b.job||'')}"><span class="av">${esc(initial(b.name))}</span><span class="nm">${esc(b.name)}</span>${dot?`<span class="bdot ${dot}"></span>`:''}</button>`+
+ return `<button type="button" data-bot="${esc(b.id)}" class="${b.id===curBot?'on':''}" title="${esc(b.job||'')}"><span class="av">${esc(initial(b.name))}</span><span class="nm">${nameHTML(b.name)}</span>${dot?`<span class="bdot ${dot}"></span>`:''}</button>`+
   (b.id===curBot&&!PANEL?`<div class="bsub">${BOT_SCREENS.map(([v,t])=>`<button type="button" data-view="${v}">${BOT_ICONS[v]}${t}</button>`).join('')}</div>`:'')}
 // The bot's details sit beside the conversation (ⓘ), not over it.
 const detailOpen=()=>!$('botDlg').hidden;
@@ -2269,7 +2296,7 @@ function renderHome(){if(!PANEL)return;const g=gstat(),box=$('nowBox');
  for(const b of box.querySelectorAll('.nowRow'))b.onclick=()=>open(b.dataset.id);
  // Nothing to show: bisu's face and one line, so the start never looks empty or broken.
  $('panelStart').classList.toggle('quiet',!g.pend.length&&!busy.length&&!myChats().length);
- const me=curBotInfo()||{name:'덱 인턴'};$('botPillName').textContent=me.name;$('botPillAv').textContent=initial(me.name);
+ const me=curBotInfo()||{name:'덱 인턴'};$('botPillName').innerHTML=nameHTML(me.name);$('botPillAv').textContent=initial(me.name);
  renderChips()}
 // Quick things to ask: this bot's routines first, then what is useful right now.
 async function renderChips(){const el=$('chips');if(!PANEL||cur){el.hidden=true;return}

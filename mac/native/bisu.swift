@@ -447,14 +447,24 @@ let shimJS = """
   }, true);
 
   // Dragging: the page marks its grab areas with -webkit-app-region, which WebKit ignores, so the
-  // shell moves the window here. Pointer capture keeps the drag alive past the window edge.
+  // shell moves the window here — the panel, or the full window the page is in. Pointer capture keeps
+  // the drag alive past the window edge. In the full window the headers and the strip along the top
+  // (where a title bar would be) move it too, and double-clicking there zooms it like a title bar.
   let drag = null;
   const DRAG = '.dragbar, .chathead, #panelStart .startWrap > .bisu, #panelStart .startTitle, #panelStart .ccStatus';
-  const skip = 'button, input, textarea, select, a, .grip, [contenteditable]';
+  const FULL = '.chathead, .listHead, .side .brand, .hero';
+  const skip = 'button, input, textarea, select, a, label, summary, .grip, [contenteditable]';
+  const full = () => !document.body.classList.contains('panel');
+  const grab = e => {
+    const t = e.target;
+    if (!t.closest || t.closest(skip)) return null;
+    return t.closest(DRAG) || (full() && (t.closest(FULL) || (e.clientY < 38 ? document.body : null)));
+  };
+  document.addEventListener('dblclick', e => { if (full() && grab(e)) post('zoom') }, true);
   document.addEventListener('pointerdown', async e => {
-    if (e.button !== 0) return;
-    const area = e.target.closest && e.target.closest(DRAG);
-    if (!area || (e.target.closest && e.target.closest(skip))) return;
+    if (e.button !== 0 || e.detail > 1) return;
+    const area = grab(e);
+    if (!area) return;
     const b = await host.bounds().catch(() => null);
     if (!b) return;
     drag = {sx: e.screenX, sy: e.screenY, x: b.x, y: b.y, id: e.pointerId, el: area};
@@ -1351,7 +1361,8 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1080, height: 760),
                      styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                      backing: .buffered, defer: false)
-    w.title = "bisu"
+    w.title = "덱 인턴"
+    w.titleVisibility = .hidden
     w.titlebarAppearsTransparent = true
     w.minSize = NSSize(width: 780, height: 520)
     w.contentView = view
@@ -1614,7 +1625,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       saveState(["panel": ["width": rect.width, "height": rect.height]])
       reply(["x": rect.minX, "y": rect.minY, "width": rect.width, "height": rect.height])
     case "bounds":
-      let f = panel.frame
+      let f = (view?.window ?? panel).frame
       reply(["x": f.minX, "y": f.minY, "width": f.width, "height": f.height])
     case "pickFolder":
       // A folder the person picks is one macOS has already let them into, which also saves a
@@ -1636,10 +1647,13 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       }
     case "move":
       guard let x = args["x"] as? Double, let y = args["y"] as? Double else { return }
-      let size = panel.frame.size
-      let origin = clampToScreen(NSPoint(x: x, y: y), size: size)
-      panel.setFrameOrigin(origin)
+      let win = view?.window ?? panel!
+      win.setFrameOrigin(clampToScreen(NSPoint(x: x, y: y), size: win.frame.size))
+    case "zoom":
+      if let w = view?.window, w !== panel { w.zoom(nil) }
     case "endMove":
+      // Only the panel remembers where it was put; the full window is an ordinary window.
+      guard view?.window == nil || view?.window === panel else { return }
       let f = panel.frame
       let probe = NSPoint(x: f.midX, y: f.midY)
       let screen = NSScreen.screens.first { $0.frame.contains(probe) } ?? panel.screen ?? NSScreen.main ?? NSScreen.screens[0]
