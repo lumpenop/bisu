@@ -96,7 +96,9 @@ function needsAsking(name, args) {
   if (MODE === 'bypassPermissions' || preAllowed.has(name) || always.has(name)) return false;
   const kind = (TOOLS[name] || EXTRA[name])?.kind;
   const inside = args.path === undefined || insideCwd({cwd}, resolvePath({cwd}, args.path));
-  if (kind === 'read') return !inside;
+  // The folder's rules files are already in the prompt, so reading one again asks nothing, wherever it
+  // is (a parent folder, ~/.claude); changing one still asks like any write outside the folder.
+  if (kind === 'read') return !inside && !(args.path !== undefined && RULE_FILES.has(resolvePath({cwd}, args.path)));
   // The web, memory, scheduling and the calendar show on the page as steps; asking first would only
   // add friction (an edit/full job still waits for its own approval in Settings). Deleting from the
   // calendar or reminders always asks.
@@ -178,6 +180,7 @@ const AGENTS = (() => { try { return JSON.parse(flags.agents || '{}') } catch { 
 // The base prompt's working rules, without its voice: a worker reports to bisu, not to the person.
 // The folder's CLAUDE.md files (ui/rules.mjs): a worker changes the project's files, so it follows them too.
 const FOLDER_RULES = (b => b ? b + '\n' : '')(rules.block(cwd, 6000));
+const RULE_FILES = new Set(rules.files(cwd).map(f => f.file));
 const WORKING = (s => s.includes('## Working') ? '## Working' + s.split('## Working')[1].split('\n## ')[0] : '')(fs.readFileSync(new URL('./prompt.md', import.meta.url), 'utf8'));
 const FILE_TOOLS = ['read_file', 'write_file', 'edit_file', 'list_files', 'search_files', 'run_command', 'web_fetch', 'web_search'];
 const screenTools = () => Object.keys(EXTRA).filter(n => n.startsWith('cu_'));

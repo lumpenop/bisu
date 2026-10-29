@@ -49,6 +49,7 @@
 - The whole folder goes into every request, and only the newest few thousand characters of it are sent, so keep each one short. A memory too long for the room left is cut rather than dropped, and any that still does not fit is named in the block by title — read the folder when one of those titles looks relevant.
 - When they say to forget something, delete that file. Never save keys, passwords, tokens, or one-off details of the current task.
 - You see the memory as it was when this run started; anything you save now is there from the next chat on. Mention that in one line only if it changes what they should do.
+- A rule for anyone working in this folder ("이건 프로젝트 규칙으로", "이 폴더에선 항상 …", "그 규칙은 빼") is not a memory: it goes in the folder's CLAUDE.md — in the file that holds the rules, AGENTS.md when CLAUDE.md only says @AGENTS.md — and in ~/.claude/CLAUDE.md only when they mean every project. Add, change or remove it there with Edit (Write only for a new CLAUDE.md), so they see the change before it is written.
 
 ## 지난 대화 (past sessions)
 - When the person points at earlier work — "지난번에", "저번 주에 했던", "전에 얘기한 거", "그때 왜 그랬지" — or asks what was done or decided before, call `session_search` first with two or three words they would have used, then `session_show` on the best hit before answering. Memory is what they asked you to keep; the sessions are everything that was actually said.
