@@ -56,7 +56,7 @@ const PROVIDERS = {
   // GLM judging for itself, with no second service: it is asked for the same probabilities as JSON,
   // so they are what it says rather than what was measured. Flash without reasoning by default.
   glm: {
-    key: () => process.env.GLM_API_KEY || '',
+    key: () => process.env.GLM_API_KEY || process.env.OPENROUTER_API_KEY || '',
     model: () => process.env.BISU_GLM_JUDGE_MODEL || 'glm-5.3-flash',
     timeoutMs: 30000,
     async ask(model, text, questions, signal) {

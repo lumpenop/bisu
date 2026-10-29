@@ -8,8 +8,22 @@
 // complete() streams: text and reasoning arrive through callbacks as they come, tool calls are
 // assembled from their fragments, and the result carries the usage from the final chunk.
 
-const BASE = () => (process.env.GLM_BASE_URL || 'https://api.z.ai').replace(/\/$/, '') + '/api/paas/v4';
-const KEY = () => process.env.GLM_API_KEY || '';
+// OpenRouter serves the same models (z-ai/glm-5.3 …) under its own key: used when asked (GLM_VIA=openrouter),
+// when there is no Z.ai key, and from the moment Z.ai says its balance is empty.
+let zaiEmpty = false;
+export const viaOpenRouter = () => !!process.env.OPENROUTER_API_KEY && (process.env.GLM_VIA === 'openrouter' || !process.env.GLM_API_KEY || zaiEmpty);
+const BASE = () => viaOpenRouter() ? (process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai').replace(/\/$/, '') + '/api/v1'
+  : (process.env.GLM_BASE_URL || 'https://api.z.ai').replace(/\/$/, '') + '/api/paas/v4';
+const KEY = () => viaOpenRouter() ? process.env.OPENROUTER_API_KEY : process.env.GLM_API_KEY || '';
+// Z.ai's fields in OpenRouter's words: the model under its maker, reasoning off or at an effort.
+function wire(body) {
+  if (!viaOpenRouter()) return body;
+  const {thinking, reasoning_effort, tool_stream, ...b} = body;
+  if (!b.model.includes('/')) b.model = 'z-ai/' + b.model;
+  if (thinking?.type === 'disabled') b.reasoning = {enabled: false};
+  else if (reasoning_effort) b.reasoning = {effort: reasoning_effort};
+  return b;
+}
 
 // USD per 1M tokens (Z.ai pricing, 2026-10). Cost is computed here because the API returns usage only.
 export const PRICES = {
@@ -18,6 +32,7 @@ export const PRICES = {
   'glm-5.3-flash': {input: 0.15, cached: 0.03, output: 0.50},
 };
 export function costOf(model, usage) {
+  if (usage?.cost != null) return usage.cost;
   const p = PRICES[model];
   if (!p || !usage) return null;
   const cached = usage.prompt_tokens_details?.cached_tokens || 0;
@@ -67,6 +82,9 @@ export async function complete({model, messages, tools, thinking = true, maxToke
       if (e instanceof GLMError && e.status === 400 && /cannot be disabled/.test(e.message) && body.thinking?.type === 'disabled') {
         ALWAYS_THINKS.add(model); delete body.thinking; body.reasoning_effort = 'low'; attempt--; continue;
       }
+      if (e instanceof GLMError && e.status === 429 && /balance|recharge|余额/i.test(e.message) && !viaOpenRouter() && process.env.OPENROUTER_API_KEY) {
+        zaiEmpty = true; attempt--; continue;
+      }
       const retryable = e instanceof GLMError ? e.retryable : true;
       if (!retryable || streamed || attempt >= 4) throw e;
       await sleep(Math.min(8000, 600 * 2 ** (attempt - 1)) + Math.random() * 300, signal);
@@ -79,7 +97,7 @@ async function once(body, signal, {onText, onReasoning, onToolStart}) {
   const r = await fetch(BASE() + '/chat/completions', {
     method: 'POST', signal,
     headers: {authorization: 'Bearer ' + KEY(), 'content-type': 'application/json', accept: 'text/event-stream'},
-    body: JSON.stringify(body),
+    body: JSON.stringify(wire(body)),
   });
   if (!r.ok) {
     const text = await r.text().catch(() => '');
@@ -108,7 +126,9 @@ async function once(body, signal, {onText, onReasoning, onToolStart}) {
       if (!c) continue;
       const d = c.delta || {};
       if (!firstAt && (d.content || d.reasoning_content || d.tool_calls)) firstAt = Date.now();
-      if (d.reasoning_content) { reasoning += d.reasoning_content; onReasoning?.(d.reasoning_content) }
+      const rc = d.reasoning_content || d.reasoning;
+      if (!firstAt && rc) firstAt = Date.now();
+      if (rc) { reasoning += rc; onReasoning?.(rc) }
       if (d.content) { text += d.content; onText?.(d.content) }
       for (const tc of d.tool_calls || []) {
         const at = tc.index ?? calls.length;
