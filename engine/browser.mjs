@@ -114,6 +114,8 @@ export const BROWSER_TOOLS = {
     }, required: ['goal', 'url']},
     kind: 'net',
     async run(ctx, {goal, url, typing, look_only, browser = 'auto'}) {
+      // A blank page is not a task: showing dec is browser_show.
+      if (/^\s*(about:blank|about:newtab|chrome:\/\/newtab\/?)?\s*$/i.test(String(url || ''))) return err('No page given. To show dec or open a new tab with nothing to do there, use browser_show; for a task, give the real address.');
       if (!/^https?:\/\//i.test(String(url || ''))) url = 'https://' + String(url || '').replace(/^\/+/, '');
       const inputs = inputsOf(typing);
       let note = '';
@@ -164,6 +166,18 @@ export const BROWSER_TOOLS = {
         if (!r.ok) return err(`Not pressed: ${r.error}. Run browser_task again from the current page.`);
         return ok(lines(`Pressed "${h.held.label}". Now on: ${r.title} — ${r.url}`, `Page says: ${r.texts.slice(0, 25).join(' / ').slice(0, 1500)}`));
       } catch (e) { return err(`Pressing it failed: ${e.code || e.message}`) }
+    },
+  },
+  browser_show: {
+    description: 'Show the person their browser (dec): bring it to the front, started if it is closed. new_tab opens a tab at dec\'s own home page. For "덱 열어줘", "브라우저 띄워줘", "새 탭/새 창" with no site to visit or task to do. browser_task works in a tab in the background and never opens a window, so use this to show dec.',
+    parameters: {type: 'object', properties: {new_tab: {type: 'boolean', description: 'also open a new tab at dec\'s home page'}}},
+    kind: 'net',
+    async run(ctx, {new_tab = false}) {
+      try {
+        const r = await dec.show({newTab: !!new_tab});
+        if (!r) return err('dec is not available (not installed, or its agent connection is off).');
+        return ok(lines(r.front ? 'dec is in front now.' : 'dec is open, but it could not be brought to the front.', r.tab && 'A new tab at dec\'s home page is open.'));
+      } catch (e) { return err(`dec failed: ${e.code || e.message}`) }
     },
   },
   browser_check: {

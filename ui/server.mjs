@@ -30,6 +30,7 @@ import * as webwaits from './webwaits.mjs';
 import {releaseSchedule,holdsSchedule} from './lock.mjs';
 import {PRICES as GLM_PRICES} from '../engine/glm.mjs';
 import {eventKit} from '../engine/calendar.mjs';
+import * as dec from '../engine/dec.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.dirname(here);
 const PORT=Number(process.env.BISU_UI_PORT||7878);
@@ -505,7 +506,9 @@ const server=http.createServer(async(req,res)=>{
   if(m==='POST'&&p==='/api/telegram/test')return json(res,200,await telegram.test());
   // Opening something outside the page for a setup step: only these, never an address the page sends.
   if(m==='POST'&&p==='/api/open'){const {what}=await body(req),tg=telegram.snapshot();
-   const target={botfather:['https://t.me/BotFather'],pair:tg.link?[tg.link]:null,dec:['-b','local.dec.browser']}[what];
+   // dec by the copy that runs (or decApp's), never by bundle id: old development copies share it.
+   if(what==='dec'){dec.front().catch(()=>{});return json(res,200,{ok:true})}
+   const target={botfather:['https://t.me/BotFather'],pair:tg.link?[tg.link]:null}[what];
    if(!target)return json(res,400,{error:'nothing to open'});
    execFile('/usr/bin/open',target,e=>{});return json(res,200,{ok:true})}
   // The keys are read when the shell starts the engine, so a key saved in dec a moment ago needs a fresh

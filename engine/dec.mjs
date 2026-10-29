@@ -85,14 +85,15 @@ export function decApp(home = os.homedir()) {
 
 // dec's status, starting dec in the background first when it is installed but not running. Null when there is no
 // dec to use: not installed, or running with its agent endpoint switched off.
-export async function up({start = true, waitMs = 25_000} = {}) {
+export async function up({start = true, waitMs = 25_000, front = false} = {}) {
   if (process.env.BISU_DEC === '0') return null;
   try { return await api('GET', '/v1/status') } catch (e) { if (!['DEC_OFF', 'DEC_UNREACHABLE'].includes(e.code)) throw e }
   if (!start || await running()) return null;
   // -g: dec comes up behind whatever the person is doing. --agent-connect: dec turns its agent connection on unless the
   // person once turned it off. (open hands its environment to the app: no ELECTRON_RUN_AS_NODE.)
   const app = decApp(), env = Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'ELECTRON_RUN_AS_NODE'));
-  const opened = await new Promise(r => execFile('/usr/bin/open', app ? ['-g', app, '--args', '--agent-connect'] : ['-g', '-b', BUNDLE, '--args', '--agent-connect'], {env}, e => r(!e)));
+  const g = front ? [] : ['-g'];
+  const opened = await new Promise(r => execFile('/usr/bin/open', app ? [...g, app, '--args', '--agent-connect'] : [...g, '-b', BUNDLE, '--args', '--agent-connect'], {env}, e => r(!e)));
   if (!opened) return null;
   // The endpoint is up before the tabs are back: wait until dec says they are (tabsReady), so the run finds its tab.
   for (const end = Date.now() + waitMs; Date.now() < end;) {
@@ -100,6 +101,30 @@ export async function up({start = true, waitMs = 25_000} = {}) {
     try { const st = await api('GET', '/v1/status'); if (st?.tabsReady !== false) return st } catch {}
   }
   return null;
+}
+
+// The Dec Browser.app that is running (from the pid in its discovery file), so bringing it forward never starts
+// another copy: old development copies share its bundle id.
+function runningApp() {
+  const pid = discovery()?.pid;
+  if (!Number.isInteger(pid)) return Promise.resolve(null);
+  return new Promise(r => execFile('/bin/ps', ['-o', 'comm=', '-p', String(pid)], (e, out) => r(e ? null : /^(.*\.app)\/Contents\/MacOS\//.exec(String(out).trim())?.[1] ?? null)));
+}
+
+// dec in front of the person, for "open dec" / "a new tab": started when it is closed (it comes back with its own
+// tabs, or its home page when it has none); newTab adds a tab at dec's own home page. Null when there is no dec.
+export async function show({newTab = false} = {}) {
+  const st = await up({front: true});
+  if (!st) return null;
+  let tab = null;
+  if (newTab) tab = (await api('POST', '/v1/tabs', {home: true, agent: 'bisu'})).tab ?? null;
+  return {tab, front: await front()};
+}
+
+// Brings dec forward: the running copy when there is one, else the app decApp finds (opened when closed).
+export async function front() {
+  const app = await runningApp() ?? decApp(), env = Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'ELECTRON_RUN_AS_NODE'));
+  return new Promise(r => execFile('/usr/bin/open', app ? [app] : ['-b', BUNDLE], {env}, e => r(!e)));
 }
 
 const tabsOf = r => Array.isArray(r) ? r : r?.tabs ?? [];
