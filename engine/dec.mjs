@@ -126,7 +126,7 @@ export async function task({goal, url, inputs = [], readOnly = false, budget, wa
   const o = await api('POST', '/v1/tabs', {url, background: true, agent: 'bisu'});
   const tabId = o.tab?.id;
   if (!tabId) throw new DecError('TAB_NOT_OPENED');
-  for (let i = 0; i < 50; i++) { const t = tabsOf(await api('GET', '/v1/tabs')).find(x => x.id === tabId); if (t && t.loading === false) break; await sleep(200) }
+  for (let i = 0; i < 50; i++) { let t = null; try { t = (await api('GET', `/v1/tabs/${tabId}`)).tab } catch {} if (t && t.loading === false) break; await sleep(200) }
   let started;
   // One run at a time in dec: wait a while for another task to end rather than failing at once.
   for (const end = Date.now() + 90_000; ;) {
@@ -166,7 +166,8 @@ export function directDriver({readText = true, tab = null} = {}) {
       if (NEEDS_PERSON[r.awaiting]) return {waiting: NEEDS_PERSON[r.awaiting], run: r};
       const p = r.pendingDecision;
       if (r.awaiting === 'agent-decision' && p && p.requestId !== lastReq) return {p, run: r};
-      await sleep(80);
+      // (a state poll is free of dec's per-minute budget, and small while dec is busy: ask often)
+      await sleep(25);
     }
     throw new DecError('TIMEOUT');
   };
@@ -192,7 +193,9 @@ export function directDriver({readText = true, tab = null} = {}) {
   };
   // Loaded at the address asked for: a tab sent to another site still shows the old page for a moment, and a run
   // started then is allowed for the old site only (AI_TASK_CONSENT_REQUIRED on the new one).
-  const loaded = async url => { for (let i = 0; i < 50; i++) { const t = tabsOf(await api('GET', '/v1/tabs')).find(x => x.id === tabId); if (t && t.loading === false && (!url || origin(t.url) === origin(url))) return true; await sleep(100) } return false };
+  // (one tab's state is a state poll, outside dec's per-minute budget; the whole tab list is not)
+  const tabNow = async () => { try { return (await api('GET', `/v1/tabs/${tabId}`)).tab ?? null } catch { return null } };
+  const loaded = async url => { for (let i = 0; i < 50; i++) { const t = await tabNow(); if (t && t.loading === false && (!url || origin(t.url) === origin(url))) return true; await sleep(40) } return false };
   const stop = async () => { try { await api('POST', `/v1/runs/${runId}/stop`, {}) } catch {} for (let i = 0; i < 30; i++) { try { if ((await api('GET', `/v1/runs/${runId}`)).run.end) break } catch { break } await sleep(100) } };
   return {
     get id() { return runId },
@@ -207,7 +210,7 @@ export function directDriver({readText = true, tab = null} = {}) {
       // last one is closed so they do not pile up.
       let moved = false;
       if (tabId) {
-        const was = tabsOf(await api('GET', '/v1/tabs')).find(t => t.id === tabId);
+        const was = await tabNow();
         if (was && origin(was.url) === origin(url)) { await api('POST', `/v1/tabs/${tabId}/navigate`, {url, agent: 'bisu'}); moved = true }
         else if (was) await api('POST', `/v1/tabs/${tabId}/close`, {agent: 'bisu'}).catch(() => {});
       }

@@ -118,6 +118,27 @@ export function listNote(body, cands, names = []) {
   const by = [...run].sort((a, b) => a.price - b.price), say = x => `${fullName(x.c, cands, ls)} ${x.raw}`;
   return `가장 싼 순: ${by.slice(0, 3).map(say).join(' / ')} · 가장 비싼 순: ${by.slice(-3).reverse().map(say).join(' / ')} (${run.length}개 중)`;
 }
+// 「전체에서 가장 싼 책 3권의 제목과 가격」 over every page of a list: read off the pages' prices, no model asked. Only
+// when the goal asks for names and prices alone, one way (the cheapest or the dearest), nothing narrowing the choice,
+// and the answer is plain (no tie at the cut, no title the list cut short).
+const FIELDS = /제목|이름|상품명|가격|재고|수량|평점|별점|리뷰|후기|UPC|SKU|브랜드|카테고리|설명|저자|작가|출판|링크|주소|날짜|배송|할인|몇|개수|합계|평균|차이|title|name|price|stock|rating|review|brand|author|category|description|link|date|count|total|average/gi;
+export function sweepAnswer(goal, pages) {
+  const g = String(goal || ''), most = MOST.exec(g), least = LEAST.exec(g);
+  if (!!most === !!least || OPENS.test(g) || AGG.test(g)) return null;
+  const sup = most || least, head = g.slice(0, sup.index + sup[0].length);
+  if (NARROWS.test(head.split(/,|\.|(?:가서|열고|하고|누르고|들어가서)\s/).pop())) return null;
+  // (what is asked of the items: after the superlative — 「그 카테고리 전체에서」 before it is where, not what)
+  const ask = /([^,.;:!?]*?)\s*(?:을|를)?\s*(?:알려|보고해|말해|tell me|report)/i.exec(g)?.[1] || '', at = ask.search(MOST.test(ask) ? MOST : LEAST);
+  const fields = (ask.slice(Math.max(0, at)).match(FIELDS) || []).map(f => f.toLowerCase());
+  if (!fields.length || fields.some(f => !/^(제목|이름|상품명|가격|title|name|price)$/.test(f))) return null;
+  const n = Math.min(10, Number(/(\d+)\s*(?:권|개|가지|items?|books?|products?)/i.exec(g.slice(sup.index))?.[1] || 1));
+  const seen = new Set(), all = [];
+  for (const p of pages) for (const x of p.items || []) { const k = `${x.name}|${x.raw}`; if (!seen.has(k)) { seen.add(k); all.push(x) } }
+  const dir = most ? 1 : -1, by = all.sort((a, b) => dir * (b.price - a.price)), top = by.slice(0, n);
+  if (top.length < n || (by[n] && by[n].price === top[n - 1].price) || top.some(x => /(\.\.\.|…)$/.test(x.name))) return null;
+  const word = most ? '비싼' : '싼';
+  return `${pages.length}쪽 ${all.length}개 중 가장 ${word} ${n > 1 ? `${n}개: ` : '것: '}${top.map((x, i) => `${n > 1 ? `${i + 1}. ` : ''}${x.name} ${x.raw}`).join(', ')}`;
+}
 // 「가장 비싼 책과 가장 싼 책의 가격 차이」: the difference worked out from the page, when nothing narrows the choice.
 export function priceSpread(goal, body, cands, names = []) {
   const g = String(goal || '');
@@ -134,7 +155,11 @@ const AGG = /차이|합계|평균|총합|몇\s*(권|개|명|건)|개수|differen
 const EACH = /각각|각\s*(카테고리|페이지|항목)|모두|전부|each|every|all of/i;
 export function eachTargets(goal, cands) {
   if (!EACH.test(goal)) return [];
-  const ls = [...new Set(cands.filter(c => c.kind === 'click').map(c => String(c.label || c.name || '').trim()).filter(l => named(l, goal)))];
+  // (named in the goal's own list — 「Fiction, Mystery, Romance」, 「love와 life」 — not anywhere: 「소개(about) 페이지」 is a
+  // link on every quote, not one of the things to visit)
+  const esc = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), J = '(?:,|·|、|및|그리고|and\\b|와|과|랑|하고)';
+  const listed = l => new RegExp(`${J}\\s*${esc(l)}(?![\\p{L}\\p{N}])|(?<![\\p{L}\\p{N}])${esc(l)}\\s*${J}`, 'iu').test(goal);
+  const ls = [...new Set(cands.filter(c => c.kind === 'click').map(c => String(c.label || c.name || '').trim()).filter(l => named(l, goal) && listed(l)))];
   const t = ls.filter(l => !ls.some(o => o !== l && o.toLowerCase().includes(l.toLowerCase())));
   return t.length >= 2 && t.length <= 8 ? t : [];
 }
@@ -155,6 +180,14 @@ export function partsOf(goal) {
   const clause = m[1].split(/(?:하고|열고|가서|눌러서|들어가서|찾고|보고)\s+/).pop().trim();
   const ps = clause.split(/\s*(?:·|・|,|\/|및|(?<=[가-힣])(?:와|과|이랑|랑)\s|\band\b)\s*/).map(x => x.trim()).filter(x => x.length >= 2 && x.length <= 24);
   return ps.length >= 2 && ps.length <= 5 ? ps : [];
+}
+// 「첫 번째 명언을 쓴 사람의 소개 페이지」: the one item a goal counts to, when it counts once.
+const ORDINAL = /(첫|두|세|네|다섯)\s*번째|\b(first|second|third|fourth|fifth)\b|마지막|\blast\b/gi;
+export function ordinalOf(goal) {
+  const m = [...String(goal || '').matchAll(ORDINAL)];
+  if (m.length !== 1) return null;
+  const w = m[0][0].toLowerCase();
+  return /마지막|last/.test(w) ? -1 : ['첫', '두', '세', '네', '다섯'].findIndex(x => w.startsWith(x)) + 1 || ['first', 'second', 'third', 'fourth', 'fifth'].indexOf(w) + 1 || null;
 }
 const WANTS_ANSWER = goal => /알려|보고|찾아|얼마|언제|몇|무엇|뭐|어디|확인해|report|tell|what|which|how many|price|title|list/i.test(goal);
 
@@ -330,7 +363,9 @@ function candidates(view, inputs, last, canBack = true, goal = '') {
     const words = goalWords(goal).map(w => w.toLowerCase());
     // Items of a list carry a number on the lines right after them (a price, a count): the things a goal picks among.
     const lines = String(view.body || '').split('\n').map(l => l.trim()).filter(Boolean);
-    const items = lines.filter((l, i) => !NUMBERED.test(l) && lines.slice(i + 1, i + 4).some(x => NUMBERED.test(x))).map(l => l.slice(0, 24).toLowerCase());
+    // (a name may start with a figure — 「10% Happier」 — and still be a name: only a line that is all figure is not)
+    const figure = l => NUMBERED.test(l) && !/\p{L}{3,}/u.test(l.replace(new RegExp(NUMBERED.source, 'g'), ''));
+    const items = lines.filter((l, i) => !figure(l) && lines.slice(i + 1, i + 4).some(x => NUMBERED.test(x))).map(l => l.slice(0, 24).toLowerCase());
     const isItem = c => items.some(t => String(c.label || '').toLowerCase().startsWith(t.slice(0, Math.min(24, String(c.label || '').length))) && String(c.label || '').length >= 4);
     const score = c => (PAGING.test(String(c.label || '').trim()) ? 3 : 0) + (c.kind !== 'click' ? 2 : 0) + (words.some(w => String(c.label || '').toLowerCase().includes(w)) ? 2 : 0) + (isItem(c) ? 2 : 0);
     const keep = new Set([...rest].sort((a, b) => score(b) - score(a)).slice(0, 70));
@@ -409,7 +444,12 @@ export function verbatim(answer, text) {
 const pageKey = view => `${view.url}#${view.title}`;
 // What a page shows, scroll position aside: whether a step changed anything.
 const contentOf = view => `${view.url}#${view.title}#${String(view.body || '').length}#${parse(view.snap).rows.join('\n')}`;
-const seenText = (seen, url) => [...seen].filter(([u]) => u !== url).slice(-6).map(([u, t]) => `- ${t}`).join('\n').slice(-9000);
+// The last six pages, and every item page opened on the way (a goal comparing three items opened one by one needs the
+// first one's page when it answers, however many list pages came after it).
+const seenText = (seen, url) => {
+  const all = [...seen].filter(([u]) => u !== url), pin = seen.pinned || new Set(), rest = all.filter(([u]) => !pin.has(u)).slice(-6).map(([u]) => u);
+  return all.filter(([u]) => pin.has(u) || rest.includes(u)).map(([u, t]) => `- ${t}`).join('\n').slice(-9000);
+};
 function pagePrompt(goal, view, hist, inputs, seen = new Map()) {
   // A list a goal compares or adds up is read whole: its first ninety lines are often the menu (dec sends each text alone).
   const whole = (COMPARE(goal) || AGG.test(goal)) && listy(view) && view.body;
@@ -525,16 +565,21 @@ const glmUse = {usd: 0, calls: 0};
 let glmDownUntil = 0;
 async function glm(content, maxTokens = 3000) {
   if (Date.now() < glmDownUntil) return null;
+  // GLM answers a look in 1.5-3 s, but now and then a provider queue holds one for 25-30 s: an answer not back in 6 s
+  // gets the same ask sent again, the first back wins, and after 30 s the loop goes on without it.
+  const asks = [], wait = ms => new Promise(r => setTimeout(r, ms).unref?.());
+  const ask = () => { const c = new AbortController(); asks.push(c); return complete({model: GLM_MODEL(), thinking: false, temperature: 0, maxTokens, signal: c.signal, messages: [
+    {role: 'system', content: 'You drive or review a browser agent. Reply with one JSON object and nothing else.'}, {role: 'user', content}]}) };
   try {
-    const r = await complete({model: GLM_MODEL(), thinking: false, temperature: 0, maxTokens, messages: [
-      {role: 'system', content: 'You drive or review a browser agent. Reply with one JSON object and nothing else.'}, {role: 'user', content}]});
-    glmUse.calls++; glmUse.usd += r.cost || 0;
+    const first = ask();
+    const r = await Promise.race([first, wait(6000).then(() => null)]) ?? await Promise.race([Promise.any([first, ask()]), wait(24_000).then(() => { throw new Error('GLM took over 30 s') })]);
+    glmUse.calls++; glmUse.usd += r.cost || 0; if (asks.length > 1) glmUse.hedged = (glmUse.hedged || 0) + 1;
     return json(r.text);
   } catch (e) {
     glmUse.failures = (glmUse.failures || 0) + 1; glmUse.lastError = String(e.message || e).slice(0, 160);
     if (/balance|recharge|quota|credit|402/i.test(glmUse.lastError)) glmDownUntil = Date.now() + 10 * 60_000;
     return null;
-  }
+  } finally { for (const c of asks) c.abort() }
 }
 export const glmStatus = () => ({...glmUse, down: Date.now() < glmDownUntil});
 
@@ -614,7 +659,7 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
   try { return await loop() } catch (e) { await driver.end?.('error').catch?.(() => {}); throw e }
   async function loop() {
   let view = await driver.open(url, ins, goal);
-  let sweepOpen = null, opened = null, targets = null, answerAt = null, last = null, answer = null, held = null, status = 'budget', steps = 0, repeats = 0, prevSig = '';
+  let sweepOpen = null, opened = null, targets = null, hub = null, cur = null, between = true, steered = 0, tick = null, itemsOf = new Set(), answerAt = null, last = null, answer = null, held = null, status = 'budget', steps = 0, repeats = 0, prevSig = '';
   const sweeps = new Map(), deadNext = new Set(), noScroll = new Set(), eachTried = new Set(), doneExt = new Set(), ticked = new Set(), seen = new Map(), visits = new Map(), tried = new Set(), compared = new Set(), reviews = {n: 0, changed: 0, why: {}};
   // The same control, not the same words: three "LinkedIn 메일 선택" boxes are three different steps.
   const sigOf = c => `${c.kind}|${c.role || ''}|${c.own ?? c.label ?? ''}|${c.nth ?? ''}|${c.value || ''}|${c.dir || ''}`;
@@ -678,11 +723,21 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
       // Each of several named things: a checklist. A page whose title names one ticks it; the next step is told what is
       // left; with none left, the notes of the pages visited answer (once a page; for a goal that opens an item of each,
       // on an item's page, not on the last list).
-      if (!targets) targets = eachTargets(goal, cands);
+      if (!targets) { targets = eachTargets(goal, cands); if (targets.length) hub = view.url }
+      // An item of the named thing being worked on, opened: its page names the item (its title), or it is wherever a
+      // click on that thing's list led that no longer names the thing (a quote's author page, a book's own page).
+      const here = `${view.title} ${decodeURIComponent(String(view.url || ''))}`.toLowerCase().replace(/[-_]/g, ' ');
+      // (a link the goal names in passing — 「소개(about) 페이지」 — still opens an item; only the named things themselves do not)
+      const isNamed = l => (targets || []).some(t => String(l || '').trim().toLowerCase() === t.toLowerCase());
+      const itemish = itemPage || (OPENS.test(goal) && !!cur && !between && last?.kind === 'click' && !PAGING.test(String(last.label || '').trim()) && !isNamed(last.label) && !here.includes(cur.toLowerCase()));
+      if (itemish) { (seen.pinned ||= new Set()).add(pageKey(view)); if (cur && OPENS.test(goal)) { itemsOf.add(cur); between = true; cur = null } }
       if (targets.length) {
-        const t = targets.find(x => !ticked.has(x) && String(view.title).toLowerCase().includes(x.toLowerCase()));
-        if (t) { ticked.add(t); hist.push(`(${t} 확인함${targets.length - ticked.size ? ` — 남은 것: ${targets.filter(x => !ticked.has(x)).join(', ')}` : ' — 모두 확인함, 이제 답하기'})`) }
-        if (ticked.size === targets.length && WANTS_ANSWER(goal) && !(OPENS.test(goal) && listy(view) && !itemPage) && !eachTried.has(pageSig(view))) {
+        // (the page its link led to — whatever its title: every page of a site may share one — or a page whose title names it)
+        const t = (tick && tick.from !== pageKey(view) && !ticked.has(tick.t) ? tick.t : null) || targets.find(x => !ticked.has(x) && String(view.title).toLowerCase().includes(x.toLowerCase()));
+        tick = null;
+        if (t) { ticked.add(t); cur = t; between = false; hist.push(`(${t} 확인함${targets.length - ticked.size ? ` — 남은 것: ${targets.filter(x => !ticked.has(x)).join(', ')}` : ' — 모두 확인함, 이제 답하기'})`) }
+        // (a goal that opens an item of each: once the last one's item is open, not on its list or tag page before that)
+        if (ticked.size === targets.length && WANTS_ANSWER(goal) && !(OPENS.test(goal) && (itemsOf.size ? itemsOf.size < targets.length : listy(view) && !itemPage)) && !eachTried.has(pageSig(view))) {
           eachTried.add(pageSig(view));
           // (this page's own note too: the notes passed along are of the pages before it)
           const r = await review(goal, view, cands, [...hist, ...(seen.get(pageKey(view)) ? [`(이 페이지 메모 — ${seen.get(pageKey(view))})`] : [])], ins, null, 'done-without-answer', seen);
@@ -704,9 +759,11 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
       if (COMPARE(goal) && goalPage(goal) == null && !ONE_PAGE.test(goal) && listText && !itemPage && onTarget) {
         const lid = listOf(view.url), sw = sweeps.get(lid) || {pages: new Map(), done: false}; sweeps.set(lid, sw);
         const run = !sw.done && priceList(listText, cands, true);
+        // (a page of the list read without its prices: the pages' prices no longer answer on their own)
+        if (!run && !sw.done && sw.pages.size && !sw.pages.has(pageKey(view))) sw.gap = true;
         if (run) {
           const ls = [...listText.split('\n'), ...parse(view.snap).els.map(e => e.name), ...(view.fulls || [])], at = x => x && {label: x.c.label, name: fullName(x.c, cands, ls), raw: x.raw, price: x.price};
-          sw.pages.set(pageKey(view), {url: view.url, max: at(extreme(run, 1)), min: at(extreme(run, -1))});
+          sw.pages.set(pageKey(view), {url: view.url, max: at(extreme(run, 1)), min: at(extreme(run, -1)), items: run.map(x => at({c: x.c, raw: x.raw, price: x.price}))});
           const next = cands.find(c => c.kind === 'click' && NEXT.test(String(c.label || '').trim()));
           if (next && !deadNext.has(pageKey(view)) && sw.pages.size < 10) { sweepTodo = [next]; log({sweep: 'next', list: lid, pages: sw.pages.size}) }
           else if (sw.pages.size > 1) {
@@ -720,6 +777,8 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
               const c = cands.find(x => x.kind === 'click' && x.label === best[key].label);
               if (c) { sweepTodo = [c]; doneExt.add(key) }
             } else if (WANTS_ANSWER(goal) && !targets?.length) {
+              const local = !sw.gap && sweepAnswer(goal, [...sw.pages.values()]);
+              if (local) { log({sweep: 'answer', answer: local}); answer = local; answerAt = pageKey(view); status = 'done'; break }
               const r = await review(goal, view, cands, [...hist, ...(seen.get(pageKey(view)) ? [`(이 페이지 메모 — ${seen.get(pageKey(view))})`] : [])], ins, null, 'done-without-answer', seen);
               reviews.n++; reviews.why['all-pages'] = (reviews.why['all-pages'] || 0) + 1;
               if (r.answer) { answer = r.answer; answerAt = pageKey(view); status = 'done'; break }
@@ -727,10 +786,21 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
           }
         }
       }
+      // Between two of the named things (at the start, or the last one's item just opened): straight to the next one
+      // still to visit, by its link here or from the page that listed them — no model asked which.
+      const left = (targets || []).filter(x => !ticked.has(x));
+      if (!sweepTodo && !sweepOpen && left.length && between && steered < targets.length * 2) {
+        const c = cands.find(x => x.kind === 'click' && left.some(t => String(x.label || '').trim().toLowerCase() === t.toLowerCase()));
+        if (c) { sweepTodo = [c]; steered++; log({each: 'next', to: c.label}) }
+        else if (hub && view.url !== hub) { steered++; log({each: 'hub', left}); view = await driver.goto(hub); hist.push(...(view.did || []), `(남은 것: ${left.join(', ')})`); continue }
+      }
       // Back on the page that held the winner: open it.
       if (!sweepTodo && sweepOpen) { const c = cands.find(x => x.kind === 'click' && x.label === sweepOpen); if (c) sweepTodo = [c]; sweepOpen = null }
       if (sweepTodo) todo = sweepTodo; else {
       let pick = await decisionsPick(goal, view, cands, hist, ins, seen, itemPage);
+      // (on the list of the named thing being worked on, a goal that opens an item of each: not off to the next one first)
+      const isTarget = c => c?.kind === 'click' && (targets || []).some(t => String(c.label || '').trim().toLowerCase() === t.toLowerCase());
+      const leaving = OPENS.test(goal) && !!cur && !between && isTarget(cands[pick?.index]);
       if (!pick || !cands[pick.index]) pick = null;
       if (!pick && mode !== 'rescue') { status = 'no-pick'; break }
       const c0 = pick && cands[pick.index];
@@ -750,7 +820,9 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
         // (a link the goal itself names, 「Mystery 카테고리」, is the way there, not a choice among items)
         // (a goal wanting both the dearest and the cheapest opens one, comes back and compares again for the other)
         // (never on the page of an item just opened: its 「recently viewed」 list is not the one the goal means)
-        : COMPARE(goal) && !itemPage && c0.kind === 'click' && !PAGING.test(String(c0.label || '').trim()) && !named(c0.label, goal) && listy(view) && !compared.has(pageSig(view) + '#' + nextExt(goal, doneExt)) ? (compared.add(pageSig(view) + '#' + nextExt(goal, doneExt)), 'compare')
+        : COMPARE(goal) && !itemPage && c0.kind === 'click' && !PAGING.test(String(c0.label || '').trim()) && (!named(c0.label, goal) || leaving) && listy(view) && !compared.has(pageSig(view) + '#' + nextExt(goal, doneExt)) ? (compared.add(pageSig(view) + '#' + nextExt(goal, doneExt)), 'compare')
+        // off to the next named thing before this one's item is open (a page that is not a priced list: GLM picks the item)
+        : leaving ? (hist.push(`(${cur}: 아직 항목을 열지 않음 — 다음 것으로 가기 전에 여기서 목표의 항목을 열기)`), 'leaving')
         : pick.confidence < 0.4 ? 'unsure'
         // it slowed down
         : c0.kind !== 'done' && tried.has(pageSig(view) + '#' + sigOf(c0)) ? 'repeat' : visits.get(pageKey(view)) >= 3 ? 'loop' : steps >= 8 && steps % 3 === 2 ? 'long' : null;
@@ -767,9 +839,27 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
         log({review: why, from: c0?.name, to: cands[r.index]?.name});
         pick = r;
       }
+      // (not while a thing the goal names one by one is still unvisited: to the next of them instead)
+      const stopping = pick?.done || cands[pick?.index]?.kind === 'done';
+      // (nor, in a goal that opens an item of each, before the last one's item is open: GLM picks it here, once a page)
+      if (stopping && !left.length && OPENS.test(goal) && cur && itemsOf.size && itemsOf.size < targets.length && !eachTried.has('open#' + pageSig(view))) {
+        eachTried.add('open#' + pageSig(view)); hist.push(`(${cur}: 아직 항목을 열지 않음 — 끝내기 전에 여기서 목표의 항목을 열기)`);
+        const r = await review(goal, view, cands, hist, ins, pick, 'leaving', seen);
+        reviews.n++; reviews.why.leaving = (reviews.why.leaving || 0) + 1; log({review: 'not-yet-open', to: cands[r.index]?.name});
+        if (!r.done && cands[r.index] && cands[r.index].kind !== 'done') { reviews.changed++; pick = r }
+      }
+      if (stopping && left.length && steered < targets.length * 2) {
+        const c = cands.find(x => x.kind === 'click' && left.some(t => String(x.label || '').trim().toLowerCase() === t.toLowerCase()));
+        if (c) { steered++; log({each: 'not-yet', to: c.label}); todo = [c]; pick = null }
+        else if (hub && view.url !== hub) { steered++; between = true; log({each: 'not-yet-hub', left}); view = await driver.goto(hub); hist.push(...(view.did || []), `(남은 것: ${left.join(', ')})`); continue }
+      }
+      if (!todo.length) {
       if (pick?.done) { if (pick.answer) answer = pick.answer; status = 'done'; break }
       if (!pick || !cands[pick.index]) { status = 'no-pick'; break }
       if (pick.answer) { answer = pick.answer; answerAt = pageKey(view) }
+      // One of a link every item has (「(about)」 under each quote): the goal's count says which, not the picker's guess.
+      const ord = ordinalOf(goal), twins = ord && cands[pick.index]?.kind === 'click' ? cands.filter(x => x.kind === 'click' && x.label === cands[pick.index].label) : [];
+      if (twins.length >= 3) { const want = ord < 0 ? twins.at(-1) : twins[ord - 1]; if (want && want.index !== pick.index) { log({ordinal: ord, from: cands[pick.index].name, to: want.name}); pick = {...pick, index: want.index} } }
       const c = cands[pick.index];
       if (c.kind === 'done') {
         // 6) An answer that does not answer: Decisions checks it in a fraction of a second; GLM writes it from the
@@ -784,6 +874,7 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
         } else { status = 'done'; break }
       } else todo = [c];
       }
+      }
     }
     // Run up to the first step that must wait for the person.
     let stop = null;
@@ -794,6 +885,7 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
       repeats = sig === prevSig ? repeats + 1 : 0; prevSig = sig;
       if (repeats >= 2) { status = 'stuck'; break }
       for (const c of now) tried.add(pageSig(view) + '#' + sigOf(c));
+      { const c = now.at(-1), t = c.kind === 'click' && (targets || []).find(x => String(c.label || '').trim().toLowerCase() === x.toLowerCase()); if (t) tick = {t, from: pageKey(view)} }
       { const c = now.at(-1); opened = c.kind === 'click' && !PAGING.test(String(c.label || '').trim()) && !named(c.label, goal) ? String(c.label || '').replace(/\s*(\.\.\.|…)$/, '').trim().toLowerCase() : null; if (opened && opened.length < 4) opened = null }
       const before = contentOf(view), lastKind = now.at(-1).kind;
       view = await driver.act(now);

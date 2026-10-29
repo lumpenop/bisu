@@ -1,6 +1,6 @@
 // Web tasks on public practice sites, the same in every browser bisu can drive: success and time.
 //   OPENAI_API_KEY=dec://OPENAI_API_KEY GLM_API_KEY=dec://GLM_API_KEY dec-secret run -- \
-//     node engine/eval/web-tasks.mjs [--set speed|complex|hard|holdout|holdout2|holdout3] [--modes dec,ego,aside,decfast] [--repeat 2] [--only O1,O2] [--budget 20]
+//     node engine/eval/web-tasks.mjs [--set speed|complex|hard|holdout|holdout2|holdout3|holdout4|holdout5|holdout6] [--modes dec,ego,aside,decfast] [--repeat 2] [--only O1,O2] [--budget 20]
 // dec = bisu drives dec (dec's fast mode must be off); decfast = dec's own fast mode (must be on); ego, aside = bisu
 // drives them. The sites are made for scraping practice (books.toscrape, quotes.toscrape, scrapethissite,
 // webscraper.io, the-internet, web-scraping.dev, scrapingcourse, Oxylabs' sandbox), so repeating is fine.
@@ -58,6 +58,27 @@ const SETS = {
     {key: 'Q4', url: 'https://www.demoblaze.com/', goal: 'Phones 카테고리에서 가장 싼 휴대폰의 이름과 가격을 알려줘', ok: a => /xperia z5/i.test(a) && /\b320\b/.test(a)},
     {key: 'Q5', url: 'https://testpages.eviltester.com/styled/tag/table.html', goal: '표에서 Amount 값이 가장 큰 사람의 이름과 그 값을 알려줘', ok: a => /Douglas/i.test(a) && /\b42\b/.test(a)},
     {key: 'Q6', url: AE + 'products', goal: '왼쪽 Category의 Women 안에 있는 Tops 상품들 중 가장 비싼 상품의 이름과 가격을 알려줘', ok: a => /Lace Top/i.test(a) && /1,?400/.test(a)},
+  ],
+  // Fourth held-out set (2026-10-29), written after H2 was fixed and before anything was tried on it: H2's shape
+  // (each named list, open its extreme, compare the items) with other lists and the other way round, the same shape on
+  // another site with no prices, and H1's shape (the N extremes of a paged list).
+  holdout4: [
+    {key: 'N1', url: B, goal: 'Poetry, Travel, Horror 세 카테고리에서 각각 가장 싼 책을 열어 재고 수량을 확인하고, 그 세 권 중 재고가 가장 적은 책의 제목과 재고 수량을 알려줘', ok: a => /Little Dribbling/i.test(a) && /\b3\b/.test(a)},
+    {key: 'N2', url: Q, goal: 'love, life, humor 세 태그 페이지에서 각각 첫 번째 명언을 쓴 사람의 소개(about) 페이지를 열어, 세 사람 중 가장 먼저 태어난 사람의 이름과 생년월일을 알려줘', ok: a => /Austen/i.test(a) && /1775/.test(a)},
+    {key: 'N3', url: B, goal: 'Mystery 카테고리의 모든 쪽을 확인해서, 그 카테고리 전체에서 가장 비싼 책 2권의 제목과 가격을 비싼 순서대로 알려줘', ok: a => /Boar Island/i.test(a) && /59\.48/.test(a) && /Ladies/i.test(a) && /57\.70?\b/.test(a) && a.indexOf('59.48') < a.indexOf('57.7')},
+  ],
+  // Fifth held-out set (2026-10-29), written after holdout4's faults were fixed and before anything was tried on it:
+  // the same three shapes again, with one-page lists (no paging to sweep), other tags, and a six-page list.
+  holdout5: [
+    {key: 'R1', url: B, goal: 'Humor, Philosophy, Psychology 세 카테고리에서 각각 가장 비싼 책을 열어 재고 수량을 확인하고, 재고가 가장 많은 책의 제목과 재고 수량을 알려줘', ok: a => /Death of Humanity/i.test(a) && /\b16\b/.test(a)},
+    {key: 'R2', url: Q, goal: 'inspirational, books, friendship 세 태그 페이지에서 각각 첫 번째 명언을 쓴 사람의 소개 페이지를 열어, 세 사람 중 가장 늦게 태어난 사람의 이름과 태어난 곳을 알려줘', ok: a => /Einstein/i.test(a) && /Ulm/i.test(a)},
+    {key: 'R3', url: B, goal: 'Nonfiction 카테고리의 모든 쪽을 확인해서, 그 카테고리 전체에서 가장 싼 책 2권의 제목과 가격을 알려줘', ok: a => /Sleep Revolution/i.test(a) && /11\.68/.test(a) && /Suffragettes/i.test(a) && /11\.89/.test(a)},
+  ],
+  // Sixth held-out set (2026-10-29), written after holdout5's faults were fixed and before anything was tried on it.
+  holdout6: [
+    {key: 'S1', url: B, goal: 'Fantasy, Science Fiction, Horror 세 카테고리에서 각각 가장 싼 책을 열어 재고 수량을 확인하고, 재고가 가장 많은 책의 제목과 재고 수량을 알려줘', ok: a => /The Project/i.test(a) && /\b15\b/.test(a)},
+    {key: 'S2', url: Q, goal: 'truth, simile, reading 세 태그 페이지에서 각각 첫 번째 명언을 쓴 사람의 소개 페이지를 열어, 세 사람 중 가장 늦게 태어난 사람의 이름과 생년월일을 알려줘', ok: a => /Steve Martin/i.test(a) && /1945/.test(a)},
+    {key: 'S3', url: WS + 'products', goal: 'products 목록의 모든 쪽을 확인해서, 전체에서 가장 비싼 상품 3개의 이름과 가격을 비싼 순서대로 알려줘', ok: a => /Hiking Boots/i.test(a) && /89[.,]99/.test(a) && /Leather Sneakers/i.test(a) && /79[.,]99/.test(a) && /High Heel/i.test(a) && /59[.,]99/.test(a) && a.indexOf('89') < a.indexOf('79') && a.indexOf('79') < a.indexOf('59')},
   ],
 };
 const set = arg('set', 'holdout3'), only = arg('only', ''), T = (SETS[set] || []).filter(t => !only || only.split(',').includes(t.key));
