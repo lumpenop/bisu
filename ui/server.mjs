@@ -13,6 +13,7 @@
 //  * Every API call carries a per-launch token that only this page knows; other hosts and cross-site origins are refused.
 import http from 'node:http';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {execFile,spawn} from 'node:child_process';import {randomBytes,randomUUID} from 'node:crypto';import {fileURLToPath} from 'node:url';
 import * as memory from './memory.mjs';
+import * as R from '../engine/routes.mjs';
 import * as bots from './bots.mjs';
 import * as routines from './routines.mjs';
 import * as teach from './teach.mjs';
@@ -61,7 +62,12 @@ const KEY=process.env.OPENROUTER_API_KEY||'';
 const KEY_BASE=(process.env.OPENROUTER_BASE_URL||'https://openrouter.ai').replace(/\/$/,'');
 const keyMode=!KEY?'none':KEY.startsWith('dec-use-only-')?'use-only':'plain';
 // The key the chosen engine thinks with: OpenRouter for Claude Code, Z.ai for bisu's own engine.
-const canThink=()=>process.env.BISU_ENGINE==='native'?!!process.env.GLM_API_KEY:!!KEY;
+const canThink=()=>process.env.BISU_ENGINE==='native'?R.routes('glm').length>0:!!KEY;
+// A Claude Code chat starts on the first OpenRouter key of the order that is not resting (routes.mjs); a chat keeps the
+// key it started with, so a new order or a key that ran dry applies from the next chat.
+const claudeKey=()=>{const r=R.routes('openrouter').find(x=>!x.resting)||R.routes('openrouter')[0];return r?{OPENROUTER_API_KEY:r.key,OPENROUTER_BASE_URL:r.base}:{}};
+// 모델 키 순서: names and sites only, the switch, which key is resting. Saved into dec's file, shared with dec.
+function routeInfo(){const st=R.settings();return {auto:st.auto,file:true,families:Object.entries(R.FAMILIES).map(([id,f])=>({id,label:f.label,routes:R.routes(id).map(r=>({name:r.name,site:R.SITE_LABEL[r.site]||r.site,resting:r.resting}))}))}}
 const noKey=()=>process.env.BISU_ENGINE==='native'?'No Z.ai key: save one for https://api.z.ai in Dec first.':'No OpenRouter key: save one for https://openrouter.ai in Dec first.';
 
 // ---- models config ----
@@ -81,7 +87,7 @@ function savedPrefs(){let p={};try{p=JSON.parse(fs.readFileSync(PREFS,'utf8'))||
  return Object.fromEntries(Object.entries(PREF_KEYS).map(([k,[t,d]])=>[k,prefOk(t,p[k])?p[k]:d]))}
 function readPrefs(){const out=savedPrefs(),forced=process.env.BISU_ENGINE_FORCED||null;
  if(forced)out.engine=forced;
- return {...out,engineForced:!!forced,glm:!!process.env.GLM_API_KEY,decisions:!!process.env.OPENAI_API_KEY}}
+ return {...out,engineForced:!!forced,glm:R.routes('glm').length>0,decisions:R.routes('decisions').length>0}}
 // Saved on top of what was saved, not of what is shown: an engine forced from the shell for one run
 // must not become the saved choice the moment any other setting changes.
 function writePrefs(patch){const next=savedPrefs();for(const [k,[t]] of Object.entries(PREF_KEYS))if(prefOk(t,patch?.[k]))next[k]=patch[k];
@@ -133,7 +139,7 @@ function nativeSpend(){
 // The helper answers for whoever started it, which here is bisu itself.
 async function calendarAccess(op='status'){const ek=eventKit();
  try{return await (op==='request'?ek.request():ek.status())}catch(e){return /not installed/.test(e.message)?{missing:true}:{error:e.message}}}
-async function nativeInfo(){return {glm:keyState(process.env.GLM_API_KEY||''),decisions:keyState(process.env.OPENAI_API_KEY||''),
+async function nativeInfo(){return {glm:keyState(R.routes('glm')[0]?.key||''),decisions:keyState(R.routes('decisions')[0]?.key||''),
  models:{assistant:process.env.BISU_NATIVE_MODEL||'glm-5.3',worker:process.env.BISU_NATIVE_WORK_MODEL||'glm-5.3-flash'},spend:nativeSpend(),calendar:await calendarAccess()}}
 async function account(){
  const streams=await helperStreams();if(!KEY)return {mode:keyMode,streams};
@@ -279,7 +285,7 @@ function start(c){
   '--settings',BACKGROUND_AGENTS,
   ...(c.sessionId?['--resume',c.sessionId]:[])];
  c.handoffKey??=randomBytes(16).toString('hex');
- const proc=spawn('zsh',args,{cwd:c.cwd,env:{...process.env,BISU_CHAT_ID:c.id,BISU_BOT:c.bot||bots.DEFAULT,BISU_BOT_MAKER:c.maker?'1':'',BISU_HANDOFF_KEY:c.handoffKey,BISU_TEACH:c.teach?'1':'',BISU_HANDOFF_DEPTH:String(c.depth||0)},stdio:['pipe','pipe','pipe']});c.proc=proc;c.models=r;c.costSoFar=0;
+ const proc=spawn('zsh',args,{cwd:c.cwd,env:{...process.env,...claudeKey(),BISU_CHAT_ID:c.id,BISU_BOT:c.bot||bots.DEFAULT,BISU_BOT_MAKER:c.maker?'1':'',BISU_HANDOFF_KEY:c.handoffKey,BISU_TEACH:c.teach?'1':'',BISU_HANDOFF_DEPTH:String(c.depth||0)},stdio:['pipe','pipe','pipe']});c.proc=proc;c.models=r;c.costSoFar=0;
  // A chat started in a folder macOS has not granted access to does not fail — zsh blocks in getcwd
  // until the permission dialog is answered, which looks like a spinner forever. Say what is happening.
  // Only when it is actually still the launcher: Claude Code says nothing until the first message, so
@@ -458,6 +464,11 @@ const server=http.createServer(async(req,res)=>{
   if(m==='GET'&&p==='/api/models')return json(res,200,{models:await models()});
   if(m==='GET'&&p==='/api/account')return json(res,200,await account());
   if(m==='GET'&&p==='/api/native')return json(res,200,await nativeInfo());
+  if(m==='GET'&&p==='/api/routes')return json(res,200,routeInfo());
+  if(m==='POST'&&p==='/api/routes'){const b=await body(req);
+   if(b.auto!==undefined&&typeof b.auto!=='boolean')return json(res,400,{error:'auto'});
+   try{R.save({...(typeof b.auto==='boolean'?{auto:b.auto}:{}),...(b.family?{family:b.family,order:b.order}:{})})}catch(e){return json(res,400,{error:String(e.message)})}
+   return json(res,200,routeInfo())}
   // Asking macOS for calendar access from Settings, rather than in the middle of a request.
   if(m==='POST'&&p==='/api/calendar/access')return json(res,200,await calendarAccess('request'));
   if(m==='GET'&&p==='/api/runs')return json(res,200,{runs:await runs()});
@@ -506,7 +517,7 @@ const server=http.createServer(async(req,res)=>{
   if(m==='POST'&&p==='/api/goals'){goals.create(await body(req));return json(res,200,goals.snapshot())}
   const gm=/^\/api\/goals\/(g-[0-9a-f]{6})$/.exec(p);
   if(gm&&m==='POST'){const {action,text}=await body(req),id=gm[1];
-   if(action==='run'){if(!process.env.GLM_API_KEY)return json(res,400,{error:'Z.ai 키가 없어요: Dec에 https://api.z.ai 키를 저장해 주세요.'});
+   if(action==='run'){if(!R.routes('glm').length)return json(res,400,{error:'GLM 키가 없어요: Dec에 OpenRouter나 Z.AI 키를 저장해 주세요.'});
     goals.run(id,{force:true}).catch(e=>console.error('bisu goals:',e.message));await new Promise(r=>setTimeout(r,100));return json(res,202,goals.snapshot())}
    if(action==='answer'){goals.answer(id,text);goalCardsDone(id)}
    else if(action==='pause'||action==='resume')goals.setStatus(id,action==='pause'?'paused':'active');

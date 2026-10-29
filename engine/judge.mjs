@@ -21,13 +21,16 @@
 // returns null, which callers treat as "not sure": ask the person, offer all tools, keep going.
 import fs from 'node:fs';
 import {complete} from './glm.mjs';
+import * as R from './routes.mjs';
 
 // Decisions and Jev charge per input token (price, per million) and nothing for the answer; GLM's
 // cost comes from glm.mjs.
 const PROVIDERS = {
+  // Its keys are the 판단 order in routes.mjs: a key that fails hands the question to the next one.
   decisions: {
-    url: () => (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '') + '/decisions',
-    key: () => process.env.OPENAI_API_KEY || '',
+    routes: () => R.routes('decisions'),
+    url: r => r.base.replace(/\/$/, '') + '/v1/decisions',
+    key: () => R.routes('decisions')[0]?.key || '',
     model: () => process.env.BISU_DECISION_MODEL || 'gpt-6-luna',
     price: 0.10,
     // A list of questions, choices as a list, yes/no as a predicate.
@@ -56,7 +59,7 @@ const PROVIDERS = {
   // GLM judging for itself, with no second service: it is asked for the same probabilities as JSON,
   // so they are what it says rather than what was measured. Flash without reasoning by default.
   glm: {
-    key: () => process.env.GLM_API_KEY || process.env.OPENROUTER_API_KEY || '',
+    key: () => R.routes('glm')[0]?.key || '',
     model: () => process.env.BISU_GLM_JUDGE_MODEL || 'glm-5.3-flash',
     timeoutMs: 30000,
     async ask(model, text, questions, signal) {
@@ -104,13 +107,17 @@ export async function ask(text, questions, {timeoutMs = 6000, signal, state} = {
   try {
     const sig = AbortSignal.any([AbortSignal.timeout(P.timeoutMs || timeoutMs), ...(signal ? [signal] : [])]);
     if (P.ask) { const r = await P.ask(P.model(), text, questions, sig); return done(r.out, r.inputTokens, r.usd, r.error) }
-    const r = await fetch(P.url(), {
-      method: 'POST',
-      signal: sig,
-      headers: {authorization: 'Bearer ' + P.key(), 'content-type': 'application/json'},
-      body: JSON.stringify(P.body(P.model(), text, questions, state)),
-    });
-    const j = await r.json().catch(() => null);
+    const list = P.routes ? P.routes() : [{key: P.key()}], auto = R.settings().auto;
+    let r, j;
+    for (const [i, route] of list.entries()) {
+      try {
+        r = await fetch(P.routes ? P.url(route) : P.url(), {method: 'POST', signal: sig, headers: {authorization: 'Bearer ' + route.key, 'content-type': 'application/json'}, body: JSON.stringify(P.body(P.model(), text, questions, state))});
+      } catch (e) { if (sig.aborted || !route.name) throw e; R.rest(route.name, 60_000); if (auto && i < list.length - 1) continue; throw e }
+      j = await r.json().catch(() => null);
+      if (r.ok || !route.name || !R.failover(r.status)) break;
+      R.rest(route.name, R.restFor(r.status, JSON.stringify(j ?? '')));
+      if (!auto || i === list.length - 1) break;
+    }
     const n = j?.usage?.input_tokens || 0;
     return done(r.ok ? P.answers(j, questions) : null, n, n / 1e6 * P.price, `${r.status} ${clip(JSON.stringify(j?.detail ?? j?.error ?? j), 300)}`);
   } catch (e) { return done(null, 0, 0, String(e?.message || e)) }

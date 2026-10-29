@@ -208,6 +208,18 @@ final class Engine {
       // Telegram: the bot token saved in dec for api.telegram.org, whatever its name. Read at every
       // engine start, so Settings' "bisu 다시 켜기" picks up a token saved a moment ago.
       if let ref = decRef(list, site: "https://api.telegram.org") { env["TELEGRAM_BOT_TOKEN"] = ref }
+      // Every key saved for the model sites, for the engine's key order (engine/routes.mjs, the order being dec's
+      // model-routes.json): BISU_RK<n>_API_KEY each, listed in BISU_ROUTE_KEYS as "n|name|site".
+      var routeKeys: [String] = []
+      for line in list.split(separator: "\n") {
+        let cols = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+        guard cols.count >= 2, cols[0].hasPrefix("dec://"), !cols[0].hasPrefix("dec://env/"), routeKeys.count < 12,
+              ["https://openrouter.ai", "https://api.z.ai", "https://api.openai.com"].contains(cols[1]) else { continue }
+        let n = routeKeys.count + 1
+        env["BISU_RK\(n)_API_KEY"] = cols[0]
+        routeKeys.append("\(n)|\(cols[0].dropFirst(6))|\(cols[1])")
+      }
+      if !routeKeys.isEmpty { env["BISU_ROUTE_KEYS"] = routeKeys.joined(separator: ";") }
     } else if let key = env["OPENROUTER_API_KEY"], !key.isEmpty {
       p.executableURL = URL(fileURLWithPath: node)
       p.arguments = [server.path]

@@ -8,16 +8,18 @@
 // complete() streams: text and reasoning arrive through callbacks as they come, tool calls are
 // assembled from their fragments, and the result carries the usage from the final chunk.
 
-// OpenRouter serves the same models (z-ai/glm-5.3 …) under its own key: used when asked (GLM_VIA=openrouter),
-// when there is no Z.ai key, and from the moment Z.ai says its balance is empty.
-let zaiEmpty = false;
-export const viaOpenRouter = () => !!process.env.OPENROUTER_API_KEY && (process.env.GLM_VIA === 'openrouter' || !process.env.GLM_API_KEY || zaiEmpty);
-const BASE = () => viaOpenRouter() ? (process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai').replace(/\/$/, '') + '/api/v1'
-  : (process.env.GLM_BASE_URL || 'https://api.z.ai').replace(/\/$/, '') + '/api/paas/v4';
-const KEY = () => viaOpenRouter() ? process.env.OPENROUTER_API_KEY : process.env.GLM_API_KEY || '';
+// The keys GLM can go out with, in the person's order (routes.mjs, shared with dec): OpenRouter serves the same models
+// (z-ai/glm-5.3 …) under its own key, Z.ai serves them directly. A key that fails before anything streamed (no balance,
+// refused, busy, down) hands the same request to the next one when the switch is on; GLM_VIA=openrouter still puts
+// OpenRouter first.
+import * as R from './routes.mjs';
+const glmRoutes = () => { const rs = R.routes('glm'); return process.env.GLM_VIA === 'openrouter' ? [...rs.filter(r => r.site === R.OR_SITE), ...rs.filter(r => r.site !== R.OR_SITE)] : rs };
+let lastRoute = null;
+export const viaOpenRouter = () => (lastRoute || glmRoutes()[0])?.site === R.OR_SITE;
+const base = r => r.base.replace(/\/$/, '') + (r.site === R.ZAI_SITE ? '/api/paas/v4' : '/api/v1');
 // Z.ai's fields in OpenRouter's words: the model under its maker, reasoning off or at an effort.
-function wire(body) {
-  if (!viaOpenRouter()) return body;
+function wire(body, r) {
+  if (r.site !== R.OR_SITE) return body;
   const {thinking, reasoning_effort, tool_stream, ...b} = body;
   if (!b.model.includes('/')) b.model = 'z-ai/' + b.model;
   if (thinking?.type === 'disabled') b.reasoning = {enabled: false};
@@ -71,19 +73,29 @@ export async function complete({model, messages, tools, thinking = true, maxToke
   if (!thinking) { if (ALWAYS_THINKS.has(model)) body.reasoning_effort = 'low'; else body.thinking = {type: 'disabled'} }
   if (maxTokens) body.max_tokens = maxTokens;
   if (temperature != null) body.temperature = temperature;
-  let attempt = 0;
+  let attempt = 0, at = 0;
+  const list = glmRoutes(), auto = R.settings().auto;
+  if (!list.length) throw new GLMError('GLM 키가 없어요: Dec에 OpenRouter나 Z.AI 키를 저장해 주세요.', {status: 401, code: 'no_key'});
   for (;;) {
     attempt++;
     let streamed = false;
+    const route = lastRoute = list[at];
     try {
-      return await once(body, signal, {onText: t => { streamed = true; onText?.(t) }, onReasoning, onToolStart});
+      const out = await once(body, route, signal, {onText: t => { streamed = true; onText?.(t) }, onReasoning, onToolStart});
+      if (R.resting(route.name)) R.rest(route.name, 0);
+      return out;
     } catch (e) {
       if (signal?.aborted) throw e;
       if (e instanceof GLMError && e.status === 400 && /cannot be disabled/.test(e.message) && body.thinking?.type === 'disabled') {
         ALWAYS_THINKS.add(model); delete body.thinking; body.reasoning_effort = 'low'; attempt--; continue;
       }
-      if (e instanceof GLMError && e.status === 429 && /balance|recharge|余额/i.test(e.message) && !viaOpenRouter() && process.env.OPENROUTER_API_KEY) {
-        zaiEmpty = true; attempt--; continue;
+      // This key failed before anything was shown: the next key takes the same request (and this one rests).
+      const status = e instanceof GLMError ? e.status : 0;
+      if (!streamed && (status ? R.failover(status) : !(e instanceof GLMError))) {
+        R.rest(route.name, status ? R.restFor(status, e.message) : 60_000);
+        if (auto && at < list.length - 1) { at++; attempt--; continue }
+        // (no money or refused: asking the same key again changes nothing)
+        if (status && R.restFor(status, e.message) > 60_000) throw e;
       }
       const retryable = e instanceof GLMError ? e.retryable : true;
       if (!retryable || streamed || attempt >= 4) throw e;
@@ -92,12 +104,12 @@ export async function complete({model, messages, tools, thinking = true, maxToke
   }
 }
 
-async function once(body, signal, {onText, onReasoning, onToolStart}) {
+async function once(body, route, signal, {onText, onReasoning, onToolStart}) {
   const t0 = Date.now();
-  const r = await fetch(BASE() + '/chat/completions', {
+  const r = await fetch(base(route) + '/chat/completions', {
     method: 'POST', signal,
-    headers: {authorization: 'Bearer ' + KEY(), 'content-type': 'application/json', accept: 'text/event-stream'},
-    body: JSON.stringify(wire(body)),
+    headers: {authorization: 'Bearer ' + route.key, 'content-type': 'application/json', accept: 'text/event-stream'},
+    body: JSON.stringify(wire(body, route)),
   });
   if (!r.ok) {
     const text = await r.text().catch(() => '');

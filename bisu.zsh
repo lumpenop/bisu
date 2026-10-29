@@ -35,6 +35,17 @@ bisu() {
   [ -n "$ref" ] && keys+=("OPENROUTER_API_KEY=$ref")
   [ -n "$glm" ] && keys+=("GLM_API_KEY=$glm")
   [ -n "$oai" ] && keys+=("OPENAI_API_KEY=$oai")
+  # Every key saved for the model sites, for the engine's key order (engine/routes.mjs; the order is dec's
+  # model-routes.json): BISU_RK<n>_API_KEY each, listed in BISU_ROUTE_KEYS as "n|name|site".
+  local rk="" n=0 line r s
+  for line in ${(f)list}; do
+    r="${${(z)line}[1]}"; s="${${(z)line}[2]}"
+    [[ "$r" == dec://* && "$r" != dec://env/* ]] || continue
+    [[ "$s" == https://openrouter.ai || "$s" == https://api.z.ai || "$s" == https://api.openai.com ]] || continue
+    (( n++ < 12 )) || break
+    keys+=("BISU_RK${n}_API_KEY=$r"); rk+="${rk:+;}$n|${r#dec://}|$s"
+  done
+  [ -n "$rk" ] && keys+=("BISU_ROUTE_KEYS=$rk")
   # bisu ui: local page for models per role, real OpenRouter spend and past runs (same key, same use-only rules).
   if [ "$1" = ui ]; then
     shift

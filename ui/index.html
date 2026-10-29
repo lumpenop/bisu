@@ -109,6 +109,13 @@ aside{width:260px;border-right:1px solid var(--line);display:flex;flex-direction
 .tile .l{font-size:12px;color:var(--muted)}
 .kv{display:grid;grid-template-columns:170px 1fr;gap:8px 16px;font-size:13px}
 .kv .k{color:var(--muted)}
+.routeFam{margin-top:14px}.routeFam h3{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 6px}
+.routeList{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.routeList li{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.routeList li:first-child{border-color:color-mix(in srgb,var(--accent) 55%,var(--line));background:var(--accent-soft)}
+.routeList .rn{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.routeList .rs{font-size:12px;color:var(--muted);white-space:nowrap}
+.routeList button{padding:2px 9px;min-width:30px}
 .role{display:grid;grid-template-columns:200px 1fr;gap:6px 16px;padding:12px 0;border-top:1px solid var(--line)}
 .role:first-of-type{border-top:0;padding-top:0}
 .role .name{font-weight:600}.role .desc{font-size:12px;color:var(--muted)}
@@ -961,6 +968,12 @@ body.panel #panelStart .row{margin-top:2px}
   <div class="kv" id="keyInfo"><div class="k">상태</div><div>…</div></div>
   <p class="note">덱 인턴은 키를 직접 갖고 있지 않아요. 추가하거나 바꾸려면 Dec Browser → 설정 → 자격 증명에서 사이트 <code>https://openrouter.ai</code>로 OpenRouter 키를 저장하고 「앱 밖에서도 쓰기」를 켠 뒤 덱 인턴을 다시 여세요.</p>
  </section>
+ <section id="routesSec">
+  <h2>모델 키 순서</h2>
+  <label class="sw"><input type="checkbox" id="routesAuto"> 키가 실패하면 다음 키로 넘어가기</label>
+  <div id="routesList"></div>
+  <p class="note">같은 일을 할 수 있는 키가 여러 개면 위에서부터 써요. 잔액이 없거나 키가 거부되거나 서버가 응답하지 않으면 다음 키로 같은 요청을 다시 보내고, 실패한 키는 잠시(최대 10분) 맨 뒤로 가요. 이 순서는 Dec과 같이 써요. Claude Code 대화는 새 대화부터 바뀐 순서를 따라요.</p>
+ </section>
  <section id="orSpend">
   <h2>쓴 돈 · OpenRouter</h2>
   <div class="tiles" id="tiles"><div class="tile"><div class="v">…</div><div class="l">불러오는 중</div></div></div>
@@ -1153,7 +1166,7 @@ function show(v){if(!$(v+'View'))v='chat';curView=v;for(const b of document.quer
  if(v==='jobs'){renderSugSettings();loadSuggestions();loadJobs();loadBrief()}
  if(v==='routines')loadRoutines();
  if(v==='connect'){loadTg();loadAlerts();loadCalendar()}
- if(v==='settings'){loadAccount();loadRoles();if(prefs.engine==='native')loadNative();loadCu();loadPanelPlace()}
+ if(v==='settings'){loadAccount();loadRoles();loadRoutes();if(prefs.engine==='native')loadNative();loadCu();loadPanelPlace()}
  heroes();try{localStorage.setItem('bisu.view',v)}catch{}}
 for(const b of document.querySelectorAll('.side button[data-view]'))b.onclick=()=>show(b.dataset.view);
 
@@ -2221,9 +2234,18 @@ function renderEngine(){for(const r of document.querySelectorAll('input[name=eng
 const KEY_KO={'use-only':'Dec으로 연결됨 (사용 전용: 덱 인턴은 일회용 토큰만 받고 키는 못 봐요)',plain:'셸의 키 (평문)',none:'<span class="err">키가 없어요</span>'};
 let calSnap=null;
 const CAL_KO={full:'허용됨',not_asked:'<span class="w">아직 안 물어봤어요</span>',denied:'<span class="err">거부됨</span>',restricted:'<span class="err">제한됨</span>',write_only:'<span class="w">추가만 허용 — 보려면 전체 접근이 필요해요</span>'};
+// 모델 키 순서 (engine/routes.mjs): names and sites only; ↑↓ save the family's new order, the switch saves auto.
+async function loadRoutes(){
+ try{renderRoutes(await api('/api/routes'))}catch(e){$('routesList').innerHTML=`<p class="note err">${esc(e.message)}</p>`}}
+function renderRoutes(r){
+ $('routesAuto').checked=r.auto!==false;
+ $('routesList').innerHTML=r.families.map(f=>`<div class="routeFam" data-fam="${esc(f.id)}"><h3>${esc(f.label)}</h3>${f.routes.length?`<ol class="routeList">${f.routes.map((k,i)=>`<li><span class="rn">${esc(k.name)}</span><span class="rs">${esc(k.site)}${k.resting?' · 잠시 쉬는 중':''}</span><button data-mv="-1" data-i="${i}" ${i?'':'disabled'} aria-label="${esc(k.name)} 위로">↑</button><button data-mv="1" data-i="${i}" ${i<f.routes.length-1?'':'disabled'} aria-label="${esc(k.name)} 아래로">↓</button></li>`).join('')}</ol>`:'<p class="note" style="margin:0">저장된 키가 없어요.</p>'}</div>`).join('');
+ for(const b of $('routesList').querySelectorAll('button[data-mv]'))b.onclick=()=>{const fam=b.closest('.routeFam').dataset.fam,f=r.families.find(x=>x.id===fam),i=Number(b.dataset.i),j=i+Number(b.dataset.mv);
+  const order=f.routes.map(k=>k.name);[order[i],order[j]]=[order[j],order[i]];post('/api/routes',{family:fam,order}).then(renderRoutes).catch(e=>alert(e.message))}}
+$('routesAuto').onchange=()=>post('/api/routes',{auto:$('routesAuto').checked}).then(renderRoutes).catch(()=>loadRoutes());
 async function loadNative(){
  try{const n=await api('/api/native');natSnap=n;heroes();
-  $('nativeKeys').innerHTML=[['Z.ai (GLM)',KEY_KO[n.glm]+(n.glm==='none'?' — 사이트 <code>https://api.z.ai</code>로 저장해요':'')],
+  $('nativeKeys').innerHTML=[['GLM',KEY_KO[n.glm]+(n.glm==='none'?' — 사이트 <code>https://openrouter.ai</code>나 <code>https://api.z.ai</code>로 저장해요':'')],
    ['판단 (OpenAI Decisions)',KEY_KO[n.decisions]+(n.decisions==='none'?' — 없으면 판단 없이 GLM-5.3이 모든 요청을 받고, 바뀌는 일은 전부 물어요. 사이트 <code>https://api.openai.com</code>':'')]]
    .map(([x,y])=>`<div class="k">${x}</div><div>${y}</div>`).join('');
   $('nativeTiles').innerHTML=[[n.spend.today,'오늘'],[n.spend.week,'이번 주'],[n.spend.month,'이번 달']].map(([v,l])=>`<div class="tile"><div class="v">${usd(v)}</div><div class="l">${l}</div></div>`).join('');
