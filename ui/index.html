@@ -663,8 +663,8 @@ body.panel #panelStart:not([hidden]){flex-direction:column;align-items:stretch;j
 #panelStart .onboard{order:0;align-self:center}
 #panelStart .nowBox{order:1}#panelStart #sug{order:2}#panelStart #recent{order:3}#panelStart .startWrap>.row{order:4;margin-top:4px}#panelStart #startErr{order:5}
 #panelStart .startWrap>.bisu,#panelStart .startTitle,#panelStart .ccStatus,#panelStart .botPick,#panelStart>.startWrap>.note,#panelStart .ccFoot,#panelStart .cc{display:none!important}
-#panelStart.quiet .startWrap>.bisu{display:block!important;margin-top:8vh}
-#panelStart.onboarding .startTitle,#panelStart.onboarding>.startWrap>.note,#panelStart.onboarding .chips{display:none!important}#panelStart.quiet .startTitle{display:block!important}#panelStart.quiet>.startWrap>.note{display:block!important}
+#panelStart.quiet .startWrap>.bisu{display:block!important;margin-top:8vh}#panelStart.quiet.onboarding .startWrap>.bisu{margin-top:2vh}
+#panelStart.onboarding .startTitle,#panelStart.onboarding>.startWrap>.note,#panelStart.onboarding .chips{display:none!important}#panelStart.quiet:not(.onboarding) .startTitle{display:block!important}#panelStart.quiet:not(.onboarding)>.startWrap>.note{display:block!important}
 body.panel:has(#sug:not([hidden])) #panelStart .startWrap{margin-top:6px}
 .nowBox{display:flex;flex-direction:column;gap:6px}.nowBox:empty{display:none}
 .nowBox .nh{font-size:11.5px;font-weight:700;color:var(--muted);margin:4px 2px 0;font-family:var(--display)}
@@ -682,6 +682,34 @@ body.panel:has(#sug:not([hidden])) #panelStart .startWrap{margin-top:6px}
 .otherBar{display:flex;align-items:center;gap:8px;margin:0 2px 8px;padding:7px 12px;border-radius:12px;background:var(--blush-soft);color:var(--blush-ink);font-size:12.5px;font-weight:600;cursor:pointer}
 .otherBar[hidden]{display:none}
 body.panel #panelStart .row{margin-top:2px}
+/* review 10-29: the same controls everywhere, in an active or inactive window */
+:root{--ck:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.8 6.3l2.2 2.2 4.2-4.6' fill='none' stroke='%23fff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+@media (prefers-color-scheme:dark){:root{--ck:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.8 6.3l2.2 2.2 4.2-4.6' fill='none' stroke='%2306150d' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}}
+input[type=checkbox]:not(.switch),input[type=radio]{-webkit-appearance:none;appearance:none;flex:none;width:17px;height:17px;margin:0;padding:0;border:1.5px solid color-mix(in srgb,var(--muted) 45%,var(--line));background:var(--card);cursor:pointer;vertical-align:-3px;transition:background-color .12s ease,border-color .12s ease}
+input[type=checkbox]:not(.switch){border-radius:6px}
+input[type=radio]{border-radius:50%}
+input[type=checkbox]:not(.switch):checked{border-color:transparent;background:var(--ck) center/12px no-repeat,linear-gradient(180deg,var(--g1),var(--g2))}
+input[type=radio]:checked{border:5px solid var(--accent);background:var(--card)}
+input[type=checkbox]:not(.switch):focus-visible,input[type=radio]:focus-visible{outline:none;box-shadow:var(--glow)}
+input[type=checkbox]:disabled,input[type=radio]:disabled{opacity:.45;cursor:default}
+label.sw{gap:10px}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{text-align:center}
+/* a label sits on the same line as the text of the field next to it */
+.kv{align-items:baseline}
+form>label.sw+.kv,section>label.sw+.kv{margin-top:12px}
+#goalForm .row{display:flex;flex-direction:column;gap:8px}#goalForm .kv{margin-top:12px}
+/* small arrows drawn, not typed, so they stay the same size as the select's */
+.botPill .chev,.statusFoot .chev{font-size:0;width:10px;height:10px;flex:none;background:var(--chev) center/10px no-repeat}
+.statusFoot .chev{transform:rotate(180deg)}
+.side .kbtn{background:var(--card);border:1px solid var(--line);padding:1px 7px}
+/* the status popover: no line above its first row, and a row's hint on its own line */
+.cc>.ccRow[hidden]{display:none}.cc>.ccRow[hidden]+.ccRow{border-top:0}
+.statusPop .ccRow .hn{display:block;margin:1px 0 0}
+.ask pre:not(.open).long::after{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif}
+.saveRoutine{margin:2px 0 0;padding:4px 11px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--muted)}
+.keyBack{color:var(--accent);font-weight:600;padding:4px 6px}
+.keyBack:hover:not(:disabled){transform:none;text-decoration:underline}
 </style>
 </head>
 <body>
@@ -863,7 +891,7 @@ body.panel #panelStart .row{margin-top:2px}
  <section id="briefSec">
   <h2>아침 브리핑</h2>
   <form id="briefForm">
-   <label class="sw"><input type="checkbox" id="briefOn"> 켜기</label>
+   <label class="sw"><input type="checkbox" class="switch" id="briefOn"> 켜기</label>
    <div class="kv">
     <div class="k">시각</div><div><select id="briefHour"><option value="5">오전 5시</option><option value="6">오전 6시</option><option value="7">오전 7시</option><option value="8">오전 8시</option><option value="9">오전 9시</option><option value="10">오전 10시</option><option value="11">오전 11시</option></select></div>
     <div class="k">캘린더</div><div id="briefAccess">…</div>
@@ -876,7 +904,7 @@ body.panel #panelStart .row{margin-top:2px}
  <section id="sugSec">
   <h2>먼저 찾아오기</h2>
   <form id="sugForm">
-   <label class="sw"><input type="checkbox" id="sugOn"> 켜기</label>
+   <label class="sw"><input type="checkbox" class="switch" id="sugOn"> 켜기</label>
    <div class="kv">
     <div class="k">주기</div><div><select id="sugEvery">
      <option value="8">하루 세 번</option><option value="12">하루 두 번</option>
@@ -992,7 +1020,7 @@ body.panel #panelStart .row{margin-top:2px}
  </section>
  <section id="routesSec">
   <h2>모델 키 순서</h2>
-  <label class="sw"><input type="checkbox" id="routesAuto"> 키가 실패하면 다음 키로 넘어가기</label>
+  <label class="sw"><input type="checkbox" class="switch" id="routesAuto"> 키가 실패하면 다음 키로 넘어가기</label>
   <div id="routesList"></div>
   <p class="note">같은 일을 할 수 있는 키가 여러 개면 위에서부터 써요. 잔액이 없거나 키가 거부되거나 서버가 응답하지 않으면 다음 키로 같은 요청을 다시 보내고, 실패한 키는 잠시(최대 10분) 맨 뒤로 가요. 이 순서는 Dec과 같이 써요. Claude Code 대화는 새 대화부터 바뀐 순서를 따라요.</p>
  </section>
@@ -1009,7 +1037,7 @@ body.panel #panelStart .row{margin-top:2px}
  </section>
  <section id="viewSec">
   <h2>보기</h2>
-  <label class="sw"><input type="checkbox" id="metaOn"> 작업 세부 보기 — 도구 호출, 단계, 비용, 모델 이름을 대화와 기록에 그대로 보여줘요 (개발자용)</label>
+  <label class="sw"><input type="checkbox" class="switch" id="metaOn"> 작업 세부 보기 — 도구 호출, 단계, 비용, 모델 이름을 대화와 기록에 그대로 보여줘요 (개발자용)</label>
   <p class="note">끄면 덱 인턴이 하는 일은 대화마다 한 줄로 접혀 있고, 눌러야 펼쳐져요.</p>
   <div class="note" style="margin:14px 0 6px">글꼴</div>
   <div class="seg" style="display:flex;gap:6px;flex-wrap:wrap">
@@ -1096,7 +1124,7 @@ const menu=(()=>{let el=null,owner=null,items=[],active=-1,onPick=null;
   el.style.top=(up?Math.max(8,r.top-h-6):r.bottom+6)+'px';if(!up)el.style.maxHeight=Math.max(120,below-6)+'px';el.classList.toggle('up',up)}
  function open(anchor,list,{selected=-1,pick}={}){close();if(!list.length)return;owner=anchor;items=list;onPick=pick;
   el=document.createElement('div');el.className='menu';el.setAttribute('role','listbox');
-  el.innerHTML=list.map((it,i)=>`<div class="mi${i===selected?' sel':''}" role="option" aria-selected="${i===selected}"><span class="ck">${i===selected?'✓':''}</span><span class="lb">${esc(it.label)}</span>${it.hint?`<span class="hn">${esc(it.hint)}</span>`:''}</div>`).join('');
+  el.innerHTML=list.map((it,i)=>`<div class="mi${i===selected?' sel':''}" role="option" aria-selected="${i===selected}"><span class="ck">${i===selected||it.checked?'✓':''}</span><span class="lb">${esc(it.label)}</span>${it.hint?`<span class="hn">${esc(it.hint)}</span>`:''}</div>`).join('');
   document.body.appendChild(el);anchor.setAttribute('aria-expanded','true');
   [...el.children].forEach((c,i)=>{c.onmousedown=e=>e.preventDefault();c.onmousemove=()=>{if(active!==i)mark(i)};c.onclick=()=>{const f=onPick;close();f?.(items[i])}});
   place();mark(Math.max(0,selected))}
@@ -1351,6 +1379,10 @@ function actStep(text){const a=actBlock();a.n++;a.querySelector('.actS').textCon
 function actDone(meta){if(!act)return;const d=act.querySelector('details');d.classList.remove('live');
  act.querySelector('.actS').textContent=act.n?`한 일 ${act.n}가지`:'한 일';if(meta)act.querySelector('.actM').textContent=' · '+meta;act=null}
 function atBottom(){const m=$('msgs');return m.scrollHeight-m.scrollTop-m.clientHeight<80}
+// The list gets shorter when the composer grows (another chat's bar, chips, a long message) or the panel is resized;
+// someone reading the latest message keeps seeing it, buttons included.
+{let pinned=true;$('msgs').addEventListener('scroll',()=>{pinned=atBottom()},{passive:true});
+ new ResizeObserver(()=>{if(pinned)$('msgs').scrollTop=$('msgs').scrollHeight}).observe($('msgs'))}
 function render(ev){
  switch(ev.kind){
   case 'hello':wrap().innerHTML='';live=null;act=null;toolEls={};setTimeout(makerCard,0);tasks=[];renderTasks();if(PANEL&&ev.chat?.sessionId)HOST?.session?.(ev.chat.sessionId,ev.chat.cwd);
@@ -2253,15 +2285,14 @@ async function runRoutineChip(r){if(r.inputs.length){$('input').value=`루틴 �
 function renderOther(g){const el=$('otherBar');if(!el)return;const others=cur?g.pend.filter(c=>c.id!==cur.id&&c.from!==cur.id):[];
  el.hidden=!others.length;if(others.length){el.textContent=`다른 대화에서 확인이 필요해요 · ${others[0].title||'대화'} ›`;el.onclick=()=>open(others[0].id)}}
 // The bot pill: switch bots anywhere in the panel.
-$('botPill').onclick=()=>{const items=[...bots.map(b=>({label:b.name,hint:b.id===curBot?'지금':'',go:()=>{setBot(b.id);renderHome()}})),{label:'봇 만들기',hint:'',go:()=>$('botNew').click()},
+$('botPill').onclick=()=>{const items=[...bots.map(b=>({label:b.name,hint:'',go:()=>{setBot(b.id);renderHome()}})),{label:'봇 만들기',hint:'',go:()=>$('botNew').click()},
   ...(HOST?.openFull?[{label:'봇 정보 · 고치기',hint:'전체 창',go:()=>HOST.openFull('chat')}]:[])];
  menu.open($('botPill'),items,{selected:bots.findIndex(b=>b.id===curBot),pick:it=>it.go()})};
 $('gStatus').onclick=()=>{if(!gotoStatus())$('input').focus()};
 // ⋯: everything about the app, out of the way of asking.
 $('appMore').onclick=async()=>{let sel=true;try{sel=HOST?await HOST.selectionEnabled():false}catch{}
- const on=v=>v?'✓ ':'';
  const items=[{label:'새 대화',hint:'⌘N',go:newChatHere},...(HOST?.openFull?[{label:'전체 창에서 보기',hint:'',go:()=>HOST.openFull()}]:[]),
-  ...(HOST?[{label:on(sel)+'선택한 텍스트 읽기',hint:'',go:()=>$('ccSel').click()}]:[]),{label:on(sug?.enabled)+'먼저 찾아오기',hint:'',go:()=>$('ccSug').click()},
+  ...(HOST?[{label:'선택한 텍스트 읽기',checked:sel,hint:'',go:()=>$('ccSel').click()}]:[]),{label:'먼저 찾아오기',checked:!!sug?.enabled,hint:'',go:()=>$('ccSug').click()},
   {label:'맥 깨어 있게',hint:alSnap?awakeText(alSnap).split(' · ')[0]:'',go:()=>$('ccAwake').dispatchEvent(new MouseEvent('click',{bubbles:true}))},
   ...(HOST?.teachStart?[{label:'보여 주고 가르치기',hint:'',go:()=>$('teachBtn').click()}]:[]),{label:'설정',hint:'⌘,',go:openSettings},...(HOST?.quit?[{label:'덱 인턴 종료',hint:'',go:()=>$('ccQuit').click()}]:[])];
  menu.open($('appMore'),items,{pick:it=>it.go()})};
@@ -2309,7 +2340,7 @@ async function loadNative(){
 async function loadCalendar(){try{renderCal((await api('/api/native')).calendar||{})}catch(e){$('calInfo').innerHTML=`<div class="k">상태</div><div class="err">${esc(e.message)}</div>`}}
 function renderCal(c={}){calSnap=c;
  const ask=$('calAsk');
- if(c.missing||c.error){$('calInfo').innerHTML=`<div class="k">상태</div><div><span class="w">${c.missing?'캘린더 도우미가 아직 설치되지 않았어요 (mac/native/build.sh가 설치해요)':esc(c.error)}</span></div>`;ask.hidden=true;return}
+ if(c.missing||c.error){$('calInfo').innerHTML=`<div class="k">상태</div><div><span class="w">${c.missing?'캘린더 도우미가 없어요 — 덱 인턴을 다시 설치하면 생겨요':esc(c.error)}</span></div>`;ask.hidden=true;return}
  $('calInfo').innerHTML=[['캘린더',CAL_KO[c.events]||esc(c.events)],['미리 알림',CAL_KO[c.reminders]||esc(c.reminders)]].map(([x,y])=>`<div class="k">${x}</div><div>${y}</div>`).join('');
  const st=[c.events,c.reminders],blocked=st.some(s=>s==='denied'||s==='restricted');
  ask.hidden=!blocked&&!st.some(s=>s==='not_asked'||s==='write_only');
