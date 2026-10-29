@@ -1,8 +1,7 @@
 // Where to put the thresholds: run the judgments on labeled examples and see what each cut-off
-// would have done. Nothing here runs a command; it only asks Decisions (or Jev) about text.
+// would have done. Nothing here runs a command; it only asks Decisions about text.
 //
 //   OPENAI_API_KEY=dec://OPENAI_API_KEY dec-secret run -- node engine/eval/judge-bench.mjs [--only route,risk,progress,claims]
-//   JEV_API_KEY=dec://JEV_API_KEY BISU_DECISION_PROVIDER=jev dec-secret run -- node engine/eval/judge-bench.mjs
 import {route, risk, progress, stepsLog, PROGRESS_ACT, RISK_CLEAR, usage, unbacked, claimsSomething, CLAIM_ACT, provider, decisionModel, cost} from '../judge.mjs';
 
 export const ROUTE_SET = {

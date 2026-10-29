@@ -614,12 +614,12 @@ const glmUse = {usd: 0, calls: 0};
 // GLM is the second opinion: when it cannot answer (an error, an empty balance), the run goes on with Decisions' pick.
 // An account out of credit is not asked again for ten minutes (each ask would wait out its retries first).
 let glmDownUntil = 0;
-async function glm(content, maxTokens = 3000) {
+async function glm(content, maxTokens = 3000, effort) {
   if (Date.now() < glmDownUntil) return null;
   // GLM answers a look in 1.5-3 s, but now and then a provider queue holds one for 25-30 s: an answer not back in 6 s
   // gets the same ask sent again, the first back wins, and after 30 s the loop goes on without it.
   const asks = [], wait = ms => new Promise(r => setTimeout(r, ms).unref?.());
-  const ask = () => { const c = new AbortController(); asks.push(c); return complete({model: GLM_MODEL(), thinking: false, effort: process.env.BISU_WEB_GLM_EFFORT || 'medium', temperature: 0, maxTokens, signal: c.signal, messages: [
+  const ask = () => { const c = new AbortController(); asks.push(c); return complete({model: GLM_MODEL(), thinking: false, effort: effort || process.env.BISU_WEB_GLM_EFFORT || 'medium', temperature: 0, maxTokens, signal: c.signal, messages: [
     {role: 'system', content: 'You drive or review a browser agent. Reply with one JSON object and nothing else.'}, {role: 'user', content}]}) };
   try {
     const first = ask();
@@ -652,7 +652,7 @@ A fast model proposes: ${c ? `${c.index}. ${c.kind}: ${c.name}` : 'none'} (confi
 - If the proposal is "done": decide from the visible text whether the goal is really achieved. If not, pick the action that makes progress.
 - Never pick a select-all checkbox unless the goal asks for everything in the list.
 - If the goal picks one item by comparing (the most expensive, the cheapest, the newest), compare every item listed on the page and pick the option that opens the one that wins.
-${wants ? '- The goal asks to report something: if the visible text (or what was seen on earlier pages) states it, put the full answer in "answer" — every part the goal asks for, only from those pages — and set goal_met true.\n' : ''}Reply: {"choice":"<option number>","goal_met":true|false${wants ? ',"answer":"<from the page or empty>"' : ''}}`, 1500);
+${wants ? '- The goal asks to report something: if the visible text (or what was seen on earlier pages) states it, put the full answer in "answer" — every part the goal asks for, only from those pages — and set goal_met true.\n' : ''}Reply: {"choice":"<option number>","goal_met":true|false${wants ? ',"answer":"<from the page or empty>"' : ''}}`, 1500, seen?.effort);
   if (!r) return pick;
   const i = Number(r.choice);
   // A comparison is answered by opening the winner, not by ending here: its details are on its own page.
@@ -696,6 +696,10 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
   try { return await loop() } catch (e) { await driver.end?.('error').catch?.(() => {}); throw e }
   async function loop() {
   let view = await driver.open(url, ins, goal);
+  // Trouble in this task (a GLM look that failed or came back empty, an answer the check refused, a step that failed, a
+  // run going round): from the second, GLM thinks at 「높음」 for the rest of the task — the emergency gear, same model.
+  let trouble = 0, glmFails0 = glmUse.failures || 0;
+  const hard = what => { trouble++; if (trouble === 2 && !seen.effort) { seen.effort = 'high'; log({escalate: 'high', after: what}); reviews.why.escalated = 1 } };
   let sweepOpen = null, opened = null, targets = null, hub = null, cur = null, between = true, steered = 0, tick = null, itemsOf = new Set(), answerAt = null, last = null, answer = null, held = null, status = 'budget', steps = 0, repeats = 0, prevSig = '';
   const sweeps = new Map(), deadNext = new Set(), noScroll = new Set(), eachTried = new Set(), doneExt = new Set(), ticked = new Set(), seen = new Map(), visits = new Map(), tried = new Set(), compared = new Set(), reviews = {n: 0, changed: 0, why: {}};
   // The same control, not the same words: three "LinkedIn 메일 선택" boxes are three different steps.
@@ -719,6 +723,7 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
     // A sign-in form: bisu never types a password, so the person signs in themselves (browser.mjs hands ego over).
     if (parse(view.snap).els.some(e => TYPABLE.has(e.role) && /비밀\s*번호|password|암호/i.test(e.name))) { status = 'needs-login'; break }
     let todo = [];
+    if ((glmUse.failures || 0) > glmFails0) { glmFails0 = glmUse.failures; hard('glm-failed') }
     if (view.snap) { seen.delete(pageKey(view)); seen.set(pageKey(view), noteOf(view, goal)) }
     // Arrivals, not looks: filling a form is many steps on one page, coming back to a page is the loop.
     if (pageKey(view) !== prevUrl) visits.set(pageKey(view), (visits.get(pageKey(view)) || 0) + 1);
@@ -765,6 +770,7 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
           const table = process.env.BISU_COMPARE_TABLE === '0' ? null : checkCompare(goal, null, [...(seen.pinned || [])].map(k => seen.get(k)).filter(Boolean))?.hint;
           const ask = () => review(goal, view, cands, [...hist, ...(seen.get(pageKey(view)) ? [`(이 페이지 메모 — ${seen.get(pageKey(view))})`] : []), ...(table ? [table] : [])], ins, null, 'done-without-answer', seen);
           let r = await ask();
+          if (!r.answer) hard('empty-answer');
           reviews.n++; reviews.why['each-done'] = (reviews.why['each-done'] || 0) + 1;
           // (every item of a goal that opens one of each is open: the answer is in the notes now, and nothing later will
           // see them all again — a look that came back empty is asked once more, not left to a pick from this page alone)
@@ -862,6 +868,7 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
       const spread = listText && c0 && (c0.kind === 'done' || /^scroll/.test(c0.kind)) ? priceSpread(goal, listText, cands, [...parse(view.snap).els.map(e => e.name), ...(view.fulls || [])]) : null;
       if (spread) { log({compare: 'spread', answer: spread}); answer = spread; answerAt = pageKey(view); status = 'done'; break }
       if (why) {
+        if (['repeat', 'loop', 'step-failed', 'no-pick'].includes(why)) hard(why);
         const r = await review(goal, view, cands, hist, ins, pick, why, seen);
         reviews.n++; reviews.why[why] = (reviews.why[why] || 0) + 1; if (r.index !== pick?.index) reviews.changed++;
         log({review: why, from: c0?.name, to: cands[r.index]?.name});
@@ -960,7 +967,9 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
   if (answer && targets?.length >= 2) {
     const items = [...(seen.pinned || [])].map(k => seen.get(k)).filter(Boolean), c = checkCompare(goal, answer, items);
     log({check: c ? (c.ok ? 'ok' : 'mismatch') : 'none'});
+    // (an answer the check refused is the last look: it goes out at 「높음」 whatever came before)
     if (c && !c.ok) {
+      hard('check'); seen.effort = 'high';
       const cs = driver.candidates ? driver.candidates(view) : candidates(view, ins, last, true, goal);
       const r = await review(goal, view, cs, [...hist, c.hint], ins, null, 'done-without-answer', seen);
       reviews.n++; reviews.why.check = (reviews.why.check || 0) + 1;

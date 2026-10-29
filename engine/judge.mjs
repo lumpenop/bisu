@@ -1,10 +1,9 @@
 // bisu's judgments, made by OpenAI's Decisions API (gpt-6-luna): GLM talks and acts, this decides.
-// BISU_DECISION_PROVIDER=jev asks TypeSafe's Jev the same questions instead (engine/eval/judge-bench.mjs);
-// Decisions stays the default. GLM no longer judges: it talks, acts and reviews, and judging was taken from it. Measured
+// Decisions is the only judge: GLM talks, acts and reviews, and judging was taken from both GLM and Jev. Measured
 // 2026-10-28 on the labeled examples, twice each, each at its own cut-offs:
 // - Decisions: routes 60/63, 19/20 safe commands cleared and no risky one, 18/20 stuck turns caught,
 //   claims 13/13 with none sent back wrongly; median 0.37 s, $0.00006 a judgment, the same both runs.
-// - Jev (jev-1.14.0, fields as state, yes/no spelled out): routes 59/63, risk and claims the same,
+// - Jev (jev-1.14.0, since removed): routes 59/63, risk and claims the same,
 //   19–20/20 stuck turns; median 0.29 s, half the price, with cut-offs set on these same examples.
 //   On the task benchmark (1–38, twice each) it passed 76/76 against Decisions' 74/76 (two known
 //   flaky misses with no judgment in them), but it scored honest answers such as "권한이 없어서 못
@@ -23,8 +22,8 @@ import fs from 'node:fs';
 import {complete} from './glm.mjs';
 import * as R from './routes.mjs';
 
-// Decisions and Jev charge per input token (price, per million) and nothing for the answer; GLM's
-// cost comes from glm.mjs.
+// Decisions charges per input token (price, per million) and nothing for the answer; GLM's cost
+// comes from glm.mjs.
 const PROVIDERS = {
   // Its keys are the 판단 order in routes.mjs: a key that fails hands the question to the next one.
   decisions: {
@@ -40,24 +39,8 @@ const PROVIDERS = {
       a.type === 'predicate' && typeof a.probability === 'number' ? a.probability
       : a.type === 'choice' ? {choice: a.choice, confidence: a.confidence ?? null, p: Object.fromEntries((a.probabilities || []).map(x => [x.value, x.probability]))} : undefined]).filter(([, v]) => v !== undefined)) : null,
   },
-  jev: {
-    url: () => (process.env.JEV_BASE_URL || 'https://api.typesafe.ai').replace(/\/$/, '') + '/v1/systemone',
-    key: () => process.env.JEV_API_KEY || '',
-    model: () => process.env.BISU_JEV_MODEL || 'jev-1.14.0',
-    price: 0.042,
-    // Named questions, choices as criteria, yes/no as `noul`. The state is the caller's fields when it
-    // gives them (BISU_JEV_STATE=text sends the prose instead), and a yes/no question says what each
-    // answer means (BISU_JEV_CRITERIA=0 leaves that out).
-    body: (model, text, questions, state) => ({model, state: state && process.env.BISU_JEV_STATE !== 'text' ? state : text,
-      questions: Object.fromEntries(questions.map(q => [q.name, q.type === 'choice'
-        ? {type: 'choice', instructions: q.instructions, criteria: Object.fromEntries(q.choices.map(c => [c.value, c.description]))}
-        : {type: 'noul', instructions: q.instructions, ...(q.yes && process.env.BISU_JEV_CRITERIA !== '0' ? {criteria: {true: q.yes, false: q.no}} : {})}]))}),
-    answers: j => j?.answers && typeof j.answers === 'object' ? Object.fromEntries(Object.entries(j.answers).map(([name, a]) => [name,
-      a.type === 'noul' && typeof a.noul === 'number' ? a.noul
-      : a.type === 'choice' ? {choice: a.choice, confidence: a.confidence ?? null, p: a.probabilities || {}} : undefined]).filter(([, v]) => v !== undefined)) : null,
-  },
 };
-export const provider = () => PROVIDERS[process.env.BISU_DECISION_PROVIDER] ? process.env.BISU_DECISION_PROVIDER : 'decisions';
+export const provider = () => 'decisions';
 export const decisionModel = () => PROVIDERS[provider()].model();
 export const available = () => !!PROVIDERS[provider()].key() && process.env.BISU_DECISIONS !== '0';
 
@@ -183,11 +166,9 @@ export function folderSummary(dir, max = 40) {
   } catch { return '' }
 }
 
-// Auto-allow below this. The two place their probabilities differently, so each has its own, from
-// engine/eval/judge-bench.mjs: Decisions 19/20 safe commands cleared at 0.15 and 0/20 risky ones; Jev
-// puts the safe ones at 0.16 or less (but `echo hello > out/hello.txt`, 0.45) and the mildest risky
-// one, `mv src old-src`, at 0.37.
-export const RISK_CLEAR = provider() === 'jev' ? 0.25 : 0.15;
+// Auto-allow below this, from engine/eval/judge-bench.mjs: 19/20 safe commands cleared at 0.15 and
+// 0/20 risky ones.
+export const RISK_CLEAR = 0.15;
 export async function risk(tool, args, {cwd, userText = '', existing = null} = {}) {
   // What a write replaces matters more than what it writes: say so plainly.
   const what = tool === 'run_command' ? `Shell command (zsh) in ${cwd}:\n${clip(args.command, 1500)}`
@@ -231,9 +212,8 @@ export async function progress(userText, steps) {
   return {state: a.state.choice, confidence: a.state.p[a.state.choice] ?? 0, p: a.state.p};
 }
 // When a judgment is acted on, and what the model is told. A turn judged to go in circles three times
-// is stopped. BISU_PROGRESS=0 turns the check off. Jev's are lower: on the labeled turns it gave a
-// moving turn at most 0.30 for any other state, and stuck ones 0.54 or more.
-export const PROGRESS_ACT = provider() === 'jev' ? {repeating: 0.6, finished: 0.7, blocked: 0.5} : {repeating: 0.75, finished: 0.85, blocked: 0.7};
+// is stopped. BISU_PROGRESS=0 turns the check off.
+export const PROGRESS_ACT = {repeating: 0.75, finished: 0.85, blocked: 0.7};
 export const PROGRESS_NUDGE = {
   repeating: '같은 방법을 반복하고 있어. 접근을 바꾸거나, 지금까지 알아낸 것으로 답해.',
   finished: '이제 충분해. 도구는 그만 쓰고 사람에게 답해.',
@@ -293,8 +273,7 @@ export async function reviewReport(brief, actions, report, {feedback = ''} = {})
 // the middle, so the middle band asks bisu to check each part rather than calling it fine.
 export const REVIEW = {short: 0.5, unsure: 0.3};
 
-// Jev's is higher: it put the lies at 0.8 or more, and once an honest "못 넣었어 … 켜 주면 바로 넣을게" at 0.55.
-export const CLAIM_ACT = provider() === 'jev' ? 0.7 : 0.5;
+export const CLAIM_ACT = 0.5;
 export const CLAIM_NUDGE = '방금 답에 이번에 실제로 하지 않은 일이 있어 (그 일을 한 도구 호출이 없거나 실패했어). 지금 도구로 하거나, 못 했으면 못 했다고 고쳐서 답해.';
 export function watchClaims(userText, {onJudgment = () => {}} = {}) {
   return async ({text, stats}) => {
