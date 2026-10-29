@@ -709,8 +709,8 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
       // Already on the page of the list the goal names (「1쪽」 on page 1): its "next" only leads away.
       if (goalPage(goal) != null && listy(view) && pageOf(view.url) === goalPage(goal)) cands = cands.filter(c => !(c.kind === 'click' && /^(next|다음|›|»|>|다음\s*(페이지|쪽))$/i.test(String(c.label || '').trim()))).map((c, i) => ({...c, index: i}));
       if (process.env.BISU_EGO_DEBUG) log({url: view.url, cands: cands.map(c => `${c.index}. ${c.kind}: ${c.name}`)});
-      // A comparing goal on a list page: the page's whole text, read once (dec sends each line once, so its driver reads
-      // it in full), gives the pages-visited note its cheapest and dearest item, for goals that span several lists.
+      // A comparing goal on a list page: the page's whole text, every line where it stands (a driver whose view leaves
+      // some out reads it in full), gives the pages-visited note its cheapest and dearest item, for goals that span lists.
       // The page of the item just opened: its title names it (「The No. 1 Ladies' ...」 → 「The No. 1 Ladies' Detective Agency」).
       const itemPage = !!opened && String(view.title).toLowerCase().includes(opened);
       let listText = null;

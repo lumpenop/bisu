@@ -196,13 +196,14 @@ export function directDriver({readText = true, tab = null} = {}) {
   // (one tab's state is a state poll, outside dec's per-minute budget; the whole tab list is not)
   const tabNow = async () => { try { return (await api('GET', `/v1/tabs/${tabId}`)).tab ?? null } catch { return null } };
   const loaded = async url => { for (let i = 0; i < 50; i++) { const t = await tabNow(); if (t && t.loading === false && (!url || origin(t.url) === origin(url))) return true; await sleep(40) } return false };
-  const stop = async () => { try { await api('POST', `/v1/runs/${runId}/stop`, {}) } catch {} for (let i = 0; i < 30; i++) { try { if ((await api('GET', `/v1/runs/${runId}`)).run.end) break } catch { break } await sleep(100) } };
+  const stop = async () => { try { await api('POST', `/v1/runs/${runId}/stop`, {}) } catch {} for (let i = 0; i < 150; i++) { try { if ((await api('GET', `/v1/runs/${runId}`)).run.end) break } catch { break } await sleep(20) } };
   return {
     get id() { return runId },
     get tabId() { return tabId },
     candidates: v => v.cands,
-    // The page's text in full, every line where it stands (the view's lines are each sent once).
-    readPage: async () => String((await api('POST', `/v1/tabs/${tabId}/content`, {limit: 20000})).text || ''),
+    // The page's text in full, every line where it stands: dec sends this agent every line, repeats included, so the
+    // view already is that (a separate read only when it is not there; each read counts against dec's per-minute budget).
+    readPage: async () => viewNow?.body || String((await api('POST', `/v1/tabs/${tabId}/content`, {limit: 20000})).text || ''),
     // One tab per conversation: the last task's tab goes to the new page; a new tab only when there is none.
     async open(url, ins = [], goal = '') {
       lastIns = ins; lastGoal = goal;
