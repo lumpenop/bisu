@@ -20,6 +20,7 @@ import {BISU_TOOLS, isDefaultBot} from './bisu-tools.mjs';
 import * as rules from '../ui/rules.mjs';
 import {CALENDAR_TOOLS, nowLines} from './calendar.mjs';
 import {BROWSER_TOOLS} from './browser.mjs';
+import {WATCH_TOOLS} from '../ui/claude-watch.mjs';
 import {connect as connectMcp} from './mcp.mjs';
 import {complete} from './glm.mjs';
 
@@ -48,14 +49,14 @@ const cwd = fs.realpathSync(process.cwd());
 // Claude Code's tool names, as launch.zsh and the jobs still spell them, to this engine's tools.
 const NAME = {Read: 'read_file', Write: 'write_file', Edit: 'edit_file', MultiEdit: 'edit_file', Glob: 'list_files', Grep: 'search_files', Bash: 'run_command', WebFetch: 'web_fetch', WebSearch: 'web_search', Task: 'delegate', Agent: 'delegate'};
 const plain = n => String(n).trim().replace(/^mcp__[^_]+(?:_[^_]+)*__/, '');
-const EXTRA = {...BISU_TOOLS, ...CALENDAR_TOOLS, ...BROWSER_TOOLS};
+const EXTRA = {...BISU_TOOLS, ...CALENDAR_TOOLS, ...BROWSER_TOOLS, ...WATCH_TOOLS};
 let wanted = flags.tools && flags.tools !== 'default'
   ? [...new Set(flags.tools.split(',').map(t => NAME[t.trim()] || t.trim()).filter(t => TOOLS[t] || EXTRA[t] || t === 'delegate'))]
   : [...Object.keys(TOOLS), 'web_search', 'delegate'];
 // A run that may change files (a chat, an edit job) also gets memory, scheduling, bots and the calendar;
-// one that only reads (a read job, like a morning summary) may still read the calendar.
-if (wanted.includes('write_file')) wanted.push('remember', 'forget', 'profile_set', 'memory_compact', ...(isDefaultBot() ? ['bot_memory'] : []), 'schedule_job', 'goal_add', 'goal_list', 'bot_create', 'bot_update', 'routine_save', 'bot_handoff', ...Object.keys(CALENDAR_TOOLS), ...Object.keys(BROWSER_TOOLS));
-else if (wanted.includes('read_file')) wanted.push('calendar_list', 'reminders_list');
+// one that only reads (a read job, like a morning summary) may still read the calendar and the Claude app's sessions.
+if (wanted.includes('write_file')) wanted.push('remember', 'forget', 'profile_set', 'memory_compact', ...(isDefaultBot() ? ['bot_memory'] : []), 'schedule_job', 'goal_add', 'goal_list', 'bot_create', 'bot_update', 'routine_save', 'bot_handoff', ...Object.keys(CALENDAR_TOOLS), ...Object.keys(BROWSER_TOOLS), 'claude_sessions');
+else if (wanted.includes('read_file')) wanted.push('calendar_list', 'reminders_list', 'claude_sessions');
 const preAllowed = new Set(String(flags.allowedTools || flags['allowed-tools'] || '').split(',').map(t => NAME[t.trim()] || plain(t)).filter(Boolean));
 
 // Two GLM models with separate jobs, and Decisions choosing between them for each message

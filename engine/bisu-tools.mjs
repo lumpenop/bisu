@@ -227,7 +227,7 @@ export const BISU_TOOLS = {
     },
   },
   schedule_job: {
-    description: 'Do something later or on a schedule, as a scheduled job whose answer appears as a card and a notification. Use cron (five fields, local time) or every ("30m", "2h") for repeating, or at for once. tools: read (default) only looks; edit may change files in cwd; full may also run commands — edit/full wait for the person to approve the job in Settings. For watching until something happens, the request says to answer only [조용] when nothing changed (no card) and to end with [끝] once it happened (the job then stops by itself). cu: true lets the run look at and press things in other Mac apps (needs tools full).',
+    description: 'Do something later or on a schedule, as a scheduled job whose answer appears as a card and a notification. Use cron (five fields, local time) or every ("30m", "2h") for repeating, or at for once. tools: read (default) only looks; edit may change files in cwd; full may also run commands — edit/full wait for the person to approve the job in Settings. For watching until something happens, the request says to answer only [조용] when nothing changed (no card) and to end with [끝] once it happened (the job then stops by itself). To know whether Claude desktop app sessions stopped, are running or finished, the request calls claude_sessions (read-only); cu: true lets the run look at and press things in other Mac apps (needs tools full).',
     parameters: {type: 'object', properties: {
       slug: {type: 'string', description: 'short ascii file name, e.g. morning-summary'},
       name: {type: 'string', description: 'title in their language'},

@@ -168,6 +168,10 @@ Claude 데스크톱 앱 창을 봐. 작업이 멈춰 있으면(오류, "다시 �
 아직 일하는 중이면 [조용]. 작업이 끝났으면 결과 한 줄과 [끝].
 ```
 
+**Knowing where the Claude app stands** needs no screen at all: `claude_sessions` ([ui/claude-watch.mjs](ui/claude-watch.mjs)) reads the app's transcripts in `~/.claude/projects`, read-only, and calls each recent session 멈춤 (a usage limit, an error, interrupted, or ten minutes without a line mid-turn), 진행 중 or 끝남 — by its last real message, since the file's last line is usually bookkeeping. [docs/jobs/claude-app-watch.md](docs/jobs/claude-app-watch.md) is a job that reports only changes; the job above is for pressing 다시 시도 as well. `node ui/claude-watch.mjs` prints the same list.
+
+**Trying a job without touching your own** — `XDG_CONFIG_HOME=/tmp/t/config BISU_JOBS_STATE=/tmp/t/jobs.json` puts the jobs folder, its state and the cards in `/tmp`; `OPENROUTER_API_KEY=dec://OPENROUTER_API_KEY dec-secret run -- node ui/jobs.mjs run <slug>` then runs one. `node engine/eval/jobs-check.mjs` checks `every:`, the markers, a first run with no state and the session judgments offline.
+
 **Watching an X account** is a job of this kind; [docs/jobs/x-watch.md](docs/jobs/x-watch.md) has two to copy — one that reads the profile in your signed-in Dec browser (no key), one through the X API with `X_BEARER_TOKEN` by name.
 
 **Posting through Buffer.** [engine/buffer.mjs](engine/buffer.mjs) lists the channels of your Buffer account and makes a post with its own replies, with the key by name (`BUFFER_API_KEY=dec://BUFFER_API_KEY dec-secret run -- node engine/buffer.mjs channels`). A link never goes in the post: a body with a URL is refused, and `--link` becomes the first reply — the second item of the thread on X, Threads, Bluesky and Mastodon, the first comment on LinkedIn. `post` only prints what it would send until you add `--send`.

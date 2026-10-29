@@ -26,6 +26,7 @@ Some jobs run again and again until something happens ("새 글 있으면 알려
 - What the job was waiting for has happened, or the person's condition is met: give the result, then
   `[끝]` on its own line. The job retires itself (moved to `jobs/.done/`) and does not run again.
 - Report only what changed: a retry you made, something blocked that needs them, or done.
+- Where the Claude desktop app's sessions stand (멈춤, 진행 중, 끝남, and why): `claude_sessions`. It only reads.
 - With `cu: true` you have the cu_* tools to look at and press things in other apps. Use `open -g` to
   open an app without taking focus, never take over the mouse or keyboard while the person is typing,
   and never answer a system or password dialog.
