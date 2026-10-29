@@ -83,6 +83,14 @@ export function parseCron(text) {
     mon: field(f[3], 1, 12, 'month'), dow: field(f[4], 0, 6, 'weekday'), domStar: f[2] === '*', dowStar: f[4] === '*',
   };
 }
+// `every: 5m` / `every: 2h`: shorthand for the cron it means (*/5 * * * *, 0 */2 * * *). Steps restart at
+// each hour or day as cron's do, so a step that does not divide 60 (or 24) leaves a shorter gap at the turn.
+export function parseEvery(text) {
+  const m = /^(\d+)\s*(m|min|분|h|시간)$/i.exec(String(text || '').trim());
+  const n = m ? Number(m[1]) : 0, hours = m && /^(h|시간)$/i.test(m[2]);
+  if (!m || n < 1 || n > (hours ? 23 : 59)) throw Error('every: a number of minutes (5m, 1–59) or hours (2h, 1–23)');
+  return hours ? `0 ${n === 1 ? '*' : `*/${n}`} * * *` : `${n === 1 ? '*' : `*/${n}`} * * * *`;
+}
 // The first minute strictly after `after` that the schedule names, in local time, or null when
 // there is none within 400 days (31 Feb). Both day fields given means either, as cron has it.
 export function nextRun(cron, after = Date.now()) {
@@ -132,6 +140,7 @@ function parseJob(file) {
       const k = kv[1].toLowerCase(), v = kv[2].replace(/\s+#.*$/, '').trim();
       if (k === 'name' && v) job.name = v.slice(0, 80);
       else if (k === 'schedule') { job.schedule = v; job.cron = parseCron(v) }
+      else if (k === 'every') { job.cron = parseCron(parseEvery(v)); job.schedule = `every ${v}` }
       else if (k === 'at') { job.at = parseAt(v); job.schedule = v }
       else if (k === 'cwd' && v) job.cwd = expand(v);
       else if (k === 'tools') { if (!(v in TOOLS)) throw Error(`tools: "${v}" — use read, edit or full`); job.tools = v }
@@ -156,7 +165,7 @@ function parseJob(file) {
       job.routinePaused = r.paused;
       job.prompt = routines.prompt(r) + (job.prompt ? `\n\n${job.prompt}` : '');
     }
-    if (!job.cron && !job.at) throw Error('needs a `schedule:` (cron, five fields) or an `at:` (one time)');
+    if (!job.cron && !job.at) throw Error('needs a `schedule:` (cron, five fields), an `every:` (5m, 2h) or an `at:` (one time)');
     if (!job.prompt) throw Error('the request below the frontmatter is empty');
     if (!fs.statSync(job.cwd, { throwIfNoEntry: false })?.isDirectory()) throw Error(`cwd: ${job.cwd} is not a folder`);
     if (job.cu && job.tools !== 'full') throw Error('cu: true needs tools: full (it presses things in other apps)');

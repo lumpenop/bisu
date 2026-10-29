@@ -921,7 +921,7 @@ body:not(.panel) .chathead:not([hidden])~#msgs{border-top:1px solid color-mix(in
   <div id="jobList"><p class="note">loading…</p></div>
   <p class="note err" id="jobNote"></p>
   <p class="note">대화에서 "매일 아침 8시에 어제 커밋 요약해 줘"처럼 말하면 덱 인턴이 예약해 두고, 그 시간에 혼자 해서 결과를 패널 카드로 남겨요. 그때 떠올리기만 하면 되는 일("3시에 알려줘")은 예약 작업이 아니라 미리 알림으로 넣어요.</p>
-  <details class="note"><summary>직접 만들기</summary><p>예약 작업은 <code>~/.config/bisu/jobs/</code>의 파일 하나예요. 맨 위에 <code>schedule: 0 8 * * 1-5</code>(cron, 이 맥의 시간) 또는 <code>at: 2026-10-28 09:00</code>, <code>cwd: /폴더</code>, <code>tools: read</code>(기본 · <code>edit</code>는 그 폴더의 파일 수정 · <code>full</code>은 명령 실행까지)를 쓰고, 그 아래에 그때 보낼 요청을 써요.</p></details>
+  <details class="note"><summary>직접 만들기</summary><p>예약 작업은 <code>~/.config/bisu/jobs/</code>의 파일 하나예요. 맨 위에 <code>schedule: 0 8 * * 1-5</code>(cron, 이 맥의 시간), <code>every: 30m</code> 또는 <code>at: 2026-10-28 09:00</code>, <code>cwd: /폴더</code>, <code>tools: read</code>(기본 · <code>edit</code>는 그 폴더의 파일 수정 · <code>full</code>은 명령 실행까지)를 쓰고, 그 아래에 그때 보낼 요청을 써요.</p></details>
  </section>
  <section id="briefSec">
   <h2>아침 브리핑</h2>

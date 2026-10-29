@@ -135,7 +135,7 @@ Once a day — at 08:00 by default, or when the Mac wakes in the four hours afte
 ```
 ---
 name: 아침 요약
-schedule: 0 8 * * 1-5        # cron, five fields, local time — or  at: 2026-10-28 09:00  for one time
+schedule: 0 8 * * 1-5        # cron, five fields, local time — or  every: 30m (2h)  — or  at: 2026-10-28 09:00  for one time
 cwd: /Users/you/the-project
 tools: read                  # read (default) · edit: may change files in cwd · full: may also run commands
 ---
@@ -148,6 +148,27 @@ tools: read                  # read (default) · edit: may change files in cwd �
 - **Enough, not frequent.** The engine looks once a minute, runs one job at a time, and a job missed while the Mac was asleep runs once when it wakes, not once per missed slot. A failed run leaves a card saying so and waits for its next slot; no retry loop.
 - **One engine runs the schedule.** With the menu bar app and `bisu ui` open at once, the first engine to tick holds a lock (`~/Library/Application Support/bisu/scheduler.lock`) and the other skips its ticks until that one is gone, so nothing runs twice. Job answers keep their own 20 cards and never push suggestions out of the list that stops a dismissed one from coming back.
 - **Settings tab:** every job with its next run, last result, *지금 실행*, *끄기/켜기* (flips `enabled:` in the file) and *삭제*. From the shell, `node ui/jobs.mjs` prints the same, `node ui/jobs.mjs run <slug>` runs one now, and `node ui/jobs.mjs next "0 8 * * 1-5"` says when a schedule fires.
+
+**Watching until something happens** ("새 글 올라오면 알려줘", "Claude 앱 작업이 멈추면 다시 눌러 주고, 끝나면 알려줘"). A job like this runs often and usually has nothing to say, so its answer can end with a marker on a line of its own:
+
+- `[조용]` — nothing new: no card, no notification. Only the last result in Settings changes.
+- `[끝]` — what it waited for happened: the answer is the card, and the job retires itself to `~/.config/bisu/jobs/.done/` (moved, never deleted) and does not run again.
+- Every other answer is a card **and a macOS notification** (Notification Center, no dialog; `BISU_NOTIFY=0` turns it off). So is a failed run.
+- `cu: true` gives the run the computer-use tools (`cu_*`: look at another app, press its buttons), for watching an app rather than a page. It needs `tools: full` and so your approval; the run opens apps with `open -g`, never takes the mouse or keyboard while you type, and never answers a password or system dialog.
+
+```
+---
+name: Claude 앱 지켜보기
+every: 30m
+cwd: /Users/you/watch
+tools: full
+cu: true
+---
+Claude 데스크톱 앱 창을 봐. 작업이 멈춰 있으면(오류, "다시 시도" 버튼) 다시 시도를 눌러 주고 그렇게 했다고 한 줄로 말해.
+아직 일하는 중이면 [조용]. 작업이 끝났으면 결과 한 줄과 [끝].
+```
+
+**With the app closed.** The schedule runs inside the engine, so it stops when the menu bar app and `bisu ui` are both closed. `node ui/jobs.mjs agent install` adds a launchd agent (`~/Library/LaunchAgents/com.bisu.jobs.plist`) that runs `node ui/jobs.mjs tick` every minute: it takes the same scheduler lock, so while the app is open it does nothing at all, and when a job is due it starts again through `dec-secret` with the keys by name (`OPENROUTER_API_KEY=dec://OPENROUTER_API_KEY`), never their values. `agent status` and `agent remove` do what they say; output goes to `~/Library/Logs/bisu-jobs.log`. `node ui/jobs.mjs tick` is the same single look by hand.
 
 ## `bisu ui`
 
