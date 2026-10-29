@@ -1,6 +1,6 @@
 // Web tasks on public practice sites, the same in every browser bisu can drive: success and time.
 //   OPENAI_API_KEY=dec://OPENAI_API_KEY GLM_API_KEY=dec://GLM_API_KEY dec-secret run -- \
-//     node engine/eval/web-tasks.mjs [--set speed|complex|hard|holdout|holdout2] [--modes dec,ego,aside,decfast] [--repeat 2] [--only O1,O2] [--budget 20]
+//     node engine/eval/web-tasks.mjs [--set speed|complex|hard|holdout|holdout2|holdout3] [--modes dec,ego,aside,decfast] [--repeat 2] [--only O1,O2] [--budget 20]
 // dec = bisu drives dec (dec's fast mode must be off); decfast = dec's own fast mode (must be on); ego, aside = bisu
 // drives them. The sites are made for scraping practice (books.toscrape, quotes.toscrape, scrapethissite,
 // webscraper.io, the-internet, web-scraping.dev, scrapingcourse, Oxylabs' sandbox), so repeating is fine.
@@ -13,7 +13,7 @@ import * as aside from '../aside.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d };
 const B = 'https://books.toscrape.com/', Q = 'https://quotes.toscrape.com/', S = 'https://www.scrapethissite.com/pages/', W = 'https://webscraper.io/test-sites/e-commerce/';
-const WS = 'https://web-scraping.dev/', SC = 'https://www.scrapingcourse.com/', OX = 'https://sandbox.oxylabs.io/';
+const WS = 'https://web-scraping.dev/', SC = 'https://www.scrapingcourse.com/', OX = 'https://sandbox.oxylabs.io/', AE = 'https://automationexercise.com/';
 const SETS = {
   speed: [
     {key: 'simple', url: B, goal: "첫 페이지에서 'A Light in the Attic' 책의 가격을 알려줘", ok: a => /51\.77/.test(a)},
@@ -50,8 +50,17 @@ const SETS = {
     {key: 'P5', url: OX + 'products', goal: '게임 목록 첫 페이지에서 가장 싼 게임의 이름과 가격을 알려줘', ok: a => /NFL 2K1/i.test(a) && /62[.,]99/.test(a)},
     {key: 'P6', url: OX + 'products', goal: 'The Legend of Zelda: Ocarina of Time 게임을 열어서 개발사(Developer)와 유형(Type)을 알려줘', ok: a => /Nintendo/i.test(a) && /single\s*-?\s*player/i.test(a)},
   ],
+  // Third held-out set (2026-10-29): automationexercise, demoblaze (lists redrawn by script, no page change), a plain table.
+  holdout3: [
+    {key: 'Q1', url: AE + 'products', goal: "'Blue Top' 상품의 상세 페이지를 열어서 가격, 재고 상태(Availability), 브랜드를 알려줘", ok: a => /500/.test(a) && /In Stock/i.test(a) && /Polo/i.test(a)},
+    {key: 'Q2', url: AE + 'products', goal: '왼쪽 Brands에서 Polo를 눌러, 나오는 상품들 중 가장 비싼 상품의 이름과 가격을 알려줘', ok: a => /Premium Polo T-?Shirts/i.test(a) && /1,?500/.test(a)},
+    {key: 'Q3', url: 'https://www.demoblaze.com/', goal: 'Laptops 카테고리를 눌러서 가장 비싼 노트북의 이름과 가격을 알려줘', ok: a => /MacBook Pro/i.test(a) && /1,?100/.test(a)},
+    {key: 'Q4', url: 'https://www.demoblaze.com/', goal: 'Phones 카테고리에서 가장 싼 휴대폰의 이름과 가격을 알려줘', ok: a => /xperia z5/i.test(a) && /\b320\b/.test(a)},
+    {key: 'Q5', url: 'https://testpages.eviltester.com/styled/tag/table.html', goal: '표에서 Amount 값이 가장 큰 사람의 이름과 그 값을 알려줘', ok: a => /Douglas/i.test(a) && /\b42\b/.test(a)},
+    {key: 'Q6', url: AE + 'products', goal: '왼쪽 Category의 Women 안에 있는 Tops 상품들 중 가장 비싼 상품의 이름과 가격을 알려줘', ok: a => /Lace Top/i.test(a) && /1,?400/.test(a)},
+  ],
 };
-const set = arg('set', 'holdout2'), only = arg('only', ''), T = (SETS[set] || []).filter(t => !only || only.split(',').includes(t.key));
+const set = arg('set', 'holdout3'), only = arg('only', ''), T = (SETS[set] || []).filter(t => !only || only.split(',').includes(t.key));
 const MODES = arg('modes', 'dec,ego,aside').split(','), REPS = Number(arg('repeat', 2)), BUDGET = Number(arg('budget', 20));
 let decTab = null;
 async function one(mode, t, rep) {

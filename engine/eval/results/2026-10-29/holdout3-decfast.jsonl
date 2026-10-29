@@ -1,0 +1,12 @@
+{"set":"holdout3","task":"Q1","mode":"decfast","rep":0,"s":8.4,"pass":true,"status":"unverified","steps":2,"answer":"Blue Top - 가격: Rs. 500, Availability: In Stock, Brand: Polo"}
+{"set":"holdout3","task":"Q2","mode":"decfast","rep":0,"s":8.1,"pass":true,"status":"unverified","steps":2,"answer":"Premium Polo T-Shirts, Rs. 1500"}
+{"set":"holdout3","task":"Q3","mode":"decfast","rep":0,"s":2.1,"pass":false,"status":"handoff","steps":0,"answer":""}
+{"set":"holdout3","task":"Q4","mode":"decfast","rep":0,"s":1.1,"pass":false,"status":"handoff","steps":0,"answer":""}
+{"set":"holdout3","task":"Q5","mode":"decfast","rep":0,"s":4.9,"pass":true,"status":"unverified","steps":1,"answer":"Douglas, 42"}
+{"set":"holdout3","task":"Q6","mode":"decfast","rep":0,"s":11.7,"pass":true,"status":"unverified","steps":3,"answer":"Lace Top For Women, Rs. 1400"}
+{"set":"holdout3","task":"Q1","mode":"decfast","rep":1,"s":6.9,"pass":true,"status":"unverified","steps":2,"answer":"Blue Top — 가격: Rs. 500, Availability: In Stock, 브랜드: Polo"}
+{"set":"holdout3","task":"Q2","mode":"decfast","rep":1,"s":8.9,"pass":true,"status":"unverified","steps":2,"answer":"Premium Polo T-Shirts - Rs. 1500"}
+{"set":"holdout3","task":"Q3","mode":"decfast","rep":1,"s":7.9,"pass":false,"status":"handoff","steps":0,"answer":""}
+{"set":"holdout3","task":"Q4","mode":"decfast","rep":1,"s":2.6,"pass":false,"status":"handoff","steps":0,"answer":""}
+{"set":"holdout3","task":"Q5","mode":"decfast","rep":1,"s":9.7,"pass":true,"status":"unverified","steps":1,"answer":"Douglas, 42"}
+{"set":"holdout3","task":"Q6","mode":"decfast","rep":1,"s":12.5,"pass":true,"status":"unverified","steps":3,"answer":"Lace Top For Women, Rs. 1400"}
