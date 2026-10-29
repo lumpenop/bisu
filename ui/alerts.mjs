@@ -69,7 +69,7 @@ export function onNotice(fn) { listeners.add(fn) }
 // { kind, title, body, chat? } — `banner` says whether the shell shows it; listeners hear all of them.
 export function notice({ kind, title, body = '', chat = null }) {
   const key = BANNER_OF[kind];
-  const n = { id: ++seq, at: Date.now(), kind, title: String(title || 'bisu').slice(0, 120), body: String(body || '').slice(0, 400), chat,
+  const n = { id: ++seq, at: Date.now(), kind, title: String(title || '덱 인턴').slice(0, 120), body: String(body || '').slice(0, 400), chat,
     banner: !key || load().banners[key] !== false };
   notices.push(n);
   if (notices.length > KEEP) notices.splice(0, notices.length - KEEP);
@@ -99,8 +99,8 @@ export function onEvent(c, ev, { phone = false } = {}) {
   else if (ev.kind === 'result') {
     const text = said.get(c.id); said.delete(c.id);
     if (phone) return;
-    if (text) notice({ kind: 'reply', title: c.title || 'bisu', body: plain(text).slice(0, 240), chat: c.id });
-    else if (ev.error) notice({ kind: 'reply', title: c.title || 'bisu', body: '끝까지 하지 못했어요.', chat: c.id });
+    if (text) notice({ kind: 'reply', title: c.title || '덱 인턴', body: plain(text).slice(0, 240), chat: c.id });
+    else if (ev.error) notice({ kind: 'reply', title: c.title || '덱 인턴', body: '끝까지 하지 못했어요.', chat: c.id });
   }
 }
 
@@ -222,7 +222,7 @@ export async function configure(patch = {}) {
   decide();
   return snapshot();
 }
-export function test() { return notice({ kind: 'test', title: 'bisu', body: '이렇게 알려 드려요.' }) }
+export function test() { return notice({ kind: 'test', title: '덱 인턴', body: '이렇게 알려 드려요.' }) }
 
 let timers = [];
 export function start() {

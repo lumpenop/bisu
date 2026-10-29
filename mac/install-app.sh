@@ -31,11 +31,11 @@ plist="$tmp/Contents/Info.plist"
 pb=/usr/libexec/PlistBuddy
 $pb -c "Set :CFBundleExecutable bisu" "$plist"
 $pb -c "Set :CFBundleName bisu" "$plist"
-$pb -c "Set :CFBundleDisplayName bisu" "$plist"
+$pb -c "Set :CFBundleDisplayName 'dec intern'" "$plist"   # outward name (덱 인턴); bundle, executable and id stay bisu so granted permissions carry over
 $pb -c "Set :CFBundleIdentifier com.bisu.desktop" "$plist"
 $pb -c "Set :CFBundleIconFile AppIcon" "$plist"
 $pb -c "Set :LSUIElement true" "$plist" 2>/dev/null || $pb -c "Add :LSUIElement bool true" "$plist"
-$pb -c "Add :NSAppleEventsUsageDescription string 'bisu reads the app you were in and the text you selected, so you do not have to explain it.'" "$plist" 2>/dev/null || true
+$pb -c "Add :NSAppleEventsUsageDescription string 'Dec Intern reads the app you were in and the text you selected, so you do not have to explain it.'" "$plist" 2>/dev/null || true
 
 cp "$here/assets/AppIcon.icns" "$tmp/Contents/Resources/AppIcon.icns"
 rm -f "$tmp/Contents/Resources/default_app.asar"

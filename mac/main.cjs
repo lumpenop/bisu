@@ -162,7 +162,7 @@ async function resolveNode() {
     const v = await run(c, ['-v'], 4000);
     if (v.ok && /^v\d+\./.test(v.out)) { nodeBin = c; return c }
   }
-  throw Error('node was not found (bisu needs Node.js 18 or newer for its engine)');
+  throw Error('node was not found (Dec Intern needs Node.js 18 or newer for its engine)');
 }
 
 function decSecret() {
@@ -225,7 +225,7 @@ async function startEngine() {
     cmd = dec.cmd;
     args = dec.args;
   } else if (!env.OPENROUTER_API_KEY) {
-    throw Error('bisu could not reach dec-secret: macOS blocks the copy in ~/Desktop from a Finder-launched app. Run `bisu app install` in Terminal once to give it a readable copy.');
+    throw Error('Dec Intern could not reach dec-secret: macOS blocks the copy in ~/Desktop from a Finder-launched app. Run `bisu app install` in Terminal once to give it a readable copy.');
   }
 
   engineLog = '';
@@ -532,7 +532,7 @@ function showError(message) {
 // ---- tray ----
 function buildMenu() {
   return Menu.buildFromTemplate([
-    {label: panel && panel.isVisible() ? 'Hide bisu' : `Show bisu   ${SHORTCUT}`, click: () => showPanel()},
+    {label: panel && panel.isVisible() ? 'Hide Dec Intern' : `Show Dec Intern   ${SHORTCUT}`, click: () => showPanel()},
     {label: 'Full window', click: openFull},
     {
       label: 'Put the panel back under the icon',
@@ -573,7 +573,7 @@ function buildMenu() {
     },
     {label: 'Restart engine', click: () => restartEngine('manual')},
     {type: 'separator'},
-    {label: 'Quit bisu', accelerator: 'Command+Q', click: () => { quitting = true; app.quit() }},
+    {label: 'Quit Dec Intern', accelerator: 'Command+Q', click: () => { quitting = true; app.quit() }},
   ]);
 }
 
@@ -587,7 +587,7 @@ function createTray() {
     img.setTemplateImage(true);
     tray = new Tray(img);
   }
-  tray.setToolTip('bisu');
+  tray.setToolTip('Dec Intern');
   tray.on('click', () => showPanel());
   tray.on('right-click', () => tray.popUpContextMenu(buildMenu()));
   // Proof for the log that the item really sits on screen, not just that a Tray object exists.
@@ -610,10 +610,10 @@ function watch() {
       const key = waiting.map(c => `${c.id}:${c.pending}`).join(',');
       if (key && key !== notified && !(panel && panel.isVisible())) {
         notified = key;
-        notify('bisu is waiting for you', waiting.length === 1 ? 'Approve or deny what it wants to do.' : `${waiting.length} chats need an answer.`);
+        notify('Dec Intern is waiting for you', waiting.length === 1 ? 'Approve or deny what it wants to do.' : `${waiting.length} chats need an answer.`);
       } else if (!key) notified = '';
       tray?.setTitle(waiting.length ? '●' : '');
-      tray?.setToolTip(waiting.length ? 'bisu · waiting for your approval' : busy ? 'bisu · working' : 'bisu');
+      tray?.setToolTip(waiting.length ? 'Dec Intern · waiting for your approval' : busy ? 'Dec Intern · working' : 'Dec Intern');
     } catch {}
   }, 3000);
 }
@@ -707,14 +707,14 @@ if (!app.requestSingleInstanceLock()) {
       BASE = `http://127.0.0.1:${PORT}`;
     } catch (e) {
       log('could not pick a port:', String(e?.message || e));
-      showError(`bisu could not open a local port: ${e?.message || e}`);
+      showError(`Dec Intern could not open a local port: ${e?.message || e}`);
       return;
     }
     createTray();
     createPanel();
 
     const ok = globalShortcut.register(SHORTCUT, () => showPanel());
-    if (!ok) tray?.setToolTip(`bisu · ${SHORTCUT} is taken by another app`);
+    if (!ok) tray?.setToolTip(`Dec Intern · ${SHORTCUT} is taken by another app`);
     log(`engine on ${BASE}, ${SHORTCUT} ${globalShortcut.isRegistered(SHORTCUT) ? 'ready' : 'unavailable'}`);
     log(`accessibility ${axTrusted() ? 'granted' : 'not granted (selection capture will be empty)'}`);
 

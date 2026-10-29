@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>bisu</title>
+<title>덱 인턴</title>
 <style>
 /* Warm ivory and deep charcoal around bisu's own glossy jade, with a blush of pink for the cute bits. */
 :root{--bg:#f6f3ec;--bg2:#efeadf;--card:#fffdf8;--ink:#1d1b16;--muted:#716b60;--line:#e6dfd1;--accent:#2b8a5f;--accent-ink:#fff;--accent-soft:#e2f1e8;--g1:#5cc496;--g2:#2b8a5f;--blush:#e88aa0;--blush-soft:#fbe5ea;--blush-ink:#b0485f;--warn:#b0611c;--warn-soft:#fbefe1;--bad:#c0362c;--chip:#f0eadf;--me:#e3f1e9;
@@ -12,6 +12,14 @@
  --sh:0 1px 2px rgba(0,0,0,.35),0 16px 36px -20px rgba(0,0,0,.8);--hi:inset 0 1px 0 rgba(255,255,255,.06);--chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%23a29e93' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
+/* 덱 브라우저체 (Dec Browser Sans, dec's own Hangul + Latin face, SIL OFL 1.1 — ui/fonts/): the dec wordmark always,
+   the whole page when 설정 › 보기 › 글꼴 says so. Same faces and weight ranges as Dec Browser's shell. */
+@font-face{font-family:"Dec Browser Sans UI";src:url("/fonts/DecBrowserSans-Light.woff2") format("woff2");font-weight:100 349;font-display:swap}
+@font-face{font-family:"Dec Browser Sans UI";src:url("/fonts/DecBrowserSans-Regular.woff2") format("woff2");font-weight:350 449;font-display:swap}
+@font-face{font-family:"Dec Browser Sans UI";src:url("/fonts/DecBrowserSans-Medium.woff2") format("woff2");font-weight:450 549;font-display:swap}
+@font-face{font-family:"Dec Browser Sans UI";src:url("/fonts/DecBrowserSans-Bold.woff2") format("woff2");font-weight:550 749;font-display:swap}
+@font-face{font-family:"Dec Browser Sans UI";src:url("/fonts/DecBrowserSans-Black.woff2") format("woff2");font-weight:750 1000;font-display:block}
+.decmark{font-family:"Dec Browser Sans UI",var(--display);font-weight:900;letter-spacing:.01em}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",sans-serif;display:flex;flex-direction:column}
 code,pre,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
@@ -310,6 +318,7 @@ select.native{position:absolute;opacity:0;pointer-events:none;width:1px;height:1
    One set of shapes for everything: pill buttons with bisu's gloss, 12px fields, 18px cards on a soft
    shadow, rounded type for anything that is a name or a label, and a jade glow for focus. */
 :root{--display:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;--glow:0 0 0 3px color-mix(in srgb,var(--accent) 24%,transparent)}
+body.font-dec{--display:"Dec Browser Sans UI",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;font-family:"Dec Browser Sans UI",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;-webkit-font-smoothing:auto}
 body{background:var(--bg);-webkit-font-smoothing:antialiased}
 ::selection{background:color-mix(in srgb,var(--accent) 28%,transparent)}
 ::-webkit-scrollbar{width:11px;height:11px}::-webkit-scrollbar-track{background:transparent}
@@ -571,6 +580,7 @@ dialog#askDlg::backdrop{background:rgba(0,0,0,.28)}
 .side .brand{position:relative}
 .side .kbtn{margin-left:auto;padding:2px 8px;font-size:11px;font-weight:700;color:var(--muted);background:var(--chip);border:0;box-shadow:none;border-radius:8px}
 .side .kbtn:hover:not(:disabled){transform:none;color:var(--ink)}
+.side .brand>b{white-space:nowrap;flex:none}.side .kbtn{min-width:0}
 .side .botList .bsub{display:flex;flex-direction:column;gap:1px;margin:1px 0 6px 18px;padding-left:8px;border-left:1px solid var(--line)}
 .side .botList .bsub button{padding:5px 10px;font-size:13px}
 .side .botList .bdot{width:7px;height:7px;border-radius:50%;flex:none;margin-left:auto}
@@ -660,7 +670,7 @@ body.panel #panelStart .row{margin-top:2px}
 
 <div class="shell">
 <nav class="side" id="side" aria-label="화면">
- <div class="brand"><span class="bisu live"></span><b>bisu</b><button type="button" class="kbtn" id="palBtn" title="빠른 전환">⌘K</button></div>
+ <div class="brand"><span class="bisu live"></span><b><span class="decmark">dec</span> 인턴</b><button type="button" class="kbtn" id="palBtn" title="빠른 전환">⌘K</button></div>
  <div class="gl">봇</div>
  <div id="botList" class="botList"></div>
  <button type="button" id="botNew" class="botNew"><svg viewBox="0 0 20 20"><path d="M10 4.5v11M4.5 10h11"/></svg>봇 만들기</button>
@@ -679,7 +689,7 @@ body.panel #panelStart .row{margin-top:2px}
  <aside>
   <div class="listHead"><b id="listTitle">대화</b><button type="button" class="iconbtn" id="newChatBtn" title="새 대화 (⌘N)">＋</button></div>
   <input type="text" id="chatFilter" class="filter" placeholder="대화 찾기" autocomplete="off" spellcheck="false">
-  <button type="button" class="botHead" id="botHead" title="봇 정보"><span class="av" id="botHeadAv">b</span><span class="bx"><b id="botHeadName">bisu</b><span id="botHeadJob"></span></span><span class="chev">›</span></button>
+  <button type="button" class="botHead" id="botHead" title="봇 정보"><span class="av" id="botHeadAv">b</span><span class="bx"><b id="botHeadName">덱 인턴</b><span id="botHeadJob"></span></span><span class="chev">›</span></button>
   <div class="newchat">
    <label for="cwd">어느 폴더에서 할까요?</label>
    <div class="row"><input type="text" id="cwd" class="mono" list="cwdList" spellcheck="false" autocomplete="off" placeholder="~/Desktop/project">
@@ -697,7 +707,7 @@ body.panel #panelStart .row{margin-top:2px}
    <button id="stop" hidden>멈추기</button><button type="button" class="iconbtn" id="infoBtn" title="봇 정보">ⓘ</button><button type="button" class="iconbtn" id="chatMore" title="더 보기">⋯</button><button id="newHere" hidden>＋</button><button class="danger" id="closeChat" hidden>닫기</button>
   </div>
   <div id="panelStart" hidden>
-  <div class="pbar"><button type="button" class="botPill" id="botPill" title="봇 바꾸기"><span class="av" id="botPillAv">b</span><span class="nm" id="botPillName">bisu</span><span class="chev">▾</span></button>
+  <div class="pbar"><button type="button" class="botPill" id="botPill" title="봇 바꾸기"><span class="av" id="botPillAv">b</span><span class="nm" id="botPillName">덱 인턴</span><span class="chev">▾</span></button>
    <button type="button" class="gpill" id="gStatus" data-gstatus title="지금 상태"><span class="sd"></span><span class="t">듣고 있어요</span></button>
    <button type="button" class="iconbtn" id="appMore" title="메뉴">⋯</button></div>
   <div class="startWrap">
@@ -724,7 +734,7 @@ body.panel #panelStart .row{margin-top:2px}
   <div id="msgs"><div class="wrap"></div></div>
   <div id="sug" hidden></div>
   <div class="compose" id="compose" hidden><div class="chips" id="chips" hidden></div><div class="otherBar" id="otherBar" hidden></div><div class="folderLine" id="folderLine" hidden>폴더 <button type="button" class="chipbtn mono" id="folderChip">~</button><span class="note" style="margin:0">새 대화는 여기서 일해요</span></div><div class="tasks" id="tasks"></div><div class="row">
-   <textarea id="input" rows="1" placeholder="bisu에게 말하기"></textarea>
+   <textarea id="input" rows="1" placeholder="덱 인턴에게 말하기"></textarea>
    <button class="primary" id="sendBtn">보내기</button>
   </div></div>
  </div>
@@ -745,11 +755,11 @@ body.panel #panelStart .row{margin-top:2px}
  <section id="searchSec" hidden>
   <h2>찾은 대화</h2>
   <div id="searchOut"></div>
-  <p class="note" id="searchNote">나와 bisu가 주고받은 말에서 찾아요. bisu도 대화 중에 같은 방법으로 지난 일을 찾아봐요.</p>
+  <p class="note" id="searchNote">나와 덱 인턴이 주고받은 말에서 찾아요. 덱 인턴도 대화 중에 같은 방법으로 지난 일을 찾아봐요.</p>
  </section>
  <section>
   <h2>최근 대화 · 60일</h2>
-  <label class="sw" style="margin-bottom:8px"><input type="checkbox" id="showAuto"> bisu가 스스로 돌린 것(먼저 찾아오기·예약 작업)도 보기</label>
+  <label class="sw" style="margin-bottom:8px"><input type="checkbox" id="showAuto"> 덱 인턴이 스스로 돌린 것(먼저 찾아오기·예약 작업)도 보기</label>
   <div class="table"><table><thead><tr><th>언제</th><th>폴더 · 내용</th><th class="metaCol">모델</th><th class="metaCol">턴</th><th class="metaCol">토큰 입력 / 출력</th><th class="metaCol">비용(추정)</th><th>걸린 시간</th><th></th></tr></thead><tbody id="runs"><tr><td colspan="8" class="note">불러오는 중…</td></tr></tbody></table></div>
   <p class="note">터미널에서 실행한 것도 포함돼요. 비용은 설정 → 보기에서 "작업 세부 보기"를 켜면 보여요.</p>
  </section>
@@ -759,7 +769,7 @@ body.panel #panelStart .row{margin-top:2px}
  <div class="hero" id="goalsHero"><div class="hx"><h1 class="ht">목표</h1><p class="hs" id="goalsSum">…</p></div></div>
  <section>
   <h2>목표</h2>
-  <p class="note">며칠이나 몇 주 걸리는 일을 맡기면 bisu가 몇 시간마다 조금씩 진행해요. 계획을 세우고, 찾아보고, 일정과 미리 알림을 넣고, 결정이 필요하면 물어봐요. 파일을 고치거나 명령을 실행하거나 무언가를 보내고 사지는 않아요. 조용한 시간에는 쉬어요. 대화에서 "이번 달 안에 …" 하고 말해도 돼요.</p>
+  <p class="note">며칠이나 몇 주 걸리는 일을 맡기면 덱 인턴이 몇 시간마다 조금씩 진행해요. 계획을 세우고, 찾아보고, 일정과 미리 알림을 넣고, 결정이 필요하면 물어봐요. 파일을 고치거나 명령을 실행하거나 무언가를 보내고 사지는 않아요. 조용한 시간에는 쉬어요. 대화에서 "이번 달 안에 …" 하고 말해도 돼요.</p>
   <form id="goalForm">
    <div class="row">
     <input type="text" id="goalTitle" placeholder="예: 11월 오사카 출장 준비" spellcheck="false" autocomplete="off">
@@ -781,9 +791,9 @@ body.panel #panelStart .row{margin-top:2px}
 <div class="view" id="memoryView"><div class="page"><div>
  <div class="hero" id="memoryHero"><div class="hx"><h1 class="ht">기억</h1><p class="hs" id="memorySum">…</p></div><button class="primary" id="memNew">기억 추가</button></div>
  <section>
-  <h2>bisu가 기억하는 것</h2>
+  <h2>덱 인턴이 기억하는 것</h2>
   <div class="kv" id="memInfo"><div class="k">폴더</div><div class="mono">…</div></div>
-  <p class="note">새 대화는 어느 폴더에서 시작하든 이 기억을 갖고 시작해요. 대화 중에 "기억해 둬"라고 하거나 bisu가 기억할 만하다고 판단하면 스스로 저장하는데, 저장도 다른 파일 쓰기처럼 먼저 물어봐요. 여기서 추가·수정·삭제한 건 다음 대화부터 적용돼요.</p>
+  <p class="note">새 대화는 어느 폴더에서 시작하든 이 기억을 갖고 시작해요. 대화 중에 "기억해 둬"라고 하거나 덱 인턴이 기억할 만하다고 판단하면 스스로 저장하는데, 저장도 다른 파일 쓰기처럼 먼저 물어봐요. 여기서 추가·수정·삭제한 건 다음 대화부터 적용돼요.</p>
  </section>
  <section id="memFormSec" hidden>
   <h2 id="memFormTitle">기억 추가</h2>
@@ -802,7 +812,7 @@ body.panel #panelStart .row{margin-top:2px}
   <div id="memList"><p class="note">loading…</p></div>
  </section>
  <section>
-  <h2>bisu에게 실제로 전달되는 글</h2>
+  <h2>덱 인턴에게 실제로 전달되는 글</h2>
   <details><summary class="note" style="cursor:pointer;margin:0">시스템 프롬프트에 붙는 그대로 보기</summary><pre id="memDigest" class="mono">…</pre></details>
   <p class="note">고정한 것부터, 그다음 최근에 바뀐 순서로 <code>BISU_MEMORY_CHARS</code>(기본 3000자)까지 들어가요. 매 요청에 붙으니 짧을수록 좋아요.</p>
  </section>
@@ -814,7 +824,7 @@ body.panel #panelStart .row{margin-top:2px}
   <h2>예약 작업</h2>
   <div id="jobList"><p class="note">loading…</p></div>
   <p class="note err" id="jobNote"></p>
-  <p class="note">대화에서 "매일 아침 8시에 어제 커밋 요약해 줘"처럼 말하면 bisu가 예약해 두고, 그 시간에 혼자 해서 결과를 패널 카드로 남겨요. 그때 떠올리기만 하면 되는 일("3시에 알려줘")은 예약 작업이 아니라 미리 알림으로 넣어요.</p>
+  <p class="note">대화에서 "매일 아침 8시에 어제 커밋 요약해 줘"처럼 말하면 덱 인턴이 예약해 두고, 그 시간에 혼자 해서 결과를 패널 카드로 남겨요. 그때 떠올리기만 하면 되는 일("3시에 알려줘")은 예약 작업이 아니라 미리 알림으로 넣어요.</p>
   <details class="note"><summary>직접 만들기</summary><p>예약 작업은 <code>~/.config/bisu/jobs/</code>의 파일 하나예요. 맨 위에 <code>schedule: 0 8 * * 1-5</code>(cron, 이 맥의 시간) 또는 <code>at: 2026-10-28 09:00</code>, <code>cwd: /폴더</code>, <code>tools: read</code>(기본 · <code>edit</code>는 그 폴더의 파일 수정 · <code>full</code>은 명령 실행까지)를 쓰고, 그 아래에 그때 보낼 요청을 써요.</p></details>
  </section>
  <section id="briefSec">
@@ -844,7 +854,7 @@ body.panel #panelStart .row{margin-top:2px}
    </div>
   </form>
   <div class="actions"><span class="note" id="sugNote" style="margin:0"></span></div>
-  <p class="note">bisu가 가끔 스스로 최근 작업을 훑어보고, 지금 말할 만한 걸 하나 남겨요. 읽기만 하는 별도 실행이라 아무것도 바꾸지 못하고, 고르면 그때 폴더에서 진짜 대화가 시작돼요. 마음에 안 든 제안은 “나중에”로 지우면 다시 꺼내지 않아요.</p>
+  <p class="note">덱 인턴이 가끔 스스로 최근 작업을 훑어보고, 지금 말할 만한 걸 하나 남겨요. 읽기만 하는 별도 실행이라 아무것도 바꾸지 못하고, 고르면 그때 폴더에서 진짜 대화가 시작돼요. 마음에 안 든 제안은 “나중에”로 지우면 다시 꺼내지 않아요.</p>
   <div id="sugPast"></div>
  </section>
 </div></div></div>
@@ -869,8 +879,8 @@ body.panel #panelStart .row{margin-top:2px}
     <p class="note">텔레그램에서 @BotFather에게 <code>/newbot</code>을 보내고, 봇 이름과 아이디(…bot으로 끝나게)를 정하면 숫자와 글자로 된 토큰을 줘요.</p>
     <div class="actions"><button id="tgBotFather">BotFather 열기</button></div></li>
    <li data-n="2" id="tgStep2"><b>토큰을 Dec에 저장</b>
-    <p class="note">Dec → 설정 → 자격 증명에서 새 항목을 만들고, <b>허용 사이트</b>에 <code>https://api.telegram.org</code>, <b>값</b>에 토큰을 넣어 저장해요. 이름은 아무거나 괜찮아요. bisu는 토큰을 직접 보지 않아요.</p>
-    <div class="actions"><button id="tgDec">Dec 열기</button><button id="tgCopySite">사이트 주소 복사</button><button class="primary" id="tgRestart">저장했어요 · bisu 다시 켜기</button></div></li>
+    <p class="note">Dec → 설정 → 자격 증명에서 새 항목을 만들고, <b>허용 사이트</b>에 <code>https://api.telegram.org</code>, <b>값</b>에 토큰을 넣어 저장해요. 이름은 아무거나 괜찮아요. 덱 인턴은 토큰을 직접 보지 않아요.</p>
+    <div class="actions"><button id="tgDec">Dec 열기</button><button id="tgCopySite">사이트 주소 복사</button><button class="primary" id="tgRestart">저장했어요 · 덱 인턴 다시 켜기</button></div></li>
    <li data-n="3" id="tgStep3"><b>내 텔레그램과 연결</b>
     <p class="note" id="tgPairNote">…</p>
     <div class="actions"><button class="primary" id="tgPair">텔레그램에서 연결하기</button><button id="tgNewCode">코드 새로 받기</button></div></li>
@@ -879,7 +889,7 @@ body.panel #panelStart .row{margin-top:2px}
    <div class="kv">
     <div class="k">텔레그램으로 받기</div><div class="checks">
      <label class="sw"><input type="checkbox" id="tgNApprovals"> 승인 요청 (버튼으로 답해요)</label>
-     <label class="sw"><input type="checkbox" id="tgNSuggestions"> bisu의 제안</label>
+     <label class="sw"><input type="checkbox" id="tgNSuggestions"> 덱 인턴의 제안</label>
      <label class="sw"><input type="checkbox" id="tgNJobs"> 예약 작업 · 아침 브리핑 · 목표 (질문엔 답장으로 답해요)</label>
      <label class="sw"><input type="checkbox" id="tgNEvents"> 일정 전 알림</label></div>
     <div class="k">텔레그램 대화 폴더</div><div><input type="text" id="tgCwd" class="mono" list="cwdList" spellcheck="false" autocomplete="off" placeholder="~ (홈 폴더)"></div>
@@ -887,7 +897,7 @@ body.panel #panelStart .row{margin-top:2px}
    <div class="actions"><button id="tgTest">테스트 메시지 보내기</button><button class="danger" id="tgUnpair">연결 끊기</button></div>
   </div>
   <p class="note err" id="tgErr"></p>
-  <p class="note">텔레그램에서 보낸 말은 bisu의 대화 하나로 이어지고, 마지막 답이 돌아와요. <code>/new</code>는 새 대화, <code>/stop</code>은 멈추기예요. 맥이 켜져 있고 bisu가 실행 중일 때만 답해요.</p>
+  <p class="note">텔레그램에서 보낸 말은 덱 인턴의 대화 하나로 이어지고, 마지막 답이 돌아와요. <code>/new</code>는 새 대화, <code>/stop</code>은 멈추기예요. 맥이 켜져 있고 덱 인턴이 실행 중일 때만 답해요.</p>
  </section>
  <section id="calSec">
   <h2>캘린더 · 미리 알림</h2>
@@ -908,12 +918,12 @@ body.panel #panelStart .row{margin-top:2px}
    <div class="k">맥 알림</div><div class="checks">
     <div id="alPerm">…</div>
     <label class="sw"><input type="checkbox" id="alBApprovals"> 확인이 필요할 때</label>
-    <label class="sw"><input type="checkbox" id="alBReplies"> bisu가 답했을 때 (bisu 창이 닫혀 있을 때만)</label>
+    <label class="sw"><input type="checkbox" id="alBReplies"> 덱 인턴이 답했을 때 (덱 인턴 창이 닫혀 있을 때만)</label>
     <label class="sw"><input type="checkbox" id="alBCards"> 제안 · 예약 작업 · 아침 브리핑</label>
     <label class="sw"><input type="checkbox" id="alBEvents"> 일정 전 알림</label></div>
   </div>
   <div class="actions"><button class="primary" id="alPermBtn" hidden>알림 허용하기</button><button id="alTest">테스트 알림 보내기</button><span class="note" id="alNote" style="margin:0"></span></div>
-  <p class="note">맥이 잠들면 bisu도 멈춰요. 전원이 연결되어 있는 동안은 잠들지 않게 해서, 자리를 비워도 텔레그램과 예약 작업에 답할 수 있어요. 화면은 평소처럼 꺼지고, 뚜껑을 닫으면 잠들어요. 알림을 누르면 그 대화가 열려요.</p>
+  <p class="note">맥이 잠들면 덱 인턴도 멈춰요. 전원이 연결되어 있는 동안은 잠들지 않게 해서, 자리를 비워도 텔레그램과 예약 작업에 답할 수 있어요. 화면은 평소처럼 꺼지고, 뚜껑을 닫으면 잠들어요. 알림을 누르면 그 대화가 열려요.</p>
  </section>
 </div></div></div>
 
@@ -922,7 +932,7 @@ body.panel #panelStart .row{margin-top:2px}
  <section id="engineSec">
   <h2>엔진</h2>
   <div class="seg" id="engineSeg" style="display:flex;gap:6px;flex-wrap:wrap">
-   <label class="sw" style="border:1px solid var(--line);border-radius:999px;padding:5px 12px"><input type="radio" name="engine" value="native"> bisu 자체 엔진 · GLM <span class="chip">베타</span></label>
+   <label class="sw" style="border:1px solid var(--line);border-radius:999px;padding:5px 12px"><input type="radio" name="engine" value="native"> 덱 인턴 자체 엔진 · GLM <span class="chip">베타</span></label>
    <label class="sw" style="border:1px solid var(--line);border-radius:999px;padding:5px 12px"><input type="radio" name="engine" value="claude"> Claude Code · OpenRouter</label>
   </div>
   <p class="note" id="engineNote">새 대화부터 적용돼요. 이미 열린 대화는 시작할 때 엔진 그대로예요.</p>
@@ -940,12 +950,12 @@ body.panel #panelStart .row{margin-top:2px}
  <section id="nativeRoles" hidden>
   <h2>역할별 모델 · 자체 엔진</h2>
   <div class="kv" id="nativeModels"></div>
-  <p class="note">요청마다 판단 모델이 누가 받을지 골라요. 바꾸려면 셸에서 <code>BISU_NATIVE_MODEL</code>, <code>BISU_NATIVE_WORK_MODEL</code>을 정하고 bisu를 다시 여세요.</p>
+  <p class="note">요청마다 판단 모델이 누가 받을지 골라요. 바꾸려면 셸에서 <code>BISU_NATIVE_MODEL</code>, <code>BISU_NATIVE_WORK_MODEL</code>을 정하고 덱 인턴을 다시 여세요.</p>
  </section>
  <section id="orKey">
   <h2>키</h2>
   <div class="kv" id="keyInfo"><div class="k">상태</div><div>…</div></div>
-  <p class="note">bisu는 키를 직접 갖고 있지 않아요. 추가하거나 바꾸려면 Dec Browser → 설정 → 자격 증명에서 사이트 <code>https://openrouter.ai</code>로 OpenRouter 키를 저장하고 「앱 밖에서도 쓰기」를 켠 뒤 bisu를 다시 여세요.</p>
+  <p class="note">덱 인턴은 키를 직접 갖고 있지 않아요. 추가하거나 바꾸려면 Dec Browser → 설정 → 자격 증명에서 사이트 <code>https://openrouter.ai</code>로 OpenRouter 키를 저장하고 「앱 밖에서도 쓰기」를 켠 뒤 덱 인턴을 다시 여세요.</p>
  </section>
  <section id="orSpend">
   <h2>쓴 돈 · OpenRouter</h2>
@@ -956,12 +966,17 @@ body.panel #panelStart .row{margin-top:2px}
   <h2>키와 쓴 돈 · 자체 엔진</h2>
   <div class="kv" id="nativeKeys"><div class="k">상태</div><div>…</div></div>
   <div class="tiles" id="nativeTiles" style="margin-top:12px"></div>
-  <p class="note">bisu는 키를 직접 갖고 있지 않아요: 둘 다 Dec Browser → 설정 → 자격 증명에 저장하고 「앱 밖에서도 쓰기」를 켜요. 쓴 돈은 이 맥의 대화 기록을 Z.ai 가격으로 계산한 거예요 (판단 모델은 한 번에 약 $0.0001이라 빠져 있어요).</p>
+  <p class="note">덱 인턴은 키를 직접 갖고 있지 않아요: 둘 다 Dec Browser → 설정 → 자격 증명에 저장하고 「앱 밖에서도 쓰기」를 켜요. 쓴 돈은 이 맥의 대화 기록을 Z.ai 가격으로 계산한 거예요 (판단 모델은 한 번에 약 $0.0001이라 빠져 있어요).</p>
  </section>
  <section id="viewSec">
   <h2>보기</h2>
   <label class="sw"><input type="checkbox" id="metaOn"> 작업 세부 보기 — 도구 호출, 단계, 비용, 모델 이름을 대화와 기록에 그대로 보여줘요 (개발자용)</label>
-  <p class="note">끄면 bisu가 하는 일은 대화마다 한 줄로 접혀 있고, 눌러야 펼쳐져요.</p>
+  <p class="note">끄면 덱 인턴이 하는 일은 대화마다 한 줄로 접혀 있고, 눌러야 펼쳐져요.</p>
+  <div class="note" style="margin:14px 0 6px">글꼴</div>
+  <div class="seg" style="display:flex;gap:6px;flex-wrap:wrap">
+   <label class="sw" style="border:1px solid var(--line);border-radius:999px;padding:5px 12px"><input type="radio" name="font" value="system"> 기본 (시스템)</label>
+   <label class="sw" style="border:1px solid var(--line);border-radius:999px;padding:5px 12px"><input type="radio" name="font" value="dec"> <span style="font-family:'Dec Browser Sans UI'">덱 브라우저체</span></label>
+  </div>
  </section>
  <section id="panelSec" hidden>
   <h2>패널</h2>
@@ -972,9 +987,9 @@ body.panel #panelStart .row{margin-top:2px}
  <details class="adv" id="advBox"><summary>고급 · 컴퓨터 조작 시험</summary>
  <section id="cuSec">
   <h2>컴퓨터 조작 시험</h2>
-  <p class="note">bisu가 텍스트 편집기·Finder·메모·계산기·시스템 설정을 직접 조작해 12가지 일(줄을 추가해 저장, 이름 바꾸기, 메모 만들기, 계산기 열기 같은 것)을 하고, 파일과 답을 보고 채점해요. 시험하는 동안에는 마우스와 창을 bisu가 쓰니 자리를 비울 때 시작하세요. 만든 파일·메모·창은 끝나면 치우고, 휴지통 같은 되돌리기 어려운 동작은 실행하지 않아요.</p>
+  <p class="note">덱 인턴이 텍스트 편집기·Finder·메모·계산기·시스템 설정을 직접 조작해 12가지 일(줄을 추가해 저장, 이름 바꾸기, 메모 만들기, 계산기 열기 같은 것)을 하고, 파일과 답을 보고 채점해요. 시험하는 동안에는 마우스와 창을 덱 인턴이 쓰니 자리를 비울 때 시작하세요. 만든 파일·메모·창은 끝나면 치우고, 휴지통 같은 되돌리기 어려운 동작은 실행하지 않아요.</p>
   <div class="actions"><button id="cuCheck">권한 확인</button><button id="cuDry">준비만 해 보기</button></div>
-  <p class="note">처음 한 번은 자리에 있을 때 눌러 주세요. 「권한 확인」을 누르면 macOS가 bisu에게 Finder·텍스트 편집기·메모를 다뤄도 되는지 물을 수 있어요 — 허용을 눌러 주세요. 「준비만 해 보기」는 모델 없이 과제를 차렸다 치우기만 해요(창이 잠깐씩 열렸다 닫혀요).</p>
+  <p class="note">처음 한 번은 자리에 있을 때 눌러 주세요. 「권한 확인」을 누르면 macOS가 덱 인턴에게 Finder·텍스트 편집기·메모를 다뤄도 되는지 물을 수 있어요 — 허용을 눌러 주세요. 「준비만 해 보기」는 모델 없이 과제를 차렸다 치우기만 해요(창이 잠깐씩 열렸다 닫혀요).</p>
   <div class="kv">
    <div class="k">반복</div><div><select id="cuRepeat"><option value="1">1번</option><option value="2" selected>2번</option><option value="3">3번</option></select></div>
    <div class="k">모델</div><div><select id="cuModels"><option value="glm-5.3">GLM-5.3 (비서)</option><option value="glm-5.3-flash">GLM-5.3-flash</option><option value="glm-5.3,glm-5.3-flash">둘 다 (시간 두 배)</option></select></div>
@@ -1112,7 +1127,7 @@ function setMood(state,text){clearTimeout(moodTimer);mood={state,text};
 // What is promised about asking first, as the chosen engine and mode really behave: bisu's own engine,
 // by default, runs what its judge clears and asks for the rest.
 const askPromise=()=>prefs.engine==='native'&&prefs.approve!=='always'?'지우기·보내기·설치처럼 되돌리기 어려운 일은 하기 전에 꼭 물어볼게요.':'파일을 고치거나 명령을 실행하기 전엔 꼭 물어볼게요.';
-const helloHTML=()=>`<div class="hello"><span class="bisu live"></span><b>안녕하세요, bisu예요</b><span>아래에 바로 말하면 돼요. 파일 일은 아래에 적힌 폴더에서 해요.<br><span class="promise">${askPromise()}</span></span></div>`;
+const helloHTML=()=>`<div class="hello"><span class="bisu live"></span><b>안녕하세요, 덱 인턴이에요</b><span>아래에 바로 말하면 돼요. 파일 일은 아래에 적힌 폴더에서 해요.<br><span class="promise">${askPromise()}</span></span></div>`;
 // Developer detail (tool calls, steps, cost, model names): off by default, one switch in Settings.
 // Kept by the engine (/api/prefs), not in this page's storage: the menu bar app gets a new port, and
 // so a new, empty origin, on every launch.
@@ -1346,7 +1361,7 @@ function chatUI(){const c=cur;$('chatHead').hidden=!c;if(c||!PANEL)$('chips').hi
  if(PANEL){$('panelStart').hidden=!!c;$('msgs').hidden=!c;if(!c)fillStartCwd()}
  if(!c){if(!wrap().children.length){wrap().innerHTML=helloHTML();mountBisu(wrap())}mountBisu();renderRecent();renderOnboard();return}
  $('chatTitle').textContent=c.title||'새 대화';$('chatSub').textContent=place(c.cwd);$('chatSub').title=short(c.cwd);
- $('stop').hidden=!c.busy;$('input').placeholder=c.busy?(PANEL?'답하는 중 — 보내도 돼요':'답하는 중이에요 — 지금 보내도 이어서 읽어요'):(PANEL?'bisu에게 말하기':'bisu에게 말하기  (Enter 보내기 · Shift+Enter 줄바꿈)');renderList()}
+ $('stop').hidden=!c.busy;$('input').placeholder=c.busy?(PANEL?'답하는 중 — 보내도 돼요':'답하는 중이에요 — 지금 보내도 이어서 읽어요'):(PANEL?'덱 인턴에게 말하기':'덱 인턴에게 말하기  (Enter 보내기 · Shift+Enter 줄바꿈)');renderList()}
 function renderList(){const q=($('chatFilter')?.value||'').trim().toLowerCase(),list=myChats().filter(c=>!q||(c.title||'').toLowerCase().includes(q)).sort((a,b)=>(b.pending>0)-(a.pending>0));
  $('chatList').innerHTML=list.map(c=>`<div class="ci${cur&&c.id===cur.id?' on':''}" data-id="${c.id}"><div class="t">${c.pending?'<span class="flag">확인 필요</span>':''}${esc(c.title||'새 대화')}</div><div class="s" title="${esc(short(c.cwd))}"><span class="dot${c.pending?' wait':c.busy||c.tasks?' busy':''}"></span>${esc(place(c.cwd))}</div></div>`).join('')||'<p class="note" style="padding:0 12px">아직 대화가 없어요.</p>';
  for(const el of $('chatList').querySelectorAll('.ci'))el.onclick=()=>open(el.dataset.id)}
@@ -1448,7 +1463,7 @@ let acctSnap=null,natSnap=null,briefSnap=null;
 async function loadAccount(){
  try{const a=await api('/api/account');acctSnap=a;heroes();const k=$('key');
   if(prefs.engine!=='native'){k.textContent={'use-only':'key · use-only (Dec)',plain:'key · plain env',none:'no key'}[a.mode];k.className='badge '+(a.mode==='none'?'bad':'ok')}
-  const rows=[['상태',{'use-only':'Dec으로 연결됨 (사용 전용: bisu는 일회용 토큰만 받고 키는 못 봐요)',plain:'셸의 OPENROUTER_API_KEY (평문)',none:'<span class="err">키가 없어요</span>'}[a.mode]]];
+  const rows=[['상태',{'use-only':'Dec으로 연결됨 (사용 전용: 덱 인턴은 일회용 토큰만 받고 키는 못 봐요)',plain:'셸의 OPENROUTER_API_KEY (평문)',none:'<span class="err">키가 없어요</span>'}[a.mode]]];
   if(a.key)rows.push(['OpenRouter 키',esc(a.key.label||'')],['한도',a.key.limit==null?'없음':`${usd(a.key.limit,0)} 중 ${usd(a.key.limit_remaining)} 남음`]);
   if(a.mode==='use-only')rows.push(['답변 방식',a.streams===true?'오는 대로 바로 보여줘요':a.streams===false?'<span class="w">한꺼번에: 답이 끝나야 보이고, 요청 하나가 약 200초로 제한돼요. 새 dec-secret-helper를 설치하면 바로바로 보여요.</span>':'알 수 없음']);
   if(a.keyError)rows.push(['오류','<span class="err">'+esc(a.keyError)+'</span>']);
@@ -1490,13 +1505,13 @@ function renderMemory(){
    <div class="h"><b>${esc(e.title)}</b>${e.pin?'<span class="chip">고정</span>':''}${e.key?`<span class="chip key">key ${esc(e.key)}</span>`:''}<span class="note" style="margin:0">${whenText(e.updated)}</span><span class="sp"></span>
     <button data-a="pin">${e.pin?'고정 해제':'고정'}</button><button data-a="edit">고치기</button><button class="danger" data-a="del">삭제</button></div>
    ${e.text?`<div class="b">${esc(e.text)}</div>`:''}</div>`).join('')
-  :'<p class="note">비어 있어요. 대화 중에 bisu가 스스로 저장하거나, 위에서 직접 추가할 수 있어요.</p>';
+  :'<p class="note">비어 있어요. 대화 중에 덱 인턴이 스스로 저장하거나, 위에서 직접 추가할 수 있어요.</p>';
  $('memDigest').textContent=m.digest||'(비어 있어요 — 아직 전달되는 게 없어요)';
  for(const row of $('memList').querySelectorAll('.mem')){
   const e=m.entries.find(x=>x.id===row.dataset.id);if(!e)continue;
   row.querySelector('[data-a=pin]').onclick=async()=>{try{mem=await post('/api/memory'+mb(),{id:e.id,pin:!e.pin});renderMemory()}catch(er){alert(er.message)}};
   row.querySelector('[data-a=edit]').onclick=()=>memForm(e);
-  row.querySelector('[data-a=del]').onclick=async()=>{if(!await ask(`“${e.title}” 기억을 지울까요? bisu가 다시 보지 않아요.`))return;
+  row.querySelector('[data-a=del]').onclick=async()=>{if(!await ask(`“${e.title}” 기억을 지울까요? 덱 인턴이 다시 보지 않아요.`))return;
    try{mem=await api('/api/memory/'+encodeURIComponent(e.id)+mb(),{method:'DELETE'});renderMemory();if(!$('memFormSec').hidden)memForm(null)}catch(er){alert(er.message)}}}
 }
 function memForm(e){memEdit=e?e.id:null;$('memFormSec').hidden=false;
@@ -1581,13 +1596,13 @@ function renderSug(){
  if(!list.length){
   // Between asking for one and it arriving there is nothing to show yet, and an empty panel looks
   // like nothing happened.
-  if(sug?.running){el.hidden=false;el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag"><span class="bisu" data-state="thinking"></span>bisu</span></div><div class="sugBody" style="margin-top:4px">뭐가 있을지 보고 있어요…</div></div>`;mountBisu(el)}
+  if(sug?.running){el.hidden=false;el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag"><span class="bisu" data-state="thinking"></span>덱 인턴</span></div><div class="sugBody" style="margin-top:4px">뭐가 있을지 보고 있어요…</div></div>`;mountBisu(el)}
   else{el.hidden=true;el.innerHTML=''}
   HOST?.suggest?.(0);return}
  const it=list[0],extra=list.length>1?`<span class="more">+${list.length-1}</span>`:'';
  el.hidden=false;
  // Folded to one line until opened: something to read later must not cover the conversation or an approval.
- if(!sugOpen){const lab=it.kind==='job'?(it.job==='briefing'?'아침 브리핑':it.job==='goal'?(it.ask?'목표 · 질문':'목표'):'예약 작업'):'bisu가 찾은 것';
+ if(!sugOpen){const lab=it.kind==='job'?(it.job==='briefing'?'아침 브리핑':it.job==='goal'?(it.ask?'목표 · 질문':'목표'):'예약 작업'):'덱 인턴이 찾은 것';
   el.innerHTML=`<button type="button" class="sugLine"><span class="tag${it.error?' bad':it.ask?' blush':''}">${lab}</span><span class="lt">${esc(it.title)}</span>${extra}<span class="chev">›</span></button>`;
   el.querySelector('.sugLine').onclick=()=>{sugOpen=true;renderSug()};
   HOST?.suggest?.(list.filter(i=>!i.seen).length);
@@ -1600,7 +1615,7 @@ function renderSug(){
   ${it.body?`<div class="sugBody job${it.error?' err':''}">${esc(it.body)}</div>`:''}
   ${it.goal&&it.ask?`<div class="sugAsk"><input type="text" data-a="answer" placeholder="여기에 답하면 이어서 해요" autocomplete="off"><button class="primary" data-a="send">보내기</button></div>`:''}
   <div class="sugBtns">${it.sessionId?`<button class="primary" data-a="do">이어서 대화</button>`:''}<button data-a="later">${it.goal&&it.ask?'나중에':'확인'}</button><button class="linkish" data-a="fold">접기</button><span class="sugWhere" title="${esc(short(it.cwd||''))}">${ago(it.at)}${it.cwd?' · '+esc(place(it.cwd)):''}</span></div></div>`;
- else el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag"><span class="bisu" data-state="waiting"></span>bisu가 하나 찾았어요</span>${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
+ else el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag"><span class="bisu" data-state="waiting"></span>덱 인턴이 하나 찾았어요</span>${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
   <div class="sugTitle">${esc(it.title)}</div>
   ${it.body?`<div class="sugBody">${esc(it.body)}</div>`:''}
   ${it.action?`<div class="sugAct"><b>해볼게</b>를 누르면 이렇게 부탁해요 · ${esc(it.action)}</div>`:''}
@@ -1660,7 +1675,7 @@ const BRIEF_SKIP={access:'캘린더 접근이 아직 허용되지 않았어요.'
 async function loadBrief(){try{renderBrief(await api('/api/briefing'))}catch(e){$('briefNote').textContent=e.message}}
 function renderBrief(b){briefSnap=b;$('briefOn').checked=b.enabled;$('briefHour').value=String(b.hour);
  const a=b.access||{};
- $('briefAccess').innerHTML=a.events&&a.reminders?'일정 · 미리 알림 볼 수 있음':a.events||a.reminders?`${a.events?'일정':'미리 알림'}만 볼 수 있음`:`<span class="w">${a.error&&/not installed/.test(a.error)?'캘린더 도우미가 아직 설치되지 않았어요':'아직 허용되지 않았어요 — 자체 엔진 설정의 「접근 허용 요청」이나 시스템 설정에서 bisu를 켜 주세요'}</span>`;
+ $('briefAccess').innerHTML=a.events&&a.reminders?'일정 · 미리 알림 볼 수 있음':a.events||a.reminders?`${a.events?'일정':'미리 알림'}만 볼 수 있음`:`<span class="w">${a.error&&/not installed/.test(a.error)?'캘린더 도우미가 아직 설치되지 않았어요':'아직 허용되지 않았어요 — 자체 엔진 설정의 「접근 허용 요청」이나 시스템 설정에서 덱 인턴을 켜 주세요'}</span>`;
  $('briefNext').textContent=b.enabled?`${whenShort(b.nextAt)}${b.lastError?` · 마지막 시도 실패: ${b.lastError}`:''}`:'꺼져 있음'}
 async function saveBrief(){try{renderBrief({...await post('/api/briefing',{enabled:$('briefOn').checked,hour:Number($('briefHour').value)}),access:(await api('/api/briefing')).access});$('briefNote').textContent='저장했어요.'}catch(e){$('briefNote').textContent=e.message}}
 for(const id of ['briefOn','briefHour'])$(id).addEventListener('change',saveBrief);
@@ -1677,7 +1692,7 @@ function renderTg(){const t=tgSnap;if(!t)return;
  $('tgSteps').hidden=t.paired;$('tgOn').hidden=!t.paired;
  $('tgState').innerHTML=t.paired?`<span class="tag">연결됨</span> ${esc(t.user?.name||'')}${t.user?.username?' (@'+esc(t.user.username)+')':''}${t.bot?.username?` · 봇 @${esc(t.bot.username)}`:''}`
   :t.token?`<span class="tag">토큰 있음</span> ${t.bot?.username?'봇 @'+esc(t.bot.username)+' · 아직 내 텔레그램과 연결 안 됨':'봇 이름을 확인하는 중…'}`
-  :'<span class="tag blush">아직 설정 안 됨</span> 세 단계면 휴대폰에서 bisu를 부를 수 있어요.';
+  :'<span class="tag blush">아직 설정 안 됨</span> 세 단계면 휴대폰에서 덱 인턴을 부를 수 있어요.';
  $('tgRestart').hidden=!t.restartable;
  $('tgPairNote').innerHTML=!t.token?'토큰을 저장하면 여기서 연결할 수 있어요.'
   :t.link?`버튼을 누르면 텔레그램이 열려요. 「시작」을 누르면 바로 연결돼요. 버튼이 안 되면 봇에게 이 숫자를 보내세요: <b class="mono">${esc(t.code)}</b>`
@@ -1695,7 +1710,7 @@ $('tgBotFather').onclick=()=>openOut('botfather');
 $('tgDec').onclick=()=>openOut('dec');
 $('tgPair').onclick=()=>openOut('pair');
 $('tgCopySite').onclick=async()=>{try{await navigator.clipboard.writeText('https://api.telegram.org');$('tgCopySite').textContent='복사했어요 ✓';setTimeout(()=>{$('tgCopySite').textContent='사이트 주소 복사'},1600)}catch{$('tgErr').textContent='복사하지 못했어요. https://api.telegram.org 를 직접 적어 주세요.'}};
-$('tgRestart').onclick=async()=>{$('tgRestart').disabled=true;$('tgRestart').textContent='다시 켜는 중…';try{await post('/api/restart')}catch(e){$('tgErr').textContent=e.message;$('tgRestart').disabled=false;$('tgRestart').textContent='저장했어요 · bisu 다시 켜기'}};
+$('tgRestart').onclick=async()=>{$('tgRestart').disabled=true;$('tgRestart').textContent='다시 켜는 중…';try{await post('/api/restart')}catch(e){$('tgErr').textContent=e.message;$('tgRestart').disabled=false;$('tgRestart').textContent='저장했어요 · 덱 인턴 다시 켜기'}};
 $('tgNewCode').onclick=()=>tgDo('/api/telegram/code');
 $('tgTest').onclick=async()=>{await tgDo('/api/telegram/test');if(!$('tgErr').textContent){$('tgTest').textContent='보냈어요 ✓';setTimeout(()=>{$('tgTest').textContent='테스트 메시지 보내기'},1600)}};
 $('tgUnpair').onclick=async()=>{if(await ask('텔레그램 연결을 끊을까요? 다시 쓰려면 연결을 새로 해야 해요.'))tgDo('/api/telegram/unpair')};
@@ -1712,7 +1727,7 @@ function renderGoals(){const s=goalsSnap;if(!s)return;const el=$('goalList');
    <span class="sp"></span><button data-a="run" ${s.running||g.status==='done'?'disabled':''}>지금 진행</button><button data-a="${g.status==='paused'||g.status==='done'?'resume':'pause'}">${g.status==='paused'?'다시 시작':g.status==='done'?'다시 열기':'멈추기'}</button><button class="danger" data-a="delete">지우기</button></div>
    ${g.detail?`<div class="b note">${esc(g.detail)}</div>`:''}
    ${n?`<div class="bar"><i style="width:${Math.round(done/n*100)}%"></i></div><ol>${g.steps.map(x=>`<li class="${x.status}">${esc(x.text)}${x.note?` <span class="note" style="display:inline">— ${esc(x.note)}</span>`:''}</li>`).join('')}</ol>`:`<div class="b note">${run?'계획을 세우는 중이에요.':'첫 진행 때 계획을 세워요.'}</div>`}
-   ${g.question?`<div class="ask"><div class="q"><b>bisu가 묻는 것</b>\n${esc(g.question.text)}</div><div class="r"><input type="text" data-answer placeholder="답 적기" autocomplete="off"><button class="primary" data-a="answer">보내기</button></div></div>`:''}
+   ${g.question?`<div class="ask"><div class="q"><b>덱 인턴이 묻는 것</b>\n${esc(g.question.text)}</div><div class="r"><input type="text" data-answer placeholder="답 적기" autocomplete="off"><button class="primary" data-a="answer">보내기</button></div></div>`:''}
    ${g.notes?`<details><summary class="note" style="cursor:pointer;margin:0">메모</summary><pre>${esc(g.notes)}</pre></details>`:''}
    ${g.log.length?`<details><summary class="note" style="cursor:pointer;margin:0">진행 기록 ${g.log.length}개</summary><ul class="log">${g.log.slice(-10).reverse().map(l=>`<li>${esc(whenShort(l.at))} · ${esc(l.text)}</li>`).join('')}</ul></details>`:''}
    <div class="b note" style="margin-top:6px">${g.status==='active'?`다음 진행: ${g.nextAt>Date.now()?whenShort(g.nextAt):'곧'}`:g.status==='waiting'?'답을 받으면 바로 이어서 해요':g.status==='done'?`${ago(g.doneAt||g.lastRun)} 달성`:'멈춰 있어요'}${g.lastRun?` · 마지막 진행 ${ago(g.lastRun)}`:''}${g.lastError?` · <span class="err">${esc(g.lastError)}</span>`:''}</div></div>`}).join('');
@@ -1755,12 +1770,12 @@ function renderAlerts(){const a=alSnap;if(!a)return;
  for(const [id,k] of Object.entries(AL_B))$(id).checked=a.banners[k]}
 // Whether macOS lets bisu show banners is the shell's to know; a page outside the app can only say so.
 async function renderPerm(){const box=$('alPerm'),btn=$('alPermBtn');
- if(!HOST?.notifications){box.innerHTML='<span class="note" style="margin:0">맥 알림은 bisu 앱에서만 떠요.</span>';btn.hidden=true;return}
+ if(!HOST?.notifications){box.innerHTML='<span class="note" style="margin:0">맥 알림은 덱 인턴 앱에서만 떠요.</span>';btn.hidden=true;return}
  let st='unknown';try{st=(await HOST.notifications()).status}catch{}
  const on=st==='authorized'||st==='provisional';
- box.innerHTML=on?'<span class="tag">허용됨</span>':st==='denied'?'<span class="tag blush">꺼져 있어요</span> 시스템 설정에서 bisu 알림을 켜 주세요.':'<span class="tag blush">아직 허락 안 받음</span>';
+ box.innerHTML=on?'<span class="tag">허용됨</span>':st==='denied'?'<span class="tag blush">꺼져 있어요</span> 시스템 설정에서 덱 인턴 알림을 켜 주세요.':'<span class="tag blush">아직 허락 안 받음</span>';
  btn.hidden=on;btn.textContent=st==='denied'?'시스템 설정 열기':'알림 허용하기';btn.dataset.st=st}
-$('alPermBtn').onclick=async()=>{if($('alPermBtn').dataset.st==='denied'){askSettings('맥 알림','bisu 알림이 꺼져 있어요. 시스템 설정에서 켜야 떠요. 설정하러 가시겠어요?','notifications',renderPerm);return}
+$('alPermBtn').onclick=async()=>{if($('alPermBtn').dataset.st==='denied'){askSettings('맥 알림','덱 인턴 알림이 꺼져 있어요. 시스템 설정에서 켜야 떠요. 설정하러 가시겠어요?','notifications',renderPerm);return}
  try{await HOST.requestNotifications()}catch{}renderPerm()};
 const alSave=async b=>{$('alNote').textContent='';try{alSnap=await post('/api/alerts',b);renderAlerts()}catch(e){$('alNote').textContent=e.message}};
 // Choosing 「시간 지정」 waits for a duration; the others take effect at once.
@@ -1773,13 +1788,13 @@ $('alMax').addEventListener('change',()=>alSave({awakeMaxH:Number($('alMax').val
 setInterval(()=>{if(alSnap?.awakeMode!=='timer'&&!alSnap?.holding)return;if(viewOn('connect')||PANEL)api('/api/alerts').then(a=>{alSnap=a;renderAlerts();renderCC()}).catch(()=>{})},30e3);
 $('alBefore').addEventListener('change',()=>alSave({before:Number($('alBefore').value)}));
 for(const [id,k] of Object.entries(AL_B))$(id).addEventListener('change',()=>alSave({banners:{[k]:$(id).checked}}));
-$('alTest').onclick=async()=>{$('alNote').textContent='';try{await post('/api/alerts/test');$('alNote').textContent=HOST?.notifications?'보냈어요. 몇 초 안에 떠요.':'보냈어요. 맥 알림은 bisu 앱에서만 떠요.'}catch(e){$('alNote').textContent=e.message}};
+$('alTest').onclick=async()=>{$('alNote').textContent='';try{await post('/api/alerts/test');$('alNote').textContent=HOST?.notifications?'보냈어요. 몇 초 안에 떠요.':'보냈어요. 맥 알림은 덱 인턴 앱에서만 떠요.'}catch(e){$('alNote').textContent=e.message}};
 // A banner clicked: the shell brings the window up and says which conversation it was about.
 if(HOST?.onOpen)HOST.onOpen(async id=>{await refreshChats();if(chats.some(c=>c.id===id)){show('chat');open(id)}});
 // ---- computer-use test (engine/eval/cu-bench.mjs, run by the engine) ----
 let cuSnap=null,cuPoll=null;
 const CU_GROUP={TextEdit:'텍스트 편집기',Finder:'Finder',Notes:'메모',Calculator:'계산기','System Settings':'시스템 설정'};
-const CU_DOING={check:'권한을 확인하는 중…',dry:'과제를 차렸다 치우는 중… 창이 열렸다 닫혀요',run:'시험하는 중 — 끝날 때까지 마우스와 창을 bisu가 써요'};
+const CU_DOING={check:'권한을 확인하는 중…',dry:'과제를 차렸다 치우는 중… 창이 열렸다 닫혀요',run:'시험하는 중 — 끝날 때까지 마우스와 창을 덱 인턴이 써요'};
 async function loadCu(){try{cuSnap=await api('/api/cubench');renderCu()}catch(e){$('cuNote').textContent=e.message}}
 function cuTable(rows){
  const pass=a=>a.filter(r=>r.pass).length,med=a=>{const x=a.map(r=>r.ms||0).sort((p,q)=>p-q);return x.length?Math.round(x[Math.floor(x.length/2)]/1000):0};
@@ -1793,7 +1808,7 @@ function renderCu(){const s=cuSnap;if(!s)return;
  const busy=s.state==='running'||s.state==='waiting';
  for(const id of ['cuCheck','cuDry','cuRun'])$(id).disabled=busy||!s.available;
  $('cuStop').hidden=!busy;
- $('cuNote').textContent=!s.available?'이 bisu에는 시험이 들어 있지 않아요. 앱을 다시 설치해 주세요.'
+ $('cuNote').textContent=!s.available?'이 덱 인턴에는 시험이 들어 있지 않아요. 앱을 다시 설치해 주세요.'
   :s.state==='waiting'?`${Math.max(0,Math.ceil((s.startsAt-Date.now())/1000))}초 뒤에 시작해요 — 이제 자리를 비워도 돼요`
   :s.state==='running'?CU_DOING[s.mode]||''
   :s.state==='done'?(s.stopped?'멈췄어요.':s.exit===0?(s.mode==='run'?'끝났어요.':'다 봤어요. 아래 결과를 확인해 주세요.'):`끝났지만 문제가 있었어요 (코드 ${s.exit}). 자세한 기록을 봐 주세요.`):'';
@@ -1807,10 +1822,10 @@ async function cuStart(mode){$('cuNote').textContent='';
  try{cuSnap=await post('/api/cubench',{mode,repeat:Number($('cuRepeat').value),models:$('cuModels').value,delaySec:30});renderCu()}catch(e){$('cuNote').textContent=e.message}}
 // The test drives other apps, which macOS allows only with Accessibility. Asked at the press, not after a failed run.
 async function cuNeedsAx(then){if(!HOST?.accessibility)return then();let ok=true;try{ok=(await HOST.accessibility()).trusted}catch{}
- if(ok)return then();askSettings('손쉬운 사용 권한','컴퓨터 조작 시험은 bisu가 다른 앱을 눌러 보는 거라 손쉬운 사용 권한이 필요해요. 설정하러 가시겠어요?','accessibility',loadCu)}
+ if(ok)return then();askSettings('손쉬운 사용 권한','컴퓨터 조작 시험은 덱 인턴이 다른 앱을 눌러 보는 거라 손쉬운 사용 권한이 필요해요. 설정하러 가시겠어요?','accessibility',loadCu)}
 $('cuCheck').onclick=()=>cuNeedsAx(()=>cuStart('check'));
 $('cuDry').onclick=()=>cuStart('dry');
-$('cuRun').onclick=()=>cuNeedsAx(async()=>{if(await ask('30초 뒤에 시험을 시작해요. 끝날 때까지 마우스와 창을 bisu가 쓰니, 그동안은 맥을 쓰지 말아 주세요. 중간에 멈추려면 이 화면의 「멈추기」를 누르면 돼요.'))cuStart('run')});
+$('cuRun').onclick=()=>cuNeedsAx(async()=>{if(await ask('30초 뒤에 시험을 시작해요. 끝날 때까지 마우스와 창을 덱 인턴이 쓰니, 그동안은 맥을 쓰지 말아 주세요. 중간에 멈추려면 이 화면의 「멈추기」를 누르면 돼요.'))cuStart('run')});
 $('cuStop').onclick=async()=>{try{cuSnap=await post('/api/cubench/stop');renderCu()}catch(e){$('cuNote').textContent=e.message}};
 // ---- scheduled jobs ----
 let jobsSnap=null;
@@ -1844,7 +1859,7 @@ $('searchForm').onsubmit=async e=>{e.preventDefault();const q=$('searchQ').value
  out.innerHTML='<p class="note">찾는 중…</p>';
  try{const r=await api('/api/search?q='+encodeURIComponent(q));
   if(!r.sessions.length){out.innerHTML=`<p class="note">대화 ${r.total}개 중에 ${r.words.map(w=>'<b>'+esc(w)+'</b>').join(' ')}이 나온 곳이 없어요.${r.refreshError?' (색인 갱신 실패: '+esc(r.refreshError)+')':''}</p>`;return}
-  out.innerHTML=`<p class="note">대화 ${r.total}개 중 ${r.sessions.length}개${r.mode==='or'?' (단어 일부만 맞음)':''}</p>`+r.sessions.map(s=>`<div class="hit"><div class="hitHead"><span class="n">${s.start?whenText(s.start):'—'}</span> <b>${esc(s.cwd?s.cwd.split('/').pop():'?')}</b> · ${esc((s.title||s.prompt||'').slice(0,90))}${s.cwd?` <button data-resume="${esc(s.id)}" data-cwd="${esc(s.cwd)}">이어가기</button>`:''}</div>${s.lines.map(l=>`<div class="hitLine"><span class="who">${l.role==='user'?'나':'bisu'}</span> ${mark(l.snip)}</div>`).join('')}</div>`).join('');
+  out.innerHTML=`<p class="note">대화 ${r.total}개 중 ${r.sessions.length}개${r.mode==='or'?' (단어 일부만 맞음)':''}</p>`+r.sessions.map(s=>`<div class="hit"><div class="hitHead"><span class="n">${s.start?whenText(s.start):'—'}</span> <b>${esc(s.cwd?s.cwd.split('/').pop():'?')}</b> · ${esc((s.title||s.prompt||'').slice(0,90))}${s.cwd?` <button data-resume="${esc(s.id)}" data-cwd="${esc(s.cwd)}">이어가기</button>`:''}</div>${s.lines.map(l=>`<div class="hitLine"><span class="who">${l.role==='user'?'나':'덱 인턴'}</span> ${mark(l.snip)}</div>`).join('')}</div>`).join('');
   for(const b of out.querySelectorAll('[data-resume]'))b.onclick=()=>startChat({cwd:b.dataset.cwd,resume:b.dataset.resume});
  }catch(e){out.innerHTML=`<p class="note err">${esc(e.message)}</p>`}};
 // The matching words come back wrapped in ** from the index; everything else is escaped.
@@ -1879,7 +1894,7 @@ function renderRuns(){$('runs').hidden=false;const all=runCache,runs=$('showAuto
    <td class="metaCol">${Object.keys(r.usage).map(m=>`<span class="chip">${esc(m.split('/').pop())}</span>`).join('')}</td>
    <td class="n metaCol">${r.turns}</td><td class="n metaCol">${tok(inp)} / ${tok(out)}</td><td class="n metaCol">${usd(r.cost)}</td><td class="n">${mins<1?'1분 안':Math.round(mins)+'분'}</td>
    <td>${r.cwd?`<button data-resume="${esc(r.id)}">이어가기</button>`:''}</td></tr>`}).join('')
-  :'<tr><td colspan="8" class="note">아직 bisu와 나눈 대화가 없어요.</td></tr>';
+  :'<tr><td colspan="8" class="note">아직 덱 인턴과 나눈 대화가 없어요.</td></tr>';
  for(const b of $('runs').querySelectorAll('[data-resume]'))b.onclick=()=>{const r=runCache.find(x=>x.id===b.dataset.resume);startChat({cwd:r.cwd,resume:r.id})}
 
  groupRuns(runs)
@@ -1889,7 +1904,7 @@ function renderRuns(){$('runs').hidden=false;const all=runCache,runs=$('showAuto
 const HOURS={8:'하루 세 번',12:'하루 두 번',24:'하루 한 번',72:'3일마다',168:'일주일에 한 번'};
 function heroes(){renderCC();const set=(id,h)=>{const el=$(id);if(el&&h!=null)el.innerHTML=h};
  if(goalsSnap){const g=goalsSnap.goals,act=g.filter(x=>x.status==='active').length,wait=g.filter(x=>x.status==='waiting').length;
-  set('goalsSum',g.length?`진행 중 <b>${act}</b>개${wait?` · <b>${wait}</b>개는 내 답을 기다려요`:''}${g.length-act-wait?` · 끝났거나 멈춘 것 ${g.length-act-wait}개`:''}`:'며칠 걸리는 일을 맡기면 bisu가 조금씩 진행해요')}
+  set('goalsSum',g.length?`진행 중 <b>${act}</b>개${wait?` · <b>${wait}</b>개는 내 답을 기다려요`:''}${g.length-act-wait?` · 끝났거나 멈춘 것 ${g.length-act-wait}개`:''}`:'며칠 걸리는 일을 맡기면 덱 인턴이 조금씩 진행해요')}
  if(jobsSnap||briefSnap||sug){const mine=jobsSnap?.jobs?.filter(j=>(j.bot||'bisu')===curBot),n=mine?.length,wait=mine?.filter(j=>j.needsApproval).length;
   set('jobsSum',[n==null?null:n?`예약 <b>${n}</b>개${wait?` · 승인 기다림 ${wait}개`:''}`:'예약한 작업 없음',
    briefSnap?(briefSnap.enabled?`아침 브리핑 오전 ${briefSnap.hour}시`:'아침 브리핑 꺼짐'):null,
@@ -1899,7 +1914,7 @@ function heroes(){renderCC();const set=(id,h)=>{const el=$(id);if(el&&h!=null)el
  if(tgSnap||calSnap||alSnap){const cal=calSnap&&!calSnap.missing&&!calSnap.error?(calSnap.events==='full'&&calSnap.reminders==='full'?'캘린더 허용됨':'<span class="w">캘린더 허용 필요</span>'):null;
   set('connectSum',[tgSnap?(tgSnap.paired?'텔레그램 <b>연결됨</b>':'텔레그램 연결 안 됨'):null,cal,alSnap?'맥 깨어 있게 '+({tasks:'작업 중에만',timer:'시간 지정',always:'계속',off:'꺼짐'}[alSnap.awakeMode]||''):null].filter(Boolean).join(' · '))}
  if(prefs?.engine){const native=prefs.engine==='native',today=native?natSnap?.spend?.today:acctSnap?.key?.usage_daily;
-  set('settingsSum',`엔진 <b>${native?'bisu 자체 · GLM':'Claude Code'}</b>${today!=null?` · 오늘 ${usd(today)}`:''}`)}}
+  set('settingsSum',`엔진 <b>${native?'덱 인턴 자체 · GLM':'Claude Code'}</b>${today!=null?` · 오늘 ${usd(today)}`:''}`)}}
 // Every renderer refreshes the top lines when it is done.
 renderGoals=(f=>function(){const r=f.apply(this,arguments);heroes();return r})(renderGoals);
 renderJobs=(f=>function(){const r=f.apply(this,arguments);heroes();return r})(renderJobs);
@@ -1921,7 +1936,7 @@ function askSettings(title,text,pane,after){const d=$('permDlg');$('permTitle').
  $('permOk').textContent=HOST?'설정 열기':'확인';permAfter=after||null;
  d.onclose=()=>{if(d.returnValue!=='ok'||!HOST)return;
   if(pane==='notifications')HOST.openNotificationSettings?.();else if(pane==='accessibility')HOST.grantAccessibility?.();else HOST.openPane?.(pane)};
- if(!HOST)$('permText').textContent=text.replace(/ 설정하러 가시겠어요\?$/,'')+' 시스템 설정 → 개인정보 보호 및 보안에서 bisu를 켜 주세요.';
+ if(!HOST)$('permText').textContent=text.replace(/ 설정하러 가시겠어요\?$/,'')+' 시스템 설정 → 개인정보 보호 및 보안에서 덱 인턴을 켜 주세요.';
  d.returnValue='';d.showModal()}
 // Back from System Settings: look again, so the screen shows what changed without a reload.
 const recheck=()=>{if(!permAfter)return;const f=permAfter;permAfter=null;setTimeout(f,300)};
@@ -1932,7 +1947,7 @@ addEventListener('focus',recheck);HOST?.onShown?.(recheck);
 // one shows in the other on its next look: on focus, on show, and every few seconds while visible.
 async function renderCC(){if(PANEL&&cur&&!$('panelStart').offsetParent)return;
  const today=prefs?.engine==='native'?natSnap?.spend?.today:acctSnap?.key?.usage_daily,waiting=sug?.list?.filter?.(x=>!x.read).length;
- $('ccStatus').innerHTML=[bots.length>1?`<b>${esc(curBotInfo()?.name||'bisu')}</b>`:null,'듣고 있어요',today!=null?`오늘 <b>${usd(today)}</b>`:null].filter(Boolean).join(' · ');
+ $('ccStatus').innerHTML=[bots.length>1?`<b>${esc(curBotInfo()?.name||'덱 인턴')}</b>`:null,'듣고 있어요',today!=null?`오늘 <b>${usd(today)}</b>`:null].filter(Boolean).join(' · ');
  $('ccSwitches').hidden=false;$('ccFoot').hidden=!HOST||!PANEL;$('ccSelRow').hidden=!HOST;
  if(HOST)try{$('ccSel').checked=await HOST.selectionEnabled()}catch{}
  if(sug)$('ccSug').checked=!!sug.enabled;if(alSnap){$('ccAwake').checked=alSnap.awakeMode!=='off';$('ccAwakeNote').textContent=alSnap.awakeMode==='off'&&alSnap.holding!=='job'?'':awakeText(alSnap)}
@@ -1950,7 +1965,7 @@ $('ccAwake').addEventListener('click',e=>{e.preventDefault();const a=alSnap||{};
  menu.open($('ccAwake'),AWAKE_MENU.map(x=>({label:x.label,hint:x.hint||'',b:x.b})),{selected:sel,pick:async it=>{try{alSnap=await post('/api/alerts',it.b);renderCC()}catch{}}})});
 $('ccFull').onclick=()=>HOST?.openFull?.();
 $('ccSettings').onclick=()=>HOST?.openFull?.('settings');
-$('ccQuit').onclick=async()=>{if(await ask('bisu를 끌까요? 끄면 텔레그램과 예약 작업에도 답하지 못해요.'))HOST?.quit?.()};
+$('ccQuit').onclick=async()=>{if(await ask('덱 인턴을 끌까요? 끄면 텔레그램과 예약 작업에도 답하지 못해요.'))HOST?.quit?.()};
 const ccRefresh=()=>Promise.all([api('/api/alerts').then(a=>{alSnap=a}),api('/api/proactive').then(p=>{sug=p})]).then(()=>{renderCC();if(viewOn('connect'))renderAlerts()}).catch(()=>{});
 ccRefresh();HOST?.onShown?.(ccRefresh);addEventListener('focus',ccRefresh);
 setInterval(()=>{if(document.visibilityState==='visible'&&(PANEL||viewOn('chat')))ccRefresh()},5000);
@@ -1973,8 +1988,8 @@ function renderBots(){const el=$('botList');
  el.innerHTML=bots.map(b=>botRow(b)).join('');
  for(const v of el.querySelectorAll('[data-view]')){v.classList.toggle('on',v.dataset.view===curView);v.onclick=()=>show(v.dataset.view)}
  for(const b of el.querySelectorAll('[data-bot]'))b.onclick=()=>{if(b.dataset.bot===curBot){if(!PANEL&&curView==='chat')toggleDetail();else show('chat')}else{setBot(b.dataset.bot);show('chat')}};
- if($('listTitle'))$('listTitle').textContent=`${(curBotInfo()||{name:'bisu'}).name}의 대화`;
- const me=curBotInfo()||{name:'bisu',job:''};$('botHeadName').textContent=me.name;$('botHeadJob').textContent=me.job||'';$('botHeadAv').textContent=initial(me.name);
+ if($('listTitle'))$('listTitle').textContent=`${(curBotInfo()||{name:'덱 인턴'}).name}의 대화`;
+ const me=curBotInfo()||{name:'덱 인턴',job:''};$('botHeadName').textContent=me.name;$('botHeadJob').textContent=me.job||'';$('botHeadAv').textContent=initial(me.name);
  const pick=$('botPick');pick.innerHTML=bots.map(b=>`<option value="${esc(b.id)}">${esc(b.name)}</option>`).join('');pick.value=curBot;$('botPickRow').hidden=!PANEL||bots.length<2;
  for(const [hero,name] of [['memoryHero','기억'],['jobsHero','예약 작업']]){const h=$(hero)?.querySelector('.ht');if(h)h.textContent=name+(bots.length>1?` · ${me.name}`:'')}
  if(typeof detailOpen==='function'&&detailOpen()&&detailBot!==curBot)openBot();
@@ -2003,7 +2018,7 @@ $('botNew').onclick=async()=>{try{const {chat}=await post('/api/chats',{maker:tr
  setTimeout(()=>post(`/api/chats/${chat.id}/send`,{text:'새 봇을 만들고 싶어요.'}).catch(()=>{}),400)}catch(e){alert(e.message)}};
 function makerCard(){let el=$('makerCard');if(!cur?.maker){el?.remove();return}
  if(el)return;el=document.createElement('div');el.id='makerCard';el.className='makerCard m';
- el.innerHTML=`<span class="t">빠르게 만들기</span><div class="row"><input type="text" id="mkName" placeholder="봇 이름" maxlength="40" autocomplete="off"><input type="text" id="mkJob" placeholder="맡을 일 한 줄" maxlength="200" autocomplete="off"><button class="primary" type="button" id="mkGo">만들기</button></div><span class="note" style="margin:0" id="mkNote">아니면 아래에서 bisu의 질문에 답하면 같이 만들어요.</span>`;
+ el.innerHTML=`<span class="t">빠르게 만들기</span><div class="row"><input type="text" id="mkName" placeholder="봇 이름" maxlength="40" autocomplete="off"><input type="text" id="mkJob" placeholder="맡을 일 한 줄" maxlength="200" autocomplete="off"><button class="primary" type="button" id="mkGo">만들기</button></div><span class="note" style="margin:0" id="mkNote">아니면 아래에서 덱 인턴의 질문에 답하면 같이 만들어요.</span>`;
  wrap().prepend(el);
  el.querySelector('#mkGo').onclick=async()=>{const name=$('mkName').value.trim(),job=$('mkJob').value.trim();if(!name){$('mkName').focus();return}
   try{const r=await post('/api/bots',{name,job});bots=r.bots;$('mkNote').textContent=`“${r.bot.name}” 봇을 만들었어요. 왼쪽에서 골라 대화해 보세요.`;renderBots()}catch(e){$('mkNote').textContent=e.message}}}
@@ -2046,7 +2061,7 @@ $('teachBtn').onclick=async()=>{
  if(!await ask('보여 주고 가르치기를 시작할까요?\n\n지금부터 「멈추기」를 누를 때까지 앱 전환, 누른 버튼과 메뉴, 입력 칸에 넣은 글, 단축키를 단계로 기록해요. 비밀번호 칸과 보안 입력은 기록하지 않고, 기록은 이 맥에만 남아요. 다 하면 위쪽의 빨간 막대나 메뉴바에서 멈추기를 눌러 주세요.'))return;
  let r=null;try{r=await HOST.teachStart()}catch(e){$('routineNote').textContent=e.message;return}
  if(r?.need==='accessibility')return askSettings('손쉬운 사용 권한','누른 버튼과 메뉴의 이름을 읽으려면 손쉬운 사용 권한이 필요해요. 설정하러 가시겠어요?','accessibility',()=>{});
- if(r?.need==='input')return askSettings('입력 모니터링','클릭과 단축키를 기록하려면 입력 모니터링 권한이 필요해요. 켠 뒤에는 bisu를 다시 열어야 할 수 있어요. 설정하러 가시겠어요?','input',()=>{});
+ if(r?.need==='input')return askSettings('입력 모니터링','클릭과 단축키를 기록하려면 입력 모니터링 권한이 필요해요. 켠 뒤에는 덱 인턴을 다시 열어야 할 수 있어요. 설정하러 가시겠어요?','input',()=>{});
  teachUI({recording:true,steps:0})};
 async function teachFinish(){let steps=[];try{steps=(await HOST.teachStop()).steps||[]}catch{}
  teachUI({recording:false});
@@ -2078,7 +2093,7 @@ function gotoStatus(){const g=gstat(),c=g.pend[0]||g.busy[0];if(!c)return false;
 const SCREENS={chat:'대화',routines:'루틴',memory:'기억',jobs:'예약 작업',goals:'목표',history:'기록',connect:'연결',settings:'설정'};
 let palItems=[],palAt=0;
 function palette(open){const p=$('palette');if(open===false||!p.hidden&&open!==true){p.hidden=true;return}p.hidden=false;$('palQ').value='';palFill();$('palQ').focus()}
-function palFill(){const q=$('palQ').value.trim().toLowerCase(),hit=t=>!q||String(t).toLowerCase().includes(q),botName=id=>bots.find(b=>b.id===(id||'bisu'))?.name||'bisu';
+function palFill(){const q=$('palQ').value.trim().toLowerCase(),hit=t=>!q||String(t).toLowerCase().includes(q),botName=id=>bots.find(b=>b.id===(id||'bisu'))?.name||'덱 인턴';
  palItems=[
   ...[['새 대화','⌘N',()=>newChatHere()],['봇 만들기','',()=>$('botNew').click()],['설정','⌘,',()=>openSettings()]].filter(([t])=>hit(t)).map(([t,h,go])=>({k:'할 일',t,h,go})),
   ...bots.filter(b=>hit(b.name)||hit(b.job)).map(b=>({k:'봇',t:b.name,h:b.job||'',go:()=>{setBot(b.id);show('chat')}})),
@@ -2144,7 +2159,7 @@ function renderHome(){if(!PANEL)return;const g=gstat(),box=$('nowBox');
  for(const b of box.querySelectorAll('.nowRow'))b.onclick=()=>open(b.dataset.id);
  // Nothing to show: bisu's face and one line, so the start never looks empty or broken.
  $('panelStart').classList.toggle('quiet',!g.pend.length&&!busy.length&&!myChats().length);
- const me=curBotInfo()||{name:'bisu'};$('botPillName').textContent=me.name;$('botPillAv').textContent=initial(me.name);
+ const me=curBotInfo()||{name:'덱 인턴'};$('botPillName').textContent=me.name;$('botPillAv').textContent=initial(me.name);
  renderChips()}
 // Quick things to ask: this bot's routines first, then what is useful right now.
 async function renderChips(){const el=$('chips');if(!PANEL||cur){el.hidden=true;return}
@@ -2170,7 +2185,7 @@ $('appMore').onclick=async()=>{let sel=true;try{sel=HOST?await HOST.selectionEna
  const items=[{label:'새 대화',hint:'⌘N',go:newChatHere},...(HOST?.openFull?[{label:'전체 창에서 보기',hint:'',go:()=>HOST.openFull()}]:[]),
   ...(HOST?[{label:on(sel)+'선택한 텍스트 읽기',hint:'',go:()=>$('ccSel').click()}]:[]),{label:on(sug?.enabled)+'먼저 찾아오기',hint:'',go:()=>$('ccSug').click()},
   {label:'맥 깨어 있게',hint:alSnap?awakeText(alSnap).split(' · ')[0]:'',go:()=>$('ccAwake').dispatchEvent(new MouseEvent('click',{bubbles:true}))},
-  ...(HOST?.teachStart?[{label:'보여 주고 가르치기',hint:'',go:()=>$('teachBtn').click()}]:[]),{label:'설정',hint:'⌘,',go:openSettings},...(HOST?.quit?[{label:'bisu 종료',hint:'',go:()=>$('ccQuit').click()}]:[])];
+  ...(HOST?.teachStart?[{label:'보여 주고 가르치기',hint:'',go:()=>$('teachBtn').click()}]:[]),{label:'설정',hint:'⌘,',go:openSettings},...(HOST?.quit?[{label:'덱 인턴 종료',hint:'',go:()=>$('ccQuit').click()}]:[])];
  menu.open($('appMore'),items,{pick:it=>it.go()})};
 // The awake menu opens from the ⋯ menu's row too, anchored where the switch was.
 if(PANEL){$('panelStart').querySelector('.startWrap').insertBefore($('sug'),$('recent'))}
@@ -2190,8 +2205,8 @@ function renderEngine(){for(const r of document.querySelectorAll('input[name=eng
  for(const el of document.querySelectorAll('.promise'))el.textContent=askPromise();
  if(native){const k=$('key');k.textContent=prefs.glm?'key · Z.ai':'no Z.ai key';k.className='badge '+(prefs.glm?'ok':'bad')}else loadAccount();
  $('engineNote').textContent=prefs.engineForced?'셸에서 BISU_ENGINE으로 정해서 이번 실행은 이 엔진이에요. 여기서 고르려면 BISU_ENGINE 없이 다시 여세요.'
-  :native&&!prefs.glm?'Z.ai 키가 없어요. Dec Browser → 설정 → 자격 증명에 사이트 https://api.z.ai로 저장하고 bisu를 다시 여세요.':'새 대화부터 적용돼요. 이미 열린 대화는 시작할 때 엔진 그대로예요.'}
-const KEY_KO={'use-only':'Dec으로 연결됨 (사용 전용: bisu는 일회용 토큰만 받고 키는 못 봐요)',plain:'셸의 키 (평문)',none:'<span class="err">키가 없어요</span>'};
+  :native&&!prefs.glm?'Z.ai 키가 없어요. Dec Browser → 설정 → 자격 증명에 사이트 https://api.z.ai로 저장하고 덱 인턴을 다시 여세요.':'새 대화부터 적용돼요. 이미 열린 대화는 시작할 때 엔진 그대로예요.'}
+const KEY_KO={'use-only':'Dec으로 연결됨 (사용 전용: 덱 인턴은 일회용 토큰만 받고 키는 못 봐요)',plain:'셸의 키 (평문)',none:'<span class="err">키가 없어요</span>'};
 let calSnap=null;
 const CAL_KO={full:'허용됨',not_asked:'<span class="w">아직 안 물어봤어요</span>',denied:'<span class="err">거부됨</span>',restricted:'<span class="err">제한됨</span>',write_only:'<span class="w">추가만 허용 — 보려면 전체 접근이 필요해요</span>'};
 async function loadNative(){
@@ -2213,12 +2228,17 @@ function renderCal(c={}){calSnap=c;
  ask.hidden=!blocked&&!st.some(s=>s==='not_asked'||s==='write_only');
  ask.textContent=blocked?'시스템 설정에서 허용…':'접근 허용 요청';ask.dataset.blocked=blocked?(c.events==='denied'||c.events==='restricted'?'calendars':'reminders'):'';
  $('calNote').textContent='';heroes()}
-$('calAsk').onclick=async()=>{if($('calAsk').dataset.blocked){askSettings('캘린더 · 미리 알림',`bisu가 일정과 할 일을 보려면 시스템 설정에서 bisu를 켜야 해요. 설정하러 가시겠어요?`,$('calAsk').dataset.blocked,loadCalendar);return}
+$('calAsk').onclick=async()=>{if($('calAsk').dataset.blocked){askSettings('캘린더 · 미리 알림',`덱 인턴이 일정과 할 일을 보려면 시스템 설정에서 덱 인턴을 켜야 해요. 설정하러 가시겠어요?`,$('calAsk').dataset.blocked,loadCalendar);return}
  $('calAsk').disabled=true;$('calNote').textContent='macOS가 묻는 창에서 허용을 눌러 주세요…';
  try{renderCal(await post('/api/calendar/access',{}))}catch(e){$('calNote').textContent=e.message}finally{$('calAsk').disabled=false}};
 for(const r of document.querySelectorAll('input[name=approve]'))r.onchange=()=>post('/api/prefs',{approve:r.value}).then(p=>{prefs=p;renderEngine()}).catch(()=>{});
+// 글꼴: 덱 브라우저체 or the system face, saved with the other prefs; the last choice is also kept on this device so
+// the page opens in it before prefs arrive.
+function applyFont(v){v=v==='dec'?'dec':'system';document.body.classList.toggle('font-dec',v==='dec');for(const r of document.querySelectorAll('input[name=font]'))r.checked=r.value===v;try{localStorage.setItem('bisu.font',v)}catch{}}
+try{applyFont(localStorage.getItem('bisu.font'))}catch{}
+for(const r of document.querySelectorAll('input[name=font]'))r.onchange=()=>{applyFont(r.value);post('/api/prefs',{font:r.value}).then(p=>{prefs=p}).catch(()=>{})};
 for(const r of document.querySelectorAll('input[name=engine]'))r.onchange=()=>post('/api/prefs',{engine:r.value}).then(p=>{prefs=p;renderEngine()}).catch(e=>{$('engineNote').textContent=e.message});
-const prefsReady=api('/api/prefs').then(p=>{prefs=p;META=!!p.meta;document.body.classList.toggle('meta',META);$('metaOn').checked=META;renderEngine();if(!cur)chatUI()}).catch(()=>{});
+const prefsReady=api('/api/prefs').then(p=>{prefs=p;META=!!p.meta;applyFont(p.font);document.body.classList.toggle('meta',META);$('metaOn').checked=META;renderEngine();if(!cur)chatUI()}).catch(()=>{});
 if(PANEL){ensureCtxBar();HOST?.onContext?.(c=>{if(!sent)setCtx(c)});HOST?.context?.().then(c=>{if(!sent)setCtx(c)}).catch(()=>{})}
 loadAccount();loadRuns();loadSuggestions();loadBots();
 // Which conversation to show on opening. A chat the shell asked for opens as asked. Otherwise the

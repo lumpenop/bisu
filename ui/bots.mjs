@@ -49,6 +49,7 @@ function parse(id, text) {
       if (kv && FIELDS.includes(kv[1])) bot[kv[1]] = kv[1] === 'cwd' ? home(kv[2].trim()) || os.homedir() : kv[2].trim();
     }
     bot.instructions = m[2].trim();
+    if (bot.default && bot.name === 'bisu') bot.name = '덱 인턴';   // the old outward name, renamed 2026-10-29
   } else bot.instructions = String(text).trim();
   return bot;
 }
@@ -64,7 +65,7 @@ function write(bot) {
 export function ensureDefault() {
   const file = path.join(DIR, `${DEFAULT}.md`);
   if (fs.existsSync(file)) return;
-  write({ id: DEFAULT, name: 'bisu', job: '무엇이든 함께하는 비서', cwd: os.homedir(), tone: '', instructions: '' });
+  write({ id: DEFAULT, name: '덱 인턴', job: '무엇이든 함께하는 비서', cwd: os.homedir(), tone: '', instructions: '' });
 }
 
 export function list() {
