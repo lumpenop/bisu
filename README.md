@@ -168,6 +168,10 @@ Claude 데스크톱 앱 창을 봐. 작업이 멈춰 있으면(오류, "다시 �
 아직 일하는 중이면 [조용]. 작업이 끝났으면 결과 한 줄과 [끝].
 ```
 
+**Watching an X account** is a job of this kind; [docs/jobs/x-watch.md](docs/jobs/x-watch.md) has two to copy — one that reads the profile in your signed-in Dec browser (no key), one through the X API with `X_BEARER_TOKEN` by name.
+
+**Posting through Buffer.** [engine/buffer.mjs](engine/buffer.mjs) lists the channels of your Buffer account and makes a post with its own replies, with the key by name (`BUFFER_API_KEY=dec://BUFFER_API_KEY dec-secret run -- node engine/buffer.mjs channels`). A link never goes in the post: a body with a URL is refused, and `--link` becomes the first reply — the second item of the thread on X, Threads, Bluesky and Mastodon, the first comment on LinkedIn. `post` only prints what it would send until you add `--send`.
+
 **With the app closed.** The schedule runs inside the engine, so it stops when the menu bar app and `bisu ui` are both closed. `node ui/jobs.mjs agent install` adds a launchd agent (`~/Library/LaunchAgents/com.bisu.jobs.plist`) that runs `node ui/jobs.mjs tick` every minute: it takes the same scheduler lock, so while the app is open it does nothing at all, and when a job is due it starts again through `dec-secret` with the keys by name (`OPENROUTER_API_KEY=dec://OPENROUTER_API_KEY`), never their values. `agent status` and `agent remove` do what they say; output goes to `~/Library/Logs/bisu-jobs.log`. `node ui/jobs.mjs tick` is the same single look by hand.
 
 ## `bisu ui`
