@@ -464,9 +464,9 @@ const tools = {
 // The index is brought up to date in a child process before a search, so a conversation that ended
 // a minute ago is already findable; a refresh that fails still leaves the old index searchable.
 
-tools.session_search = async ({query, days, project, limit} = {}) => {
+tools.session_search = async ({query, days, project, bot, limit} = {}) => {
   const r = await sessions.refresh();
-  return sessions.searchText(query, {days: Number(days) || 0, project: project ? String(project) : '', limit: Math.max(1, Math.min(20, Number(limit) || 8))}, r?.error ? `index refresh failed: ${r.error}` : '');
+  return sessions.searchText(query, {days: Number(days) || 0, project: project ? String(project) : '', bot: bot ? String(bot).slice(0, 40) : '', limit: Math.max(1, Math.min(20, Number(limit) || 8))}, r?.error ? `index refresh failed: ${r.error}` : '');
 };
 tools.session_show = async ({id, offset, limit} = {}) => {
   await sessions.refresh();
@@ -476,11 +476,12 @@ tools.session_show = async ({id, offset, limit} = {}) => {
 const sessionDefinitions = [
   {
     name: 'session_search',
-    description: 'Full-text search over past bisu conversations (what the person and bisu said; not tool output). Use it when they refer to earlier work — "지난번에", "저번 주에 했던", "전에 얘기한" — or ask what was done or decided. Korean works with any word of two or more characters. Returns the best-matching sessions with the matching lines and an id for session_show.',
+    description: 'Full-text search over every past bisu conversation: every bot\'s chats, scheduled-job and goal runs, and what the workers bisu delegated to reported and did (what the person and bisu said; not raw tool output). Use it when they refer to earlier work — "지난번에", "저번 주에 했던", "전에 얘기한" — or ask what was done or decided, by bisu, another bot, a worker or a scheduled job. Korean works with any word of two or more characters. Returns the best-matching sessions with the matching lines and an id for session_show.',
     inputSchema: {type: 'object', properties: {
       query: {type: 'string', description: 'a few words that would appear in the conversation, e.g. "결제 테스트"'},
       days: {type: 'number', description: 'only sessions from the last N days'},
       project: {type: 'string', description: 'only sessions whose folder path contains this, e.g. "PawOV"'},
+      bot: {type: 'string', description: 'only one bot\'s conversations, by its id (the default bot is "bisu"); leave out to search every bot'},
       limit: {type: 'number', description: 'how many sessions to return (default 8, max 20)'},
     }, required: ['query']},
   },

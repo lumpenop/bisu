@@ -29,7 +29,9 @@ export function find(sessionId) {
 
 export class Transcript {
   constructor(sessionId, cwd) { this.sessionId = sessionId; this.cwd = cwd; this.file = fileFor(sessionId, cwd) }
-  write(rec) { fs.appendFileSync(this.file, JSON.stringify({...rec, sessionId: this.sessionId, cwd: this.cwd, timestamp: new Date().toISOString()}) + '\n') }
+  // Every line also names the bot that was talking (BISU_BOT), so session_search can say whose
+  // conversation a hit is and filter by it.
+  write(rec) { fs.appendFileSync(this.file, JSON.stringify({...rec, sessionId: this.sessionId, cwd: this.cwd, bot: process.env.BISU_BOT || undefined, timestamp: new Date().toISOString()}) + '\n') }
   user(text) { this.write({type: 'user', message: {role: 'user', content: text}}) }
   assistant({model, text, toolCalls, usage, id}) {
     const content = [];

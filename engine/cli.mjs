@@ -265,6 +265,19 @@ function runRound(w, text, parent) {
   });
 }
 
+// What a worker actually did, for the record bisu keeps (session_search reads it later): tool and
+// target, each once, in order. The arguments are clipped in the log, so the target is picked out by
+// name rather than parsed.
+function actionsLine(actions) {
+  const seen = new Set(), items = [];
+  for (const a of actions || []) {
+    const m = /"(path|command|pattern|query|url|worker)"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(a.args || '');
+    const item = `${a.name}${m ? ' ' + clipTo(m[2].replace(/\s+/g, ' '), 60) : ''}${a.ok ? '' : ' (실패)'}`;
+    if (seen.has(item)) continue;
+    seen.add(item); items.push(item);
+  }
+  return items.length ? clipTo(items.join(', '), 700) : '(도구를 쓰지 않음)';
+}
 function reportText(w) {
   const r = w.review, n = r == null ? '' : ` (${r.toFixed(2)})`;
   const review = r == null ? '' : r >= judge.REVIEW.short
@@ -272,7 +285,7 @@ function reportText(w) {
     : r >= judge.REVIEW.unsure
       ? `\n검토: 맡긴 일 중 일부가 빠졌을 수 있어${n}. 맡긴 일을 항목마다 결과와 맞춰 봐.`
       : `\n검토: 보고가 맡긴 일과 맞아 보여${n}. 그래도 결과를 한 번 직접 봐.`;
-  return `[${w.label} · 작업 ${w.id} · ${STATUS[w.status]}${w.rounds > 1 ? ` · ${w.rounds}번째` : ''}]\n맡긴 일: ${clipTo(w.brief, 500)}\n보고: ${clipTo(w.report, 3000)}${review}`;
+  return `[${w.label} · 작업 ${w.id} · ${STATUS[w.status]}${w.rounds > 1 ? ` · ${w.rounds}번째` : ''}]\n맡긴 일: ${clipTo(w.brief, 500)}\n한 일: ${actionsLine(w.actions)}\n보고: ${clipTo(w.report, 3000)}${review}`;
 }
 // When the last worker of a turn is done, bisu hears from all of them at once. One the person stopped
 // from the page needs no word from bisu, but it no longer holds the others back.
