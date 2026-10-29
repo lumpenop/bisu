@@ -10,7 +10,9 @@
   OPENAI_API_KEY=dec://OPENAI_API_KEY GLM_API_KEY=dec://GLM_API_KEY dec-secret run -- \
     node engine/eval/web-tasks.mjs --set holdout2 --modes dec,ego,aside --repeat 2
   ```
-  - `--set`: `speed`, `complex`, `hard`, `holdout`, `holdout2` 중 하나
+  - `--set`: `speed`, `complex`, `hard`, `holdout`, `holdout2`~`holdout6` 중 하나
+  - GLM 키가 z.ai에서 비면 OpenRouter로 바뀌어요(`OPENROUTER_API_KEY=dec://OPENROUTER_API_KEY`를 함께 넘기세요).
+  - 이 파일은 불러오기만 해도 측정이 시작돼요. 다른 스크립트에서 import하지 마세요.
   - `--modes`: 아래 네 방식 중 고를 수 있어요(쉼표로 여러 개)
   - 한 번 실행할 때마다 JSON 한 줄을 남겨요(과제, 방식, 초, 성공 여부, 답, GLM을 부른 횟수와 이유).
 - **방식 네 가지:**
@@ -23,6 +25,8 @@
   - scrapethissite, webscraper.io 테스트 쇼핑몰, the-internet
   - web-scraping.dev, scrapingcourse, Oxylabs 샌드박스
 - **원본 결과:** `engine/eval/results/<날짜>/*.jsonl`
+- **한 과제의 시간 내역:** `engine/eval/trace.mjs <dec|ego|aside> <주소> <목표…>`. 브라우저 호출마다 걸린 시간과 루프 기록을 보여 줘요. Dec이면 Dec 쪽 시간(읽기·안정 대기·클릭, 다시 읽기를 못 한 이유)도 함께 보여 줘요.
+- **Dec 링크 클릭 점검:** `engine/eval/dec-links.mjs [목록 주소]`. 목록의 항목 링크를 모델 없이 하나씩 눌러, Dec이 주소로 다시 연 것을 세요(10-29 수정 뒤 0/11).
 - **홀드아웃:** 처음 보는 사이트의 과제를 코드 수정 없이 재는 거예요. 한 번 재고 그 실패를 고치면 그 세트는 더 이상 홀드아웃이 아니라서, 그다음 평가는 새 세트로 해요.
 
 ## 1. 기본 속도 (books.toscrape, 2회씩)
