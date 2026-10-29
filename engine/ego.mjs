@@ -740,8 +740,12 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
         if (ticked.size === targets.length && WANTS_ANSWER(goal) && !(OPENS.test(goal) && (itemsOf.size ? itemsOf.size < targets.length : listy(view) && !itemPage)) && !eachTried.has(pageSig(view))) {
           eachTried.add(pageSig(view));
           // (this page's own note too: the notes passed along are of the pages before it)
-          const r = await review(goal, view, cands, [...hist, ...(seen.get(pageKey(view)) ? [`(이 페이지 메모 — ${seen.get(pageKey(view))})`] : [])], ins, null, 'done-without-answer', seen);
+          const ask = () => review(goal, view, cands, [...hist, ...(seen.get(pageKey(view)) ? [`(이 페이지 메모 — ${seen.get(pageKey(view))})`] : [])], ins, null, 'done-without-answer', seen);
+          let r = await ask();
           reviews.n++; reviews.why['each-done'] = (reviews.why['each-done'] || 0) + 1;
+          // (every item of a goal that opens one of each is open: the answer is in the notes now, and nothing later will
+          // see them all again — a look that came back empty is asked once more, not left to a pick from this page alone)
+          if (!r.answer && OPENS.test(goal) && itemsOf.size === targets.length) { r = await ask(); reviews.n++; reviews.why['each-done'] += 1 }
           log({review: 'each-done', answer: r.answer ? String(r.answer).slice(0, 160) : null, notes: seenText(seen, pageKey(view)).slice(0, 400)});
           if (r.answer) { answer = r.answer; answerAt = pageKey(view); status = 'done'; break }
         }
