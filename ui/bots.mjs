@@ -27,6 +27,7 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as memory from './memory.mjs';
+import * as profile from './profile.mjs';
 
 const CONFIG = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu');
 export const DIR = path.join(CONFIG, 'bots');
@@ -171,8 +172,12 @@ async function main(argv) {
     const base = fs.readFileSync(argv[1], 'utf8').trimEnd();
     const id = validId(process.env.BISU_BOT) ? process.env.BISU_BOT : DEFAULT;
     const mine = block(id, { maker: process.env.BISU_BOT_MAKER === '1' });
-    const mem = memory.inBot(id, () => memory.digest(Number(argv[2]) || memory.BUDGET));
-    return process.stdout.write([base, mine, mem].filter(Boolean).join('\n\n') + '\n');
+    // The person is the same person for every bot. Their block comes last, after memory: it wins over
+    // memory, and the end of the prompt is what the model weighs most. Memories about what the profile
+    // now says (their name, their tone) are left out, so the two cannot disagree.
+    const me = profile.get();
+    const mem = memory.inBot(id, () => memory.digest(Number(argv[2]) || memory.BUDGET, profile.supersedes(me)));
+    return process.stdout.write([base, mine, mem, profile.block(me)].filter(Boolean).join('\n\n') + '\n');
   }
   for (const b of list()) process.stdout.write(`${b.id}${b.default ? ' (default)' : ''}  ${b.name}  — ${b.job}  [${short(b.cwd)}]\n`);
 }

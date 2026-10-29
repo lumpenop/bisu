@@ -112,8 +112,8 @@ export function list() {
 const MIN_CUT = 120; // a cut shorter than this says nothing worth the characters
 const TRUNC = '…(cut to fit)';
 
-function compose(budget) {
-  const all = list();
+function compose(budget, skip) {
+  const all = list().filter(e => !(skip && e.key && skip.has(e.key)));
   const blocks = [], cut = [];
   let used = 0;
   for (const e of all) {
@@ -143,8 +143,10 @@ function brief(titles, cap = 240) {
   return names + (shown < titles.length ? ', …' : '');
 }
 
-export function digest(budget = BUDGET) {
-  const { blocks, cut, used } = compose(budget);
+// `skip`: topic keys to leave out — the ones the person's profile (ui/profile.mjs) now answers for, so
+// an old memory about the same thing cannot contradict it.
+export function digest(budget = BUDGET, skip = null) {
+  const { blocks, cut, used } = compose(budget, skip);
   if (!blocks.length) {
     // Nothing fitted at all, which with a sane budget means every memory is huge; still say that memory
     // exists, because saying nothing is the one answer that is certainly wrong.

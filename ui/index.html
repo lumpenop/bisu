@@ -162,7 +162,8 @@ body.panel .sugBody{max-height:4.4em}body.panel .sugBody.job{max-height:11em}
 .goal .ask{margin-top:10px;padding:10px 12px;border-radius:var(--r);background:var(--chip)}.goal .ask .q{font-size:13px;margin-bottom:8px;white-space:pre-wrap}.goal .ask .r{display:flex;gap:8px}.goal .ask input{flex:1}
 .goal details{margin-top:8px;font-size:13px}.goal details pre{white-space:pre-wrap;word-break:break-word;font:inherit;margin:6px 0 0}.goal .log{list-style:none;padding:0;margin:6px 0 0;color:var(--muted)}
 .mem button{padding:3px 9px;font-size:12px}
-#memForm .row{display:flex;flex-direction:column;gap:8px}
+#memForm .row,#profForm .row{display:flex;flex-direction:column;gap:8px}
+#profForm .pf{display:grid;grid-template-columns:84px 1fr;gap:8px;align-items:center;font-size:13px;color:var(--muted)}#profForm .pf.top{align-items:start}#profForm .pf span{padding-top:0}#profForm .pf.top span{padding-top:8px}#profForm input,#profForm textarea{width:100%;box-sizing:border-box}
 #memCands{border:1px solid var(--warn);border-radius:8px;padding:10px 12px;margin:10px 0 0;font-size:13px}
 #memCands .c{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-top:6px}
 #memCands .c b{font-weight:600}
@@ -801,6 +802,19 @@ body.panel #panelStart .row{margin-top:2px}
 
 <div class="view" id="memoryView"><div class="page"><div>
  <div class="hero" id="memoryHero"><div class="hx"><h1 class="ht">기억</h1><p class="hs" id="memorySum">…</p></div><div class="actions" style="margin:0"><button id="memTidy" hidden title="같은 주제는 하나로 합치고, 이제 안 맞는 건 지우자고 제안해요. 승인하기 전엔 아무것도 바뀌지 않아요.">정리</button><button class="primary" id="memNew">기억 추가</button></div></div>
+ <section id="profSec">
+  <h2>나에 대해</h2>
+  <p class="note">직접 적어 두는 곳이에요. 어느 봇과 어떤 대화를 하든 늘 들어가고, 기억 한도나 정리와 상관없이 그대로 전달돼요. 대화 중에 "나 ○○이야"라고 하면 덱 인턴이 여기에 적기도 해요.</p>
+  <form id="profForm">
+   <div class="row">
+    <label class="pf"><span>부르는 이름</span><input type="text" id="profName" placeholder="예: 승원, 대장" spellcheck="false" autocomplete="off"></label>
+    <label class="pf"><span>말투</span><input type="text" id="profTone" placeholder="예: 반말, 존댓말, 내 말투 따라" spellcheck="false" autocomplete="off"></label>
+    <label class="pf"><span>하는 일</span><input type="text" id="profJob" placeholder="예: 1인 개발자, 앱 여러 개 운영" spellcheck="false" autocomplete="off"></label>
+    <label class="pf top"><span>그 밖에</span><textarea id="profAbout" rows="4" placeholder="알아둘 것. 예: 서울, 아침형, 결정은 짧게 물어보는 걸 좋아함, 영어 답변 싫어함"></textarea></label>
+   </div>
+   <div class="actions"><button class="primary" id="profSave">저장</button><span class="note" id="profNote" style="margin:0"></span></div>
+  </form>
+ </section>
  <section>
   <h2>덱 인턴이 기억하는 것</h2>
   <div class="kv" id="memInfo"><div class="k">폴더</div><div class="mono">…</div></div>
@@ -1455,8 +1469,8 @@ function renderOnboard(){
  card.querySelector('#obSkip').onclick=done;
  card.querySelector('#obGo').onclick=async()=>{const b=card.querySelector('#obGo');b.disabled=true;
   try{const name=card.querySelector('#obName').value.trim(),tone=card.querySelector('input[name=obTone]:checked').value,every=card.querySelector('#obEvery').value;
-   if(name)await post('/api/memory',{title:'부르는 이름',key:'user-name',body:`나를 부를 때는 "${name}"이라고 불러.`});
-   if(tone!=='follow')await post('/api/memory',{title:'말투',key:'reply-style',body:tone==='casual'?'항상 반말로 답해.':'항상 존댓말로 답해.'});
+   // Who they are goes in the profile (기억 탭 → 나에 대해), which every bot gets in every conversation.
+   if(name||tone!=='follow')await post('/api/profile',{...(name?{name}:{}),...(tone!=='follow'?{tone:tone==='casual'?'반말':'존댓말'}:{})});
    await post('/api/proactive',every==='off'?{enabled:false}:{enabled:true,intervalHours:Number(every)});
    await done();loadSuggestions()}
   catch(e){card.querySelector('#obErr').textContent=e.message;b.disabled=false}}}
@@ -1520,8 +1534,16 @@ $('save').onclick=async e=>{e.preventDefault();const body={};for(const i of $('r
 // ---- memory ----
 // The files in ~/.config/bisu/memory, which launch.zsh folds into every new run's system prompt.
 // Editing here is the same thing as editing the markdown, so the two never disagree.
-let mem=null,memEdit=null;
-async function loadMemory(){try{mem=await api('/api/memory'+mb());renderMemory()}catch(e){$('memList').innerHTML=`<p class="note err">${esc(e.message)}</p>`}}
+let mem=null,memEdit=null,prof=null;
+async function loadMemory(){try{mem=await api('/api/memory'+mb());renderMemory()}catch(e){$('memList').innerHTML=`<p class="note err">${esc(e.message)}</p>`}
+ try{prof=await api('/api/profile');renderProfile()}catch(e){$('profNote').innerHTML=`<span class="err">${esc(e.message)}</span>`}}
+// Who the person is, apart from memory: one profile for every bot, always sent, never cut.
+function renderProfile(){const p=prof;if(!p)return;
+ $('profName').value=p.name||'';$('profTone').value=p.tone||'';$('profJob').value=p.job||'';$('profAbout').value=p.about||'';
+ const n=(p.block||'').length;$('profNote').textContent=n?`${n.toLocaleString()}자 · 모든 대화에 늘 전달돼요${p.updated?` · ${whenText(p.updated)}`:''}`:'아직 비어 있어요.'}
+$('profForm').onsubmit=async e=>{e.preventDefault();const b=$('profSave');b.disabled=true;
+ try{prof=await post('/api/profile',{name:$('profName').value,tone:$('profTone').value,job:$('profJob').value,about:$('profAbout').value});renderProfile();$('profNote').textContent='저장했어요. 다음 대화부터 적용돼요. · '+$('profNote').textContent}
+ catch(er){$('profNote').innerHTML=`<span class="err">${esc(er.message)}</span>`}finally{b.disabled=false}};
 const whenText=ts=>new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+new Date(ts).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
 function renderMemory(){
  const m=mem;if(!m)return;

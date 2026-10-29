@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import * as memory from '../ui/memory.mjs';
+import * as profile from '../ui/profile.mjs';
 import {DIR as JOBS_DIR, parseCron, nextRun} from '../ui/jobs.mjs';
 import * as goals from '../ui/goals.mjs';
 import * as bots from '../ui/bots.mjs';
@@ -53,6 +54,24 @@ export const BISU_TOOLS = {
         }
         return err(`Could not save: ${e.message}`);
       }
+    },
+  },
+  // What is simply true of the person, kept apart from memory (ui/profile.mjs): one file for every bot,
+  // in every conversation, never cut or compacted. Like remember, it does not ask: it is what they said.
+  profile_set: {
+    description: 'Save a fact about the person themselves, when they tell you or ask you to: how to address them (name), how they want to be spoken to (tone, e.g. 반말), what they do (job), or a line about them — where they live, family, pets, habits (add: appended to the free text about them; about replaces that whole text). It is in every conversation of every bot, apart from memory. Everything else — projects, decisions, corrections — is remember.',
+    parameters: {type: 'object', properties: {
+      name: {type: 'string', description: 'what to call them'},
+      tone: {type: 'string', description: 'how they want to be spoken to'},
+      job: {type: 'string', description: 'what they do'},
+      add: {type: 'string', description: 'one line about them, in their language, added to the free text'},
+      about: {type: 'string', description: 'the whole free text about them, replacing what is there'},
+    }},
+    kind: 'memory',
+    run(ctx, patch = {}) {
+      if (!Object.values(patch).some(v => v !== undefined && v !== '')) return err('Give name, tone, job, add or about.');
+      try { const p = profile.set(patch); return ok(`Saved. About the person now: ${profile.summary(p)}. It applies from the next conversation.`) }
+      catch (e) { return err(`Could not save: ${e.message}`) }
     },
   },
   forget: {

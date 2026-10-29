@@ -576,7 +576,7 @@ const cuDefinitions = [
 // The same tools bisu's own engine has (engine/calendar.mjs, engine/bisu-tools.mjs, engine/browser.mjs), so a
 // Claude Code chat can do what a native one does. Short ids (e1, r2, h1) live in this process, which lasts as long
 // as the chat. calendar_delete and browser_approve are not pre-allowed by launch.zsh: they go through the approval card.
-const ASSISTANT = {...CALENDAR_TOOLS, web_search: BISU_TOOLS.web_search, goal_add: BISU_TOOLS.goal_add, goal_list: BISU_TOOLS.goal_list, goal_update: BISU_TOOLS.goal_update, bot_create: BISU_TOOLS.bot_create, bot_update: BISU_TOOLS.bot_update, routine_save: BISU_TOOLS.routine_save, bot_handoff: BISU_TOOLS.bot_handoff, memory_compact: BISU_TOOLS.memory_compact, ...(isDefaultBot() ? {bot_memory: BISU_TOOLS.bot_memory} : {}), ...BROWSER_TOOLS};
+const ASSISTANT = {...CALENDAR_TOOLS, web_search: BISU_TOOLS.web_search, goal_add: BISU_TOOLS.goal_add, goal_list: BISU_TOOLS.goal_list, goal_update: BISU_TOOLS.goal_update, bot_create: BISU_TOOLS.bot_create, bot_update: BISU_TOOLS.bot_update, routine_save: BISU_TOOLS.routine_save, bot_handoff: BISU_TOOLS.bot_handoff, memory_compact: BISU_TOOLS.memory_compact, profile_set: BISU_TOOLS.profile_set, ...(isDefaultBot() ? {bot_memory: BISU_TOOLS.bot_memory} : {}), ...BROWSER_TOOLS};
 const failed = new WeakSet();
 for (const [name, t] of Object.entries(ASSISTANT)) tools[name] = async args => {
   const r = await t.run({cwd: process.cwd()}, args);

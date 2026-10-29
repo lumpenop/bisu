@@ -13,6 +13,7 @@
 //  * Every API call carries a per-launch token that only this page knows; other hosts and cross-site origins are refused.
 import http from 'node:http';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {execFile,spawn} from 'node:child_process';import {randomBytes,randomUUID} from 'node:crypto';import {fileURLToPath} from 'node:url';
 import * as memory from './memory.mjs';
+import * as profile from './profile.mjs';
 import * as R from '../engine/routes.mjs';
 import * as bots from './bots.mjs';
 import * as routines from './routines.mjs';
@@ -483,6 +484,10 @@ const server=http.createServer(async(req,res)=>{
   // immediate for the next chat or bisu run; a chat that is already running keeps what it started with.
   // Each bot's own memory: ?bot= (or bot in the body) picks the folder; none is the default bot's.
   const memBot=bots.validId(url.searchParams.get('bot'))?url.searchParams.get('bot'):bots.DEFAULT;
+  // Who the person is: one profile for every bot, apart from memory (ui/profile.mjs).
+  const profileOut=pr=>({...pr,block:profile.block(pr),limit:profile.LIMIT});
+  if(m==='GET'&&p==='/api/profile')return json(res,200,profileOut(profile.get()));
+  if(m==='POST'&&p==='/api/profile'){const b=await body(req);return json(res,200,profileOut(profile.set(b)))}
   if(m==='GET'&&p==='/api/memory')return json(res,200,memory.inBot(memBot,()=>memory.snapshot()));
   if(m==='POST'&&p==='/api/memory'){const b=await body(req);return json(res,200,memory.inBot(bots.validId(b.bot)?b.bot:memBot,()=>memory.save(b)))}
   // What already looks like the memory being written. Returns candidates and never writes, so the page
