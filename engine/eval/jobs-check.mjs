@@ -31,8 +31,8 @@ fs.mkdirSync(path.join(dir, 'watch'));
 fs.writeFileSync(path.join(jobs.DIR, 'w.md'), `---\nname: "@someone 새 글"\nevery: 30m\ncwd: ${path.join(dir, 'watch')}\ntools: edit\n---\n새 글 있으면 알려줘\n`);
 let s = jobs.snapshot();
 assert.equal(s.jobs[0].name, '@someone 새 글');
-// Under 「알아서 하기」 (the default) an edit job runs without a one-time approval; under 「전부 물어보기」 it waits for
-// one, and the approval is for the file as it is; under 「전부 허용」 nothing waits.
+// Under 「알아서 하기」 (the default) and 「전부 허용」 a job runs without a one-time approval; under 「전부 물어보기」 an edit
+// or full job waits for one, and the approval is for the file as it is.
 assert.equal(jobs.approveLevel(), 'auto');
 assert.equal(s.jobs[0].needsApproval, false);
 process.env.DEC_INTERN_APPROVE = 'ask';
@@ -44,7 +44,7 @@ assert.ok(s.jobs[0].nextAt > Date.now());
 fs.writeFileSync(path.join(jobs.DIR, 'f.md'), `---\nevery: 30m\ncwd: ${path.join(dir, 'watch')}\ntools: full\n---\nx\n`);
 assert.equal(jobs.snapshot().jobs.find(j => j.slug === 'f').needsApproval, true);
 process.env.DEC_INTERN_APPROVE = 'auto';
-assert.equal(jobs.snapshot().jobs.find(j => j.slug === 'f').needsApproval, true);   // a full job still asks once
+assert.equal(jobs.snapshot().jobs.find(j => j.slug === 'f').needsApproval, false);   // the default asks for no job
 process.env.DEC_INTERN_APPROVE = 'all';
 assert.equal(jobs.snapshot().jobs.find(j => j.slug === 'f').needsApproval, false);
 process.env.DEC_INTERN_APPROVE = 'ask';

@@ -1033,9 +1033,9 @@ body:not(.panel) .chathead:not([hidden])~#msgs{border-top:1px solid color-mix(in
   </div>
   <p class="note" id="engineNote">새 대화부터 적용돼요. 이미 열린 대화는 시작할 때 엔진 그대로예요.</p>
   <div id="approveRow" style="margin-top:12px"><div class="note" style="margin:0 0 6px">확인 방식 — 두 엔진 다, 예약 작업도</div>
-   <label class="sw"><input type="radio" name="approve" value="auto"> <b>알아서 하기</b> (기본) — 평소엔 스스로 승인하고, 지우기·보내기·결제·설치·폴더 밖 수정처럼 되돌리기 어려운 것만 물어요. 명령을 실행하는 예약 작업은 처음 한 번 승인해요</label>
+   <label class="sw"><input type="radio" name="approve" value="auto"> <b>알아서 하기</b> (기본) — 평소엔 스스로 승인하고, 지우기·보내기·결제·설치·폴더 밖 수정처럼 되돌리기 어려운 것만 물어요. 예약 작업은 승인 없이 돌아요</label>
    <label class="sw" style="margin-top:4px"><input type="radio" name="approve" value="all"> <b>모든 사항 승인</b> — 아무것도 묻지 않아요. 되돌리기 어려운 것도, 예약 작업도 바로 해요</label>
-   <label class="sw" style="margin-top:4px"><input type="radio" name="approve" value="ask"> <b>전부 물어보기</b> — 파일을 고치거나 명령을 실행할 때마다 물어요</label>
+   <label class="sw" style="margin-top:4px"><input type="radio" name="approve" value="ask"> <b>전부 물어보기</b> — 파일을 고치거나 명령을 실행할 때마다 묻고, 파일을 고치거나 명령을 실행하는 예약 작업은 처음 한 번 승인해요</label>
    <p class="note" style="margin:6px 0 0">물어볼 때 카드에서 「이번만」, 「이 대화에선 다 허용」, 「앞으로 전부 허용」을 고를 수 있어요.</p></div>
  </section>
  <section id="orRoles">

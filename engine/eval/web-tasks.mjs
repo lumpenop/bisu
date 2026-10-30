@@ -1,6 +1,6 @@
 // Web tasks on public practice sites, the same in every browser dec-intern can drive: success and time.
 //   OPENAI_API_KEY=dec://OPENAI_API_KEY GLM_API_KEY=dec://GLM_API_KEY dec-secret run -- \
-//     node engine/eval/web-tasks.mjs [--set speed|complex|hard|holdout|holdout2|holdout3|holdout4|holdout5|holdout6] [--modes dec,ego,aside,decfast] [--repeat 2] [--only O1,O2] [--budget 20]
+//     node engine/eval/web-tasks.mjs [--set speed|complex|hard|holdout|holdout2|holdout3|holdout4|holdout5|holdout6|holdout7] [--modes dec,ego,aside,decfast] [--repeat 2] [--only O1,O2] [--budget 20]
 // dec = dec-intern drives dec (dec's fast mode must be off); decfast = dec's own fast mode (must be on); ego, aside = dec-intern
 // drives them. The sites are made for scraping practice (books.toscrape, quotes.toscrape, scrapethissite,
 // webscraper.io, the-internet, web-scraping.dev, scrapingcourse, Oxylabs' sandbox), so repeating is fine.
@@ -83,6 +83,18 @@ const SETS = {
     {key: 'S1', url: B, goal: 'Fantasy, Science Fiction, Horror 세 카테고리에서 각각 가장 싼 책을 열어 재고 수량을 확인하고, 재고가 가장 많은 책의 제목과 재고 수량을 알려줘', ok: a => /The Project/i.test(claim(a, MOST_RE)) && /\b15\b/.test(claim(a, MOST_RE))},
     {key: 'S2', url: Q, goal: 'truth, simile, reading 세 태그 페이지에서 각각 첫 번째 명언을 쓴 사람의 소개 페이지를 열어, 세 사람 중 가장 늦게 태어난 사람의 이름과 생년월일을 알려줘', ok: a => /Steve Martin/i.test(claim(a, LATE_RE)) && /1945/.test(a)},
     {key: 'S3', url: WS + 'products', goal: 'products 목록의 모든 쪽을 확인해서, 전체에서 가장 비싼 상품 3개의 이름과 가격을 비싼 순서대로 알려줘', ok: a => /Hiking Boots/i.test(a) && /89[.,]99/.test(a) && /Leather Sneakers/i.test(a) && /79[.,]99/.test(a) && /High Heel/i.test(a) && /59[.,]99/.test(a) && a.indexOf('89') < a.indexOf('79') && a.indexOf('79') < a.indexOf('59')},
+  ],
+  // Seventh held-out set (2026-10-30), sites nobody has tuned on: a WooCommerce shop (scrapeme), pages drawn by script
+  // (qaplayground's shuffled table, GreenKart's React list), a button inside an iframe inside an iframe, and an AJAX
+  // answer that takes 15 s to come (uitestingplayground, http).
+  holdout7: [
+    {key: 'V1', url: 'https://scrapeme.live/shop/', goal: 'Pikachu 상품을 찾아 상세 페이지를 열고, 가격과 SKU, 재고 수량을 알려줘', ok: a => /37(\.00)?/.test(a) && /\b1333\b/.test(a) && /\b254\b/.test(a)},
+    {key: 'V2', url: 'https://scrapeme.live/shop/', goal: '상품 목록 3쪽에서 가장 비싼 상품을 열어서 이름, 가격, SKU를 알려줘', ok: a => /Clefable/i.test(a) && /188/.test(a) && /\b9786\b/.test(a)},
+    {key: 'V3', url: 'https://qaplayground.dev/apps/dynamic-table/', goal: '표에서 Doctor Strange의 실제 이름(real name)을 알려줘', ok: a => /Stephen\s+Vincent\s+Strange/i.test(a)},
+    {key: 'V4', url: 'https://qaplayground.dev/apps/iframe/', goal: '안쪽 iframe에 있는 Click Me 버튼을 누르고, 누른 뒤 나타나는 문구를 알려줘', ok: a => /Button\s+Clicked/i.test(a)},
+    {key: 'V5', url: 'http://uitestingplayground.com/ajax', goal: 'AJAX 요청을 보내는 버튼을 누르고, 잠시 뒤 나타나는 문구를 그대로 알려줘', ok: a => /Data loaded with AJAX get request/i.test(a)},
+    {key: 'V6', url: 'https://rahulshettyacademy.com/seleniumPractise/', goal: '상품 검색창에 @q 를 입력해서 나오는 상품들의 이름과 가격을 모두 알려줘', inputs: {q: 'ber'}, ok: a => /Cucumber/i.test(a) && /\b48\b/.test(a) && /Raspberry/i.test(a) && /\b160\b/.test(a) && /Strawberry/i.test(a) && /\b180\b/.test(a)},
+    {key: 'V7', url: 'https://rahulshettyacademy.com/seleniumPractise/', goal: '전체 상품 중 가장 비싼 상품의 이름과 가격을 알려줘', ok: a => /Nuts Mixture/i.test(a) && /\b950\b/.test(a)},
   ],
 };
 const set = arg('set', 'holdout3'), only = arg('only', ''), T = (SETS[set] || []).filter(t => !only || only.split(',').includes(t.key));
