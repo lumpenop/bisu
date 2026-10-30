@@ -83,11 +83,11 @@ export const ROUTES = {
   chat: 'Conversation or a question that general knowledge answers, with no files, commands, web or memory needed. Not a question about the people, numbers or contents in the person\'s own files.',
   work: 'Needs to look at or change files in the working folder, or run commands there (reading, searching, editing, testing) — including questions about data the folder holds (how many users, which orders, what a setting is).',
   build: 'A sizeable piece of building: a new feature, many files, a whole page, a refactor across the project.',
-  past: 'Refers to earlier conversations or earlier work with dec-intern ("지난번에", "전에 얘기한", "그때"), or asks what another bot, a worker dec-intern handed work to, or a scheduled job did or found ("리서치 봇이 뭐 찾았어?", "어젯밤 예약 작업 어떻게 됐어?").',
+  past: 'Refers to earlier conversations or earlier work with Dec Intern ("지난번에", "전에 얘기한", "그때"), or asks what another bot, a worker dec-intern handed work to, or a scheduled job did or found ("리서치 봇이 뭐 찾았어?", "어젯밤 예약 작업 어떻게 됐어?").',
   mac: "Operate the Mac outside the working folder: other apps, the screen, clipboard, windows, files elsewhere.",
   schedule: 'Asks the assistant itself to do a task later or repeatedly — check, summarize, report or run something then ("매일 아침 8시에 뉴스 요약해줘", "내일 9시에 빌드 돌려줘"). Not an event in their calendar, and not just reminding them of something.',
   calendar: 'Their calendar or reminders: what is on (today, this week), adding, moving or cancelling an event or appointment, finding a free time, their to-do lists, or being reminded of something at a time ("3시에 알려줘", "잊지 않게").',
-  remember: 'Asks dec-intern to remember a fact or preference for future conversations, or to forget one.',
+  remember: 'Asks Dec Intern to remember a fact or preference for future conversations, or to forget one.',
   web: 'Needs current information from the internet (news, prices, docs, anything recent).',
 };
 // folder: what the assistant has open (top-level names), so "서울 사는 사용자는 몇 명이야?" reads as a

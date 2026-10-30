@@ -13,7 +13,7 @@ LINE="source \"$DIR/dec-intern.zsh\""
 
 # A ~/.zshrc that still sources bisu.zsh (the name until 2026-10-30) is pointed at the new file.
 if grep -qF "$DIR/bisu.zsh" "$RC" 2>/dev/null; then
-  sed -i '' -e "s#^# bisu — Claude Code on OpenRouter#\# dec-intern — Claude Code on OpenRouter#" -e "s#source \"$DIR/bisu.zsh\"#$LINE#" "$RC"
+  sed -i '' -e "s|^# bisu — Claude Code on OpenRouter|# dec-intern — Claude Code on OpenRouter|" -e "s|source \"$DIR/bisu.zsh\"|$LINE|" "$RC"
   echo "updated $RC: bisu.zsh → dec-intern.zsh — open a new terminal and run: dec-intern"
 elif grep -qF "$LINE" "$RC" 2>/dev/null; then
   echo "already installed in $RC"

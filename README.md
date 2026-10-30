@@ -10,7 +10,7 @@ Run **Claude Code** as a cheap autonomous sidekick on **OpenRouter** models (Dee
 
 ```
 claude   → your Anthropic subscription (design, hard problems)
-Dec Intern     → OpenRouter pay-per-token (grunt work, assistant duty)
+dec-intern → OpenRouter pay-per-token (grunt work, assistant duty)
 ```
 
 ## Install
@@ -27,7 +27,7 @@ Requires [Claude Code](https://code.claude.com) and zsh.
 
 ```sh
 export OPENROUTER_API_KEY=sk-or-...   # in ~/.zshrc
-Dec Intern
+dec-intern
 ```
 
 **Use-only (recommended):** if your machine has a secret manager exposing the `dec-secret` CLI, save the key there with the site `https://openrouter.ai` (any name). `dec-intern` detects it automatically and the real key is **never placed in any process environment** — the CLI only ever sees a one-time token, and a signed helper injects the key when the request leaves for openrouter.ai. Nothing to leak in logs, env dumps, or the model's own context.
@@ -43,8 +43,8 @@ The main model is the assistant: it talks with you, decides, delegates and check
 | Large publishing (pages, many components) and large refactors | `publisher`, `refactorer` | `qwen/qwen3.8-max-0902` | `DEC_INTERN_CODE_MODEL` |
 
 ```sh
-Dec Intern                                          # all defaults
-DEC_INTERN_DEV_MODEL=qwen/qwen3-coder-next Dec Intern     # any OpenRouter slug per role
+dec-intern                                          # all defaults
+DEC_INTERN_DEV_MODEL=qwen/qwen3-coder-next dec-intern     # any OpenRouter slug per role
 ```
 
 `DEC_INTERN_FAST_MODEL`, the old name of `DEC_INTERN_DEV_MODEL`, still works. Each handoff starts a subagent (about 2 s before it acts) and the assistant then checks the result, so a delegated task takes a few seconds longer than doing it in one model.

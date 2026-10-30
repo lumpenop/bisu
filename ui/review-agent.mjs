@@ -38,8 +38,8 @@ export function readTranscript(file) {
 }
 
 export function reason(p) {
-  if (p >= judge.REVIEW.short) return '검토(dec-intern): 보고와 실제로 한 일을 맞춰 보면, 맡긴 일 중 빠졌거나 실패했거나 확인되지 않은 게 있어 보여. 맡긴 일을 항목마다 다시 확인해서 빠진 건 마저 하고, 할 수 없는 건 왜 못 했는지 보고에 적어. 그다음 다시 짧게 보고해.';
-  if (p >= judge.REVIEW.unsure) return '검토(dec-intern): 맡긴 일 중 일부가 빠졌을 수 있어. 항목마다 결과를 직접 확인하고, 보고에 항목별로 됐는지 적어서 다시 짧게 보고해.';
+  if (p >= judge.REVIEW.short) return '검토(덱 인턴): 보고와 실제로 한 일을 맞춰 보면, 맡긴 일 중 빠졌거나 실패했거나 확인되지 않은 게 있어 보여. 맡긴 일을 항목마다 다시 확인해서 빠진 건 마저 하고, 할 수 없는 건 왜 못 했는지 보고에 적어. 그다음 다시 짧게 보고해.';
+  if (p >= judge.REVIEW.unsure) return '검토(덱 인턴): 맡긴 일 중 일부가 빠졌을 수 있어. 항목마다 결과를 직접 확인하고, 보고에 항목별로 됐는지 적어서 다시 짧게 보고해.';
   return null;
 }
 

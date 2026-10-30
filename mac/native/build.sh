@@ -1,7 +1,7 @@
 #!/bin/sh
-# Builds ~/Applications/Dec Intern.app from mac/native/dec-intern.swift — the same bundle folder and identifier the
-# Electron build used, so the Accessibility grant, the login item and everything else macOS knows
-# about "dec-intern" keep pointing at it.
+# Builds ~/Applications/Dec Intern.app from mac/native/dec-intern.swift. The bundle folder and identifier
+# (local.dec.intern) are what macOS keys the Accessibility grant, the login item and the folder permissions to:
+# keep them, or every grant is asked for again.
 #
 # The engine and the page are copied in unchanged: this replaces the shell, not the assistant.
 set -eu

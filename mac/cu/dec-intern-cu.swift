@@ -241,7 +241,7 @@ func windowInfo() -> [String: Any] {
 
 func requireTrust() {
   guard AXIsProcessTrusted() else {
-    fail("Accessibility permission is missing: allow dec-intern in System Settings → Privacy & Security → Accessibility, then try again.")
+    fail("Accessibility permission is missing: allow 덱 인턴 (Dec Intern) in System Settings → Privacy & Security → Accessibility, then try again.")
   }
 }
 

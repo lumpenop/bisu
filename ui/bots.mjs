@@ -116,6 +116,7 @@ export function create({ name, job = '', instructions = '', cwd = '~', tone = ''
   return get(bot.id);
 }
 export function update(id, patch = {}) {
+  id = norm(id);
   const bot = get(id);
   if (!bot) throw Object.assign(Error(`봇이 없어요: ${id}`), { status: 404 });
   const next = { ...bot };
@@ -128,6 +129,7 @@ export function update(id, patch = {}) {
 // Deleting a bot removes its file. Its memory folder stays where it is (bots/<id>/memory) and its jobs
 // and conversations fall back to the default bot, so nothing the person wrote disappears with it.
 export function remove(id) {
+  id = norm(id);
   if (id === DEFAULT) throw Object.assign(Error('기본 봇은 지울 수 없어요.'), { status: 400 });
   const bot = get(id);
   if (!bot) throw Object.assign(Error(`봇이 없어요: ${id}`), { status: 404 });

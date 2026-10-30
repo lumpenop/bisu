@@ -34,7 +34,7 @@ const ALL = process.env.DEC_INTERN_SEARCH_ALL === '1';
 const OPENROUTER_MODEL = /"model":"[a-z0-9][a-z0-9._-]*\//; // provider/model: only OpenRouter names look like this
 const MAX_TEXT = 6000;     // per message in the index
 const SHOW_BUDGET = 16000; // per session_show answer
-const WHO = ALL ? 'assistant' : 'dec-intern'; // who answered, in the printed lines
+const WHO = ALL ? 'assistant' : '덱 인턴'; // who answered, in the printed lines
 
 // ---- the database ----
 
@@ -108,7 +108,7 @@ function parse(text) {
       const ctx = t.indexOf('<dec-intern-context>');
       if (ctx > 0) t = t.slice(0, ctx).trim();
       // A worker's report reaches dec-intern as a message too (engine/cli.mjs): the team's, not the person's.
-      const team = t.startsWith('(dec-intern: 맡긴 일');
+      const team = /^\((덱 인턴|dec-intern|bisu): 맡긴 일/.test(t);   // the prefix as each version of the assistant wrote it
       if (!team) { if (!s.prompt) s.prompt = t.slice(0, 300); s.turns++ }
       streaming = null;
       messages.push({session: s.id, ts, role: team ? 'team' : 'user', text: t.slice(0, MAX_TEXT)});

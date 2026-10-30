@@ -164,7 +164,7 @@ async function compactIfLong() {
   const size = JSON.stringify(messages).length;
   if (size < COMPACT_AT || messages.length < 6) return;
   const text = messages.map(m => m.role === 'tool' ? `[도구 결과] ${String(m.content).slice(0, 800)}`
-    : m.role === 'assistant' ? `dec-intern: ${m.content || ''}${(m.tool_calls || []).map(t => `\n[도구 ${t.function.name}] ${t.function.arguments.slice(0, 300)}`).join('')}`
+    : m.role === 'assistant' ? `덱 인턴: ${m.content || ''}${(m.tool_calls || []).map(t => `\n[도구 ${t.function.name}] ${t.function.arguments.slice(0, 300)}`).join('')}`
     : `사람: ${m.content}`).join('\n\n').slice(-180_000);
   try {
     const r = await complete({model: 'glm-5.3-flash', thinking: false, maxTokens: 2000, messages: [
@@ -228,7 +228,7 @@ const askTool = w => ({
       const stop = () => { clearTimeout(timer); resolve(null) };
       ctx.signal?.addEventListener('abort', stop, {once: true});
       w.answer = a => { clearTimeout(timer); ctx.signal?.removeEventListener('abort', stop); resolve(a) };
-      wake(`(dec-intern: ${w.label}(작업 ${w.id})이 묻고 있어: "${question}"\n맡긴 일: ${clipTo(w.brief, 400)}\n\n알면 answer_worker로 바로 답해. 사람만 정할 수 있는 거면 사람에게 물어보고, 답을 들으면 answer_worker로 전해. 담당은 답을 기다리며 멈춰 있어.)`);
+      wake(`(덱 인턴: ${w.label}(작업 ${w.id})이 묻고 있어: "${question}"\n맡긴 일: ${clipTo(w.brief, 400)}\n\n알면 answer_worker로 바로 답해. 사람만 정할 수 있는 거면 사람에게 물어보고, 답을 들으면 answer_worker로 전해. 담당은 답을 기다리며 멈춰 있어.)`);
     });
     w.answer = null; w.question = null;
     if (ctx.signal?.aborted) return {text: 'Stopped.', error: true};
@@ -312,7 +312,7 @@ function report(w) {
   const due = group.filter(x => !x.reported);
   if (!due.length) return;
   for (const x of due) x.reported = true;
-  wake(`(dec-intern: 맡긴 일${due.length > 1 ? ` ${due.length}개가` : '이'} 끝났어. 사람에게 알리기 전에 확인해.\n\n${due.map(reportText).join('\n\n')}\n\n할 일: 결과를 직접 확인하고(파일을 읽거나 실행해 봐), 맡긴 일과 다르거나 모자라면 send_back으로 그 담당에게 되돌려 보내. 다 됐으면 사람에게 무엇이 됐는지 짧게 알려줘.)`);
+  wake(`(덱 인턴: 맡긴 일${due.length > 1 ? ` ${due.length}개가` : '이'} 끝났어. 사람에게 알리기 전에 확인해.\n\n${due.map(reportText).join('\n\n')}\n\n할 일: 결과를 직접 확인하고(파일을 읽거나 실행해 봐), 맡긴 일과 다르거나 모자라면 send_back으로 그 담당에게 되돌려 보내. 다 됐으면 사람에게 무엇이 됐는지 짧게 알려줘.)`);
 }
 
 const workerArg = {type: 'string', description: 'The task id from delegate.'};
@@ -400,7 +400,7 @@ async function turn(text, {team = false} = {}) {
   // What kind of request this is decides who answers (GLM-5.3, or Flash for work in the folder;
   // GLM-5.3 again when the work is several jobs, to split it), whether tools are offered, and a
   // one-line hint.
-  const recent = messages.slice(-6).filter(m => m.role !== 'tool').map(m => `${m.role === 'user' ? '사람' : 'dec-intern'}: ${String(m.content || '').slice(0, 200)}`).join('\n');
+  const recent = messages.slice(-6).filter(m => m.role !== 'tool').map(m => `${m.role === 'user' ? '사람' : '덱 인턴'}: ${String(m.content || '').slice(0, 200)}`).join('\n');
   const r = team ? null : await judge.route(text, {recent, folder: judge.folderSummary(cwd)});
   const {model, tools, thinking, effort, hint, split} = team ? {model: MODEL, tools: wanted, thinking: true, effort: judge.EFFORT, hint: TEAM_HINT} : judge.planTurn(mentioned(r), {model: MODEL, workModel: WORK_MODEL, tools: wanted});
   turnEffort = effort;

@@ -64,7 +64,7 @@ function decReport(r, goal) {
       : r.waitingFor === 'control' ? 'the person took over the tab in dec.'
       : 'dec is still working on it.';
     return ok(lines(`Not finished yet (dec run ${r.runId}): ${what}`,
-      'Tell the person in a sentence what is needed, if anything. dec carries on by itself once they do, and dec-intern tells this chat the result when the run ends; browser_check shows where it is.'));
+      'Tell the person in a sentence what is needed, if anything. dec carries on by itself once they do, and Dec Intern tells this chat the result when the run ends; browser_check shows where it is.'));
   }
   return ok(lines(`Done in dec (${r.status}, ${r.steps ?? '?'} steps).`, r.answer && `Answer: ${r.answer}`, r.url && `Ended on: ${r.url}`,
     r.reason && /failed|stopped/.test(r.status) && `Why: ${r.reason}`,
@@ -77,7 +77,7 @@ async function viaDecDirect({goal, url, inputs, budget}) {
   const r = await ego.drive({goal, url, inputs, driver, budget});
   state.decTab = driver.tabId;
   state.last = {via: 'dec', tabId: driver.tabId};
-  const head = `${r.status === 'done' ? 'Done' : 'Stopped'} in dec, dec-intern driving (${r.status}, ${r.steps} steps, ${(r.ms / 1000).toFixed(0)} s). Page: ${r.title || ''} — ${r.url || ''}`;
+  const head = `${r.status === 'done' ? 'Done' : 'Stopped'} in dec, Dec Intern driving (${r.status}, ${r.steps} steps, ${(r.ms / 1000).toFixed(0)} s). Page: ${r.title || ''} — ${r.url || ''}`;
   const did = r.history.length ? `What was done: ${r.history.slice(-8).join(' → ')}` : '';
   if (r.status === 'needs-approval') {
     const id = `h${++heldNo}`;
