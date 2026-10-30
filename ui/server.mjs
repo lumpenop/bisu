@@ -31,6 +31,7 @@ import {releaseSchedule,holdsSchedule} from './lock.mjs';
 import {PRICES as GLM_PRICES} from '../engine/glm.mjs';
 import {eventKit} from '../engine/calendar.mjs';
 import * as dec from '../engine/dec.mjs';
+import * as keys from '../engine/keys.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.dirname(here);
 const PORT=Number(process.env.BISU_UI_PORT||7878);
@@ -226,6 +227,8 @@ function restoreChats(){
 
 // ---- chats ----
 // One Claude Code process per chat. Events are kept (capped) so a reloaded page can replay the conversation.
+// `dec-secret` by name for every chat's shell (engine/keys.mjs): the person's keys, use-only.
+keys.ensurePath();
 const chats=new Map();
 restoreChats();
 const MAX_EVENTS=3000;
@@ -466,6 +469,8 @@ const server=http.createServer(async(req,res)=>{
   if(m==='GET'&&p==='/api/models')return json(res,200,{models:await models()});
   if(m==='GET'&&p==='/api/account')return json(res,200,await account());
   if(m==='GET'&&p==='/api/native')return json(res,200,await nativeInfo());
+  // Where dec and bisu stand: the browser (installed, running, its agent connection, the switches) and the keys in it.
+  if(m==='GET'&&p==='/api/dec'){const [h,k]=await Promise.all([dec.health(),keys.status()]);return json(res,200,{...h,...k})}
   if(m==='GET'&&p==='/api/routes')return json(res,200,routeInfo());
   if(m==='POST'&&p==='/api/routes'){const b=await body(req);
    if(b.auto!==undefined&&typeof b.auto!=='boolean')return json(res,400,{error:'auto'});

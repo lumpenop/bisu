@@ -3,6 +3,8 @@
 # Runs in a fresh zsh: drops every inherited CLAUDE*/ANTHROPIC* variable (a host app's login token would otherwise win over
 # ours), then points Claude Code at OpenRouter, or at the dec-secret proxy for it (OPENROUTER_BASE_URL + one-time token).
 for v in ${(k)parameters[(I)(CLAUDE|ANTHROPIC)*]}; do unset $v; done
+# `dec-secret` by name for Bash (the person's keys, use-only; engine/keys.mjs): Dec installs it in ~/.local/bin.
+[ -x "$HOME/.local/bin/dec-secret" ] && [[ ":$PATH:" != *":$HOME/.local/bin:"* ]] && export PATH="$HOME/.local/bin:$PATH"
 export ANTHROPIC_BASE_URL="${OPENROUTER_BASE_URL:-https://openrouter.ai}/api"
 export ANTHROPIC_AUTH_TOKEN="$OPENROUTER_API_KEY"
 export ANTHROPIC_API_KEY=""
@@ -74,7 +76,7 @@ JSON
   extra+=(--mcp-config "$mcp" --strict-mcp-config)
   # The calendar, web search, goals and the browser too, except deleting from the calendar and pressing a step the
   # browser held (paying, sending, booking), which ask.
-  allowed="mcp__bisu__session_search,mcp__bisu__session_show,mcp__bisu__web_search,mcp__bisu__calendar_list,mcp__bisu__calendar_add,mcp__bisu__calendar_change,mcp__bisu__reminders_list,mcp__bisu__reminder_add,mcp__bisu__reminder_change,mcp__bisu__goal_add,mcp__bisu__goal_list,mcp__bisu__goal_update,mcp__bisu__browser_task,mcp__bisu__browser_check,mcp__bisu__browser_read,mcp__bisu__browser_show,mcp__bisu__bot_handoff,mcp__bisu__bot_memory,mcp__bisu__profile_set,mcp__bisu__claude_sessions"
+  allowed="mcp__bisu__session_search,mcp__bisu__session_show,mcp__bisu__web_search,mcp__bisu__calendar_list,mcp__bisu__calendar_add,mcp__bisu__calendar_change,mcp__bisu__reminders_list,mcp__bisu__reminder_add,mcp__bisu__reminder_change,mcp__bisu__goal_add,mcp__bisu__goal_list,mcp__bisu__goal_update,mcp__bisu__browser_task,mcp__bisu__browser_check,mcp__bisu__browser_read,mcp__bisu__browser_tabs,mcp__bisu__browser_routine,mcp__bisu__browser_show,mcp__bisu__secret_list,mcp__bisu__bot_handoff,mcp__bisu__bot_memory,mcp__bisu__profile_set,mcp__bisu__claude_sessions"
   # A goal session (ui/goals.mjs) may only look, add events and reminders, and write its own goal.
   [ -n "$BISU_GOAL_ID" ] && allowed="mcp__bisu__session_search,mcp__bisu__session_show,mcp__bisu__web_search,mcp__bisu__calendar_list,mcp__bisu__calendar_add,mcp__bisu__reminders_list,mcp__bisu__reminder_add,mcp__bisu__reminder_change,mcp__bisu__goal_update"
   [ "${BISU_CU:-1}" != "0" ] && allowed+=",mcp__bisu__cu_look,mcp__bisu__cu_state,mcp__bisu__cu_decide,mcp__bisu__cu_click,mcp__bisu__cu_type,mcp__bisu__cu_key,mcp__bisu__cu_scroll,mcp__bisu__cu_wait,mcp__bisu__cu_screenshot,mcp__bisu__cu_ground"

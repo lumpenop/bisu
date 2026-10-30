@@ -52,6 +52,10 @@ const lines = (...xs) => xs.filter(Boolean).join('\n');
 
 async function viaDec({goal, url, inputs, lookOnly}) {
   const r = await dec.task({goal, url, inputs: Object.entries(inputs).slice(0, 8).map(([name, value]) => ({name, value})), readOnly: lookOnly, dir: SHOTS});
+  return decReport(r, goal);
+}
+// What a run dec did by itself (a task in fast mode, one of its routines) comes to: done, or still needing someone.
+function decReport(r, goal) {
   state.last = {via: 'dec', tabId: r.tabId, runId: r.runId};
   if (r.waitingFor || r.status === 'running') {
     remember({...r, goal});
@@ -206,16 +210,41 @@ export const BROWSER_TOOLS = {
       } catch (e) { return err(`Could not read that run: ${e.code || e.message}`) }
     },
   },
-  browser_read: {
-    description: 'Read the text of the page the last web task ended on, to answer from it or check details (paged: offset in characters).',
-    parameters: {type: 'object', properties: {offset: {type: 'integer'}}},
+  browser_tabs: {
+    description: 'The tabs open in the person\'s browser (dec) that you may read or work in, the one in front marked active. For "지금 보고 있는 페이지", "열린 탭 중에", or to pick a tab for browser_read. Private tabs are never listed.',
+    parameters: {type: 'object', properties: {}},
     kind: 'net',
-    async run(ctx, {offset = 0}) {
-      const l = state.last;
-      if (!l) return err('No web task in this chat yet: run browser_task first.');
+    async run() {
+      try {
+        const st = await dec.up({start: false});
+        if (!st) return err('dec is not open (or its agent connection is off): no tabs to list. browser_show opens it.');
+        const {tabs, hidden} = await dec.tabs();
+        if (!tabs.length) return ok(`No tab dec lets you use${hidden ? ` (${hidden} open tab${hidden > 1 ? 's are' : ' is'} private or has AI control off)` : ''}.`);
+        return ok(lines(`${tabs.length} tab${tabs.length > 1 ? 's' : ''}${hidden ? ` (${hidden} more not for agents)` : ''}:`,
+          ...tabs.map(t => `- ${t.active ? '[active] ' : ''}${(t.title || '(no title)').slice(0, 100)} — ${t.url || ''}${t.loading ? ' (loading)' : ''}  id ${t.id}`),
+          'browser_read with tab "active", an id, or a word from a title reads one.'));
+      } catch (e) { return err(`dec failed: ${e.code || e.message}`) }
+    },
+  },
+  browser_read: {
+    description: 'Read a page\'s text: the page the last web task ended on (default), or any open tab in dec — tab "active" for the one the person is looking at ("이 페이지 요약해줘", "지금 보는 거"), a tab id from browser_tabs, or a word from a tab\'s title or address. Paged: offset in characters. Local and private pages are refused.',
+    parameters: {type: 'object', properties: {offset: {type: 'integer'}, tab: {type: 'string', description: '"active", a tab id, or a word from the tab\'s title or address; omitted: the last web task\'s page'}}},
+    kind: 'net',
+    async run(ctx, {offset = 0, tab}) {
+      let l = state.last;
+      if (tab !== undefined && tab !== null && String(tab).trim()) {
+        try {
+          const st = await dec.up({start: false});
+          if (!st) return err('dec is not open (or its agent connection is off): no tab to read. browser_show opens it.');
+          const t = await dec.findTab(String(tab));
+          if (!t) return err(`No open tab matches "${tab}" (browser_tabs lists them).`);
+          l = state.last = {via: 'dec', tabId: t.id};
+        } catch (e) { return err(`dec failed: ${e.code || e.message}`) }
+      }
+      if (!l) return err('No web task in this chat yet: run browser_task first, or give tab ("active", or from browser_tabs).');
       try {
         if (l.via === 'dec') {
-          const r = await dec.api('POST', `/v1/tabs/${l.tabId}/content`, {limit: 8000, offset: Math.max(0, offset | 0)});
+          const r = await dec.read(l.tabId, {limit: 8000, offset});
           // The page's links too, once (first page): a post's own address is only there (X: the date links to /status/<id>).
           const seen = new Set(), links = offset ? [] : (Array.isArray(r.links) ? r.links : [])
             .filter(k => k?.href && !seen.has(k.href) && seen.add(k.href)).slice(0, 80).map(k => `${String(k.text || '').replace(/\s+/g, ' ').trim().slice(0, 60)} → ${k.href}`);
@@ -224,7 +253,43 @@ export const BROWSER_TOOLS = {
         const r = await ego.read({space: l.space, offset});
         const next = offset + r.text.length;
         return ok(lines(`${r.title} — ${r.url}`, r.text, next < r.total && `(more: offset ${next} of ${r.total})`));
-      } catch (e) { return err(`Could not read the page: ${e.code || e.message}`) }
+      } catch (e) {
+        const why = e.code === 'CONTENT_LOCAL_DENIED' ? 'dec does not hand agents pages on this Mac (localhost)' : e.code === 'SENSITIVE_DOCUMENT' ? 'dec keeps that page from agents (a password or payment page)' : e.code === 'TAB_NOT_AVAILABLE' ? 'that tab is gone' : e.code || e.message;
+        return err(`Could not read the page: ${why}`);
+      }
+    },
+  },
+  browser_routine: {
+    description: 'The routines the person saved in dec (recipes for web tasks they do again: a name, a goal, pages, sometimes {params}), and running one by name — "루틴 돌려줘", "덱에 저장해 둔 그거". Without name: the list. With name: runs it (in their browser, like browser_task; steps that commit wait for them). args fills its {params}.',
+    parameters: {type: 'object', properties: {name: {type: 'string', description: 'the routine to run, by its name (omit to list)'}, args: {type: 'object', description: 'values for its {params}, by name', additionalProperties: {type: 'string'}}}},
+    kind: 'net',
+    async run(ctx, {name, args = {}}) {
+      let st, tab, list;
+      try {
+        st = await dec.up();
+        if (!st) return err('dec is not available (not installed, or its agent connection is off).');
+        tab = await dec.findTab('active');
+        if (!tab) return err('dec has no tab an agent may use: ask the person to open one in dec (any page), then try again.');
+        list = await dec.routines(tab.id);
+      } catch (e) { return err(`dec failed: ${e.code || e.message}`) }
+      const line = r => `- ${r.name}: ${r.goal}${Array.isArray(r.params) && r.params.length ? ` (params: ${r.params.map(p => `{${p}}`).join(', ')})` : ''}${Array.isArray(r.urls) && r.urls.length ? ` — ${r.urls[0]}` : ''}${r.schedule ? ' · scheduled in dec' : ''}`;
+      if (!String(name || '').trim()) return ok(list.length ? lines(`${list.length} routine${list.length > 1 ? 's' : ''} in dec:`, ...list.map(line), 'browser_routine with name runs one.') : 'No routines saved in dec yet (the person saves one in dec after a task, or asks you to with routine_save for your own).');
+      const q = String(name).trim().toLowerCase();
+      const r = list.find(x => x.name.toLowerCase() === q) ?? list.find(x => x.name.toLowerCase().includes(q) || q.includes(x.name.toLowerCase()));
+      if (!r) return err(list.length ? lines(`No routine called "${name}" in dec. There are:`, ...list.map(line)) : `No routines saved in dec, so none called "${name}".`);
+      const vals = Object.fromEntries(Object.entries(args || {}).filter(([k, v]) => /^[a-z][a-z0-9_]{0,23}$/.test(k) && v != null).slice(0, 4).map(([k, v]) => [k, String(v).slice(0, 500)]));
+      const missing = (Array.isArray(r.params) ? r.params : []).filter(p => !(p in vals));
+      if (missing.length) return err(`"${r.name}" needs ${missing.map(p => `{${p}}`).join(', ')}: ask the person for ${missing.length > 1 ? 'them' : 'it'} and call again with args.`);
+      try {
+        // With its fast mode on, dec runs the routine itself; without it, bisu drives the recipe as a task of its own.
+        if (st.fastMode?.enabled) return decReport(await dec.runRoutine(r.id, tab.id, vals, {dir: SHOTS}), r.goal);
+        const fill = t => String(t || '').replace(/\{([a-z][a-z0-9_]{0,23})\}/g, (m, k) => k in vals ? vals[k] : m);
+        const goal = [fill(r.goal), r.body && String(r.body).trim()].filter(Boolean).join('\n');
+        const url = fill((Array.isArray(r.urls) && r.urls[0]) || tab.url || '');
+        if (!/^https?:\/\//i.test(url)) return err(`"${r.name}" has no page to start on and the active tab has none: give the person's browser a page first.`);
+        const out = await viaDecDirect({goal, url, inputs: vals});
+        return {...out, text: `Routine "${r.name}" — ${out.text}`};
+      } catch (e) { return err(`dec failed: ${e.code || e.message}`) }
     },
   },
 };

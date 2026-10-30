@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
+import * as keys from './keys.mjs';
 
 const MAX_OUT = 30_000;
 // What a command the model runs may see of the engine's environment. Not the API tokens or base
@@ -187,16 +188,24 @@ export const TOOLS = {
     },
   },
   run_command: {
-    description: 'Run a shell command (zsh) in the working folder and return its output and exit code. For builds, tests, git, and scripts. Avoid interactive commands.',
+    description: 'Run a shell command (zsh) in the working folder and return its output and exit code. For builds, tests, git, and scripts. Avoid interactive commands. When the command needs one of the person\'s API keys (a project that reads OPENAI_API_KEY, a call to an API with their key), name the keys in `keys` (secret_list shows them): the command then gets a one-time token in that variable and the service\'s address in <PREFIX>_BASE_URL (OPENAI_BASE_URL …), and must send its requests to that base url. Never read, print or ask for a key.',
     parameters: {type: 'object', properties: {
       command: {type: 'string'},
       timeout_seconds: {type: 'integer', description: 'default 120, at most 600'},
+      keys: {type: 'array', items: {type: 'string'}, description: 'variable names of keys saved in Dec to provide, e.g. ["OPENAI_API_KEY"]'},
     }, required: ['command']},
     kind: 'exec',
-    run(ctx, {command, timeout_seconds = 120}) {
+    async run(ctx, {command, timeout_seconds = 120, keys: names = []}) {
+      // The keys stay in Dec: dec-secret starts the command with a one-time token per key (engine/keys.mjs).
+      let file = '/bin/zsh', args = ['-c', String(command)], withKeys = {};
+      if (Array.isArray(names) && names.length) {
+        const w = await keys.wrap(command, names.map(String));
+        if (w.error) return err(w.error);
+        ({file, args, env: withKeys} = w);
+      }
       return new Promise(resolve => {
-        const env = commandEnv({...ctx.env, PAGER: 'cat', GIT_PAGER: 'cat', TERM: 'dumb', NO_COLOR: '1'});
-        const child = spawn('/bin/zsh', ['-c', String(command)], {cwd: ctx.cwd, env, stdio: ['ignore', 'pipe', 'pipe']});
+        const env = commandEnv({...ctx.env, PAGER: 'cat', GIT_PAGER: 'cat', TERM: 'dumb', NO_COLOR: '1', ...withKeys});
+        const child = spawn(file, args, {cwd: ctx.cwd, env, stdio: ['ignore', 'pipe', 'pipe']});
         let out = '';
         const add = d => { out += d; if (out.length > MAX_OUT * 4) out = out.slice(-MAX_OUT * 2) };
         child.stdout.on('data', add); child.stderr.on('data', add);
@@ -208,7 +217,8 @@ export const TOOLS = {
         child.on('error', e => { clearTimeout(t); resolve(err(`Could not run: ${e.message}`)) });
         child.on('close', code => {
           clearTimeout(t); ctx.signal?.removeEventListener('abort', stop);
-          const body = clip(out.trimEnd()) || '(no output)';
+          // A one-time token printed by the command (`env`, a debug line) is worth nothing after it, and still not the model's.
+          const body = clip(out.trimEnd().replace(/dec-use-only-[A-Za-z0-9._-]+/g, '[dec token]')) || '(no output)';
           resolve(killed ? err(`${killed}\n${body}`) : code ? {text: `exit ${code}\n${body}`, error: true} : ok(body));
         });
       });

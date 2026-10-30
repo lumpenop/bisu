@@ -14,6 +14,7 @@ import readline from 'node:readline';
 import {randomUUID} from 'node:crypto';
 import {runTurn} from './loop.mjs';
 import {TOOLS, insideCwd, resolvePath} from './tools.mjs';
+import * as keys from './keys.mjs';
 import {Transcript, loadMessages} from './store.mjs';
 import * as judge from './judge.mjs';
 import {BISU_TOOLS, isDefaultBot} from './bisu-tools.mjs';
@@ -23,6 +24,9 @@ import {BROWSER_TOOLS} from './browser.mjs';
 import {WATCH_TOOLS} from '../ui/claude-watch.mjs';
 import {connect as connectMcp} from './mcp.mjs';
 import {complete} from './glm.mjs';
+
+// `dec-secret` by name for the commands the model runs (engine/keys.mjs): the person's keys, use-only.
+keys.ensurePath();
 
 // ---- arguments ----
 const argv = process.argv.slice(2);
@@ -55,8 +59,8 @@ let wanted = flags.tools && flags.tools !== 'default'
   : [...Object.keys(TOOLS), 'web_search', 'delegate'];
 // A run that may change files (a chat, an edit job) also gets memory, scheduling, bots and the calendar;
 // one that only reads (a read job, like a morning summary) may still read the calendar and the Claude app's sessions.
-if (wanted.includes('write_file')) wanted.push('remember', 'forget', 'profile_set', 'memory_compact', ...(isDefaultBot() ? ['bot_memory'] : []), 'schedule_job', 'goal_add', 'goal_list', 'bot_create', 'bot_update', 'routine_save', 'bot_handoff', ...Object.keys(CALENDAR_TOOLS), ...Object.keys(BROWSER_TOOLS), 'claude_sessions');
-else if (wanted.includes('read_file')) wanted.push('calendar_list', 'reminders_list', 'claude_sessions');
+if (wanted.includes('write_file')) wanted.push('remember', 'forget', 'profile_set', 'memory_compact', ...(isDefaultBot() ? ['bot_memory'] : []), 'schedule_job', 'goal_add', 'goal_list', 'bot_create', 'bot_update', 'routine_save', 'bot_handoff', 'secret_list', ...Object.keys(CALENDAR_TOOLS), ...Object.keys(BROWSER_TOOLS), 'claude_sessions');
+else if (wanted.includes('read_file')) wanted.push('calendar_list', 'reminders_list', 'secret_list', 'claude_sessions');
 const preAllowed = new Set(String(flags.allowedTools || flags['allowed-tools'] || '').split(',').map(t => NAME[t.trim()] || plain(t)).filter(Boolean));
 
 // Two GLM models with separate jobs, and Decisions choosing between them for each message

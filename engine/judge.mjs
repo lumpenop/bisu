@@ -175,7 +175,7 @@ export function folderSummary(dir, max = 40) {
 export const RISK_CLEAR = 0.15;
 export async function risk(tool, args, {cwd, userText = '', existing = null} = {}) {
   // What a write replaces matters more than what it writes: say so plainly.
-  const what = tool === 'run_command' ? `Shell command (zsh) in ${cwd}:\n${clip(args.command, 1500)}`
+  const what = tool === 'run_command' ? `Shell command (zsh) in ${cwd}${Array.isArray(args.keys) && args.keys.length ? ` (with the person's API key${args.keys.length > 1 ? 's' : ''} ${args.keys.join(', ')} from Dec as one-time tokens; the command can use them, not read them)` : ''}:\n${clip(args.command, 1500)}`
     : tool === 'write_file' ? `REPLACE the existing file ${args.path} (in ${cwd}${existing != null ? `, currently ${existing} lines` : ''}) with new contents:\n${clip(args.content, 800)}`
     : tool === 'edit_file' ? `Edit the existing file ${args.path} (in ${cwd}): replace exactly this text${args.replace_all ? ' (every occurrence)' : ' (once)'}:\n${clip(args.old_string, 500)}\nwith:\n${clip(args.new_string, 500)}\n(The rest of the file is unchanged.)`
     : `${tool} ${clip(JSON.stringify(args), 800)} (working folder ${cwd})`;

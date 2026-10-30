@@ -170,7 +170,11 @@ export async function task({goal, url, inputs = [], readOnly = false, budget, wa
       await sleep(2000);
     }
   }
-  const runId = started.runId ?? started.id;
+  return follow(started.runId ?? started.id, tabId, {waitMs, dir, onWait});
+}
+
+// A run dec is doing (a task, or a routine of its own): waited for the same way, reported in the same shape.
+export async function follow(runId, tabId, {waitMs = 240_000, dir, onWait} = {}) {
   let v = {runId};
   for (const end = Date.now() + waitMs; Date.now() < end;) {
     try { await api('POST', `/v1/runs/${runId}/wait`, {timeoutSec: 20}, {timeoutMs: 30_000}) } catch { await sleep(500) }
@@ -179,6 +183,57 @@ export async function task({goal, url, inputs = [], readOnly = false, budget, wa
     if (v.waitingFor) { onWait?.(v); return {...v, tabId} }
   }
   return {...v, tabId, status: 'running'};
+}
+
+// ---- the person's tabs, routines, and where dec stands ----
+
+// The open tabs an agent may use (AI control on for them, which is dec's default; private tabs never), the active one
+// marked. `hidden` counts the rest.
+export async function tabs() {
+  const r = await api('GET', '/v1/tabs');
+  return {tabs: tabsOf(r), hidden: Number(r?.hiddenTabs) || 0};
+}
+// A tab by its id, by "active" (the one in front), or by words in its title or address.
+export async function findTab(q) {
+  const {tabs: ts} = await tabs();
+  const s = String(q || '').trim().toLowerCase();
+  if (!s || ['active', 'current', '현재', '현재 탭', '지금', '앞'].includes(s)) return ts.find(t => t.active) ?? ts[0] ?? null;
+  return ts.find(t => t.id === q) ?? ts.find(t => (t.title || '').toLowerCase().includes(s) || (t.url || '').toLowerCase().includes(s)) ?? null;
+}
+// The text of a tab, paged (dec reads at most 20,000 characters a call; local and sensitive pages are refused).
+export async function read(tabId, {offset = 0, limit = 8000} = {}) {
+  return api('POST', `/v1/tabs/${tabId}/content`, {limit: Math.min(20_000, Math.max(1, limit | 0)), offset: Math.max(0, offset | 0)});
+}
+
+// The routines the person saved in dec (recipes for web tasks: a goal, pages, {params}), for the tab's profile.
+export async function routines(tabId) {
+  const r = await api('POST', '/v1/routines/query', {tabId});
+  return Array.isArray(r?.items) ? r.items : [];
+}
+// dec runs one of its routines itself (fast mode); the run is followed like a task.
+export async function runRoutine(id, tabId, args = {}, opts = {}) {
+  const r = await api('POST', `/v1/routines/${id}/run`, {tabId, ...(Object.keys(args).length ? {args} : {})});
+  return follow(r.runId ?? r.id, tabId, opts);
+}
+
+// Where dec and bisu stand with each other, for the settings page: installed, running, its agent connection, bisu's
+// pairing, and the switches that decide what bisu may do there. Never starts dec.
+export async function health() {
+  const app = decApp();
+  const out = {installed: !!app, app, running: await running(), endpoint: 'closed', paired: fs.existsSync(PAIR_FILE), agent: 'bisu', error: null,
+    fastMode: null, credentials: null, tabControl: null, taskCache: null, tabs: null, hidden: null};
+  if (process.env.BISU_DEC === '0') return {...out, endpoint: 'disabled'};
+  try {
+    const st = await api('GET', '/v1/status');
+    out.endpoint = 'on';
+    out.fastMode = !!st.fastMode?.enabled; out.credentials = !!st.credentials?.agentAccess; out.tabControl = !!st.tabControl?.agentAccess; out.taskCache = !!st.taskCache?.enabled;
+    try { const t = await tabs(); out.tabs = t.tabs.length; out.hidden = t.hidden } catch {}
+  } catch (e) {
+    out.error = e.code || e.message;
+    if (e.code === 'DEC_OFF' || e.code === 'DEC_UNREACHABLE') out.endpoint = out.running ? 'off' : 'closed';
+    else out.endpoint = 'blocked';
+  }
+  return out;
 }
 
 // ---- dec with its fast mode off: bisu makes every pick ----

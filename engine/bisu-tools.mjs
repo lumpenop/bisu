@@ -11,12 +11,27 @@ import * as goals from '../ui/goals.mjs';
 import * as bots from '../ui/bots.mjs';
 import * as routines from '../ui/routines.mjs';
 import * as R from './routes.mjs';
+import * as keys from './keys.mjs';
 
 const ok = text => ({text});
 const err = text => ({text, error: true});
 export const isDefaultBot = () => !process.env.BISU_BOT || process.env.BISU_BOT === bots.DEFAULT;
 
 export const BISU_TOOLS = {
+  secret_list: {
+    description: 'The API keys the person keeps in Dec (their browser): names, sites and the variable each is handed in — never values. Call it before a command or project that needs a key (then run_command with keys), when they ask what keys they have, or when something fails with a missing key or 401.',
+    parameters: {type: 'object', properties: {}},
+    kind: 'read',
+    async run() {
+      const st = await keys.status();
+      if (!st.secret) return err('dec-secret is not on this Mac: it comes with Dec Browser (open Dec once and it installs the command). Until then no saved key can be used.');
+      if (st.error) return err(`Could not read the key list: ${st.error}`);
+      if (!st.keys.length) return ok(`No keys are saved in Dec yet. To use one, the person saves it there (${keys.SAVE_HINT}); never ask them to paste it here.`);
+      return ok(['Keys in Dec (use-only: a command gets a one-time token, never the key):',
+        ...st.keys.map(k => `- ${k.var || '(no variable: not a key a program can use)'} — ${k.name}, ${k.site}${k.var ? `, base url in ${keys.baseVarOf(k.var)}` : ''}`),
+        'Use one with run_command keys: ["OPENAI_API_KEY"] (the command sends its requests to $OPENAI_BASE_URL with the token as the key), or put OPENAI_API_KEY=dec://OPENAI_API_KEY in the project\'s .env and run it with `dec-secret run --env-file .env -- <command>`. A key that is missing: ask the person to save it in Dec with its site; never ask for the value.'].join('\n'));
+    },
+  },
   web_search: {
     description: 'Search the web for current information. Returns titles, links, dates and snippets; read a promising page with web_fetch.',
     parameters: {type: 'object', properties: {query: {type: 'string'}, count: {type: 'integer', description: 'results, default 6, at most 10'}}, required: ['query']},
