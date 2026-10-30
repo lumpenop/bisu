@@ -76,7 +76,10 @@ const MODEL = flags.model || process.env.DEC_INTERN_NATIVE_MODEL || 'glm-5.3';
 const WORK_MODEL = process.env.DEC_INTERN_NATIVE_WORK_MODEL || 'glm-5.3-flash';
 // How permission works: 'risky' asks only for what the judge does not clear (the default), 'always'
 // asks for every change and command.
-const APPROVE = process.env.DEC_INTERN_APPROVE === 'always' ? 'always' : 'risky';
+// 'ask' asks for every change and command, 'auto' (the default) asks only for what is critical — the red flags, what the
+// judge rates at RISK_AUTO or above, writes outside the folder, deleting, paying, sending — and 'all' asks for nothing.
+// The old names: 'always' = ask, 'risky' = auto.
+const APPROVE = {ask: 'ask', auto: 'auto', all: 'all', always: 'ask', risky: 'auto'}[process.env.DEC_INTERN_APPROVE] || 'auto';
 
 const promptFile = flags['system-prompt-file'] || flags['append-system-prompt-file'];
 const system = [
@@ -101,7 +104,7 @@ const out = OUT === 'stream-json' ? emit : () => {};
 const pending = new Map(); // request_id -> resolve
 const always = new Set();
 function needsAsking(name, args) {
-  if (MODE === 'bypassPermissions' || preAllowed.has(name) || always.has(name)) return false;
+  if (MODE === 'bypassPermissions' || APPROVE === 'all' || preAllowed.has(name) || always.has(name)) return false;
   const kind = (TOOLS[name] || EXTRA[name])?.kind;
   const inside = args.path === undefined || insideCwd({cwd}, resolvePath({cwd}, args.path));
   // The folder's rules files are already in the prompt, so reading one again asks nothing, wherever it
@@ -115,7 +118,7 @@ function needsAsking(name, args) {
   return true;
 }
 // Never cleared by the judge, whatever it says: these always go to the person.
-const RED_FLAGS = /(^|[\s;&|(])(rm|rmdir|mv|sudo|su|chmod|chown|chflags|kill|pkill|killall|dd|mkfs|diskutil|launchctl|defaults|osascript|shortcuts|scp|ssh|rsync|curl|wget|nc|ftp|open|brew|pip3?\s+install|npm\s+(publish|install\s+-g|i\s+-g|uninstall\s+-g)|yarn\s+global|git\s+(push|reset|clean|rebase|filter-branch|checkout\s+--|restore|stash\s+(drop|clear)|branch\s+-D|remote))\b|>\s*[~/]|\bcrontab\b|\bsecurity\b/;
+const RED_FLAGS = judge.RED_FLAGS;
 const CLEAR_BELOW = judge.RISK_CLEAR;
 let currentRequest = '';
 async function canUseTool(name, args) {
@@ -124,11 +127,12 @@ async function canUseTool(name, args) {
   const kind = (TOOLS[name] || EXTRA[name])?.kind;
   const inside = args.path === undefined || insideCwd({cwd}, resolvePath({cwd}, args.path));
   // A new file inside the folder destroys nothing: no judgment needed.
-  if (APPROVE === 'risky' && name === 'write_file' && inside && !fs.existsSync(resolvePath({cwd}, args.path))) {
+  let critical = kind === 'act' || name === 'calendar_delete' || (kind === 'write' && !inside) || (kind === 'exec' && RED_FLAGS.test(String(args.command || '')));
+  if (APPROVE === 'auto' && name === 'write_file' && inside && !fs.existsSync(resolvePath({cwd}, args.path))) {
     out({type: 'system', subtype: 'auto_allowed', tool_name: name, input: args, reason: '새 파일', session_id: sessionId});
     return {allow: true};
   }
-  if (APPROVE === 'risky' && inside && (kind === 'write' || kind === 'exec') && !(kind === 'exec' && RED_FLAGS.test(String(args.command || ''))) && judge.available()) {
+  if (APPROVE === 'auto' && inside && (kind === 'write' || kind === 'exec') && !(kind === 'exec' && RED_FLAGS.test(String(args.command || ''))) && judge.available()) {
     let existing = null;
     if (name === 'write_file') { try { existing = fs.readFileSync(resolvePath({cwd}, args.path), 'utf8').split('\n').length } catch {} }
     const r = await judge.risk(name, args, {cwd, userText: currentRequest, existing});
@@ -139,6 +143,7 @@ async function canUseTool(name, args) {
         out({type: 'system', subtype: 'auto_allowed', tool_name: name, input: args, reason: `위험도 ${worst.toFixed(2)}`, session_id: sessionId});
         return {allow: true};
       }
+      critical = critical || worst >= judge.RISK_AUTO;
     }
   }
   if (!PROMPT_TOOL && !process.stdin.isTTY) return {allow: false, message: 'this run cannot ask for permission'};
@@ -146,7 +151,8 @@ async function canUseTool(name, args) {
   const request_id = randomUUID();
   const answer = new Promise(resolve => pending.set(request_id, resolve));
   const description = (TOOLS[name] || EXTRA[name])?.describe?.({}, args) || undefined;
-  emit({type: 'control_request', request_id, request: {subtype: 'can_use_tool', tool_name: name, input: args, ...(description ? {description} : {})}});
+  // The page decides what to do with it by the person's setting; under 「알아서 하기」 only a critical one is asked about.
+  emit({type: 'control_request', request_id, request: {subtype: 'can_use_tool', tool_name: name, input: args, critical: !!critical, ...(description ? {description} : {})}});
   const r = await answer;
   if (r.behavior === 'allow') return {allow: true, args: r.updatedInput || args};
   return {allow: false, message: r.message};

@@ -1032,9 +1032,11 @@ body:not(.panel) .chathead:not([hidden])~#msgs{border-top:1px solid color-mix(in
    <label class="sw" style="border:1px solid var(--line);border-radius:999px;padding:5px 12px"><input type="radio" name="engine" value="claude"> Claude Code · OpenRouter</label>
   </div>
   <p class="note" id="engineNote">새 대화부터 적용돼요. 이미 열린 대화는 시작할 때 엔진 그대로예요.</p>
-  <div id="approveRow" style="margin-top:12px"><div class="note" style="margin:0 0 6px">확인 방식 (자체 엔진)</div>
-   <label class="sw"><input type="radio" name="approve" value="risky"> 위험해 보이는 것만 묻기 — 폴더 안의 수정과 명령은 판단 모델이 안전하다고 본 것만 바로 해요. 삭제·전송·설치는 항상 물어요</label>
-   <label class="sw" style="margin-top:4px"><input type="radio" name="approve" value="always"> 매번 묻기</label></div>
+  <div id="approveRow" style="margin-top:12px"><div class="note" style="margin:0 0 6px">확인 방식 — 두 엔진 다, 예약 작업도</div>
+   <label class="sw"><input type="radio" name="approve" value="auto"> <b>알아서 하기</b> (기본) — 평소엔 스스로 승인하고, 지우기·보내기·결제·설치·폴더 밖 수정처럼 되돌리기 어려운 것만 물어요. 명령을 실행하는 예약 작업은 처음 한 번 승인해요</label>
+   <label class="sw" style="margin-top:4px"><input type="radio" name="approve" value="all"> <b>모든 사항 승인</b> — 아무것도 묻지 않아요. 되돌리기 어려운 것도, 예약 작업도 바로 해요</label>
+   <label class="sw" style="margin-top:4px"><input type="radio" name="approve" value="ask"> <b>전부 물어보기</b> — 파일을 고치거나 명령을 실행할 때마다 물어요</label>
+   <p class="note" style="margin:6px 0 0">물어볼 때 카드에서 「이번만」, 「이 대화에선 다 허용」, 「앞으로 전부 허용」을 고를 수 있어요.</p></div>
  </section>
  <section id="orRoles">
   <h2>역할별 모델</h2>
@@ -1246,7 +1248,7 @@ function setMood(state,text){clearTimeout(moodTimer);mood={state,text};
  if(state==='done')moodTimer=setTimeout(()=>setMood('idle','듣고 있어요'),2600)}
 // What is promised about asking first, as the chosen engine and mode really behave: Dec Intern's own engine,
 // by default, runs what its judge clears and asks for the rest.
-const askPromise=()=>prefs.engine==='native'&&prefs.approve!=='always'?'지우기·보내기·설치처럼 되돌리기 어려운 일은 하기 전에 꼭 물어볼게요.':'파일을 고치거나 명령을 실행하기 전엔 꼭 물어볼게요.';
+const askPromise=()=>prefs.approve==='all'?'묻지 않고 바로 해요. 설정에서 바꿀 수 있어요.':prefs.approve==='ask'?'파일을 고치거나 명령을 실행하기 전엔 꼭 물어볼게요.':'지우기·보내기·결제·설치처럼 되돌리기 어려운 일만 하기 전에 물어볼게요.';
 // The empty chat greets as the bot it belongs to, with its job when it has one of its own.
 const iyeyo=n=>{const k=String(n).charCodeAt(String(n).length-1)-0xAC00;return n+(k>=0&&k<11172&&k%28===0?'예요':'이에요')};
 const helloHTML=()=>{const b=(()=>{try{return curBotInfo()}catch{}})(),nm=b?.name||'덱 인턴';return `<div class="hello"><span class="intern live"></span><b>안녕하세요, ${esc(iyeyo(nm))}</b><span>${b&&!b.default&&b.job?esc(b.job)+'<br>':''}아래에 바로 말하면 돼요. 파일 일은 아래에 적힌 폴더에서 해요.<br><span class="promise">${askPromise()}</span></span></div>`};
@@ -1443,7 +1445,7 @@ function render(ev){
   case 'tool_result':{const el=toolEls[ev.id];if(!el)break;const st=el.querySelector('.st');st.textContent=ev.error?'오류':'완료';st.classList.toggle('e',ev.error);
    el.querySelector('details').insertAdjacentHTML('beforeend',`<pre>${esc(ev.text||'(no output)')}</pre>`)}break;
   case 'approval':live=null;{const what=String(ev.description||toolSummary(ev.tool,ev.input)||'').slice(0,90);const el=add(`<div class="ask" data-id="${esc(ev.request_id)}" data-what="${esc(what)}"><div class="q">${ev.via?`<span class="tag blush">${esc(ev.via.bot)}</span> `:''}${esc(askQ(ev.tool))}${ev.description?` <span class="note" style="font-weight:400">${esc(ev.description)}</span>`:''}</div>${askBody(ev.tool,ev.input)}
-   <div class="btns">${isBotTool(ev.tool)?`<button class="primary" data-a="allow">${/routine_save$/.test(ev.tool)?'저장하기':/memory_compact$/.test(ev.tool)?'정리하기':/create$/.test(ev.tool)?'만들기':'바꾸기'}</button><button class="danger" data-a="deny">다시 할게요</button>`:`<button class="primary" data-a="allow">허용</button><button class="danger" data-a="deny">거절</button><button class="linkish" data-a="always">이 대화에선 묻지 않기</button>`}</div></div>`,null);
+   <div class="btns">${isBotTool(ev.tool)?`<button class="primary" data-a="allow">${/routine_save$/.test(ev.tool)?'저장하기':/memory_compact$/.test(ev.tool)?'정리하기':/create$/.test(ev.tool)?'만들기':'바꾸기'}</button><button class="danger" data-a="deny">다시 할게요</button>`:`<button class="primary" data-a="allow">이번만 허용</button><button data-a="chat">이 대화에선 다 허용</button><button class="danger" data-a="deny">거절</button><button class="linkish" data-a="all">앞으로 전부 허용</button>`}</div></div>`,null);
    if(isBotTool(ev.tool))el.querySelector('.q').textContent=/routine_save$/.test(ev.tool)?'이 루틴을 저장할까요?':/memory_compact$/.test(ev.tool)?'기억을 이렇게 정리할까요?':/create$/.test(ev.tool)?'이렇게 만들까요?':'이렇게 바꿀까요?';
    for(const b of el.querySelectorAll('button'))b.onclick=()=>answer(ev.request_id,b.dataset.a,el);
    for(const pr of el.querySelectorAll('pre')){if(pr.scrollHeight>pr.clientHeight+4)pr.classList.add('long');pr.onclick=()=>pr.classList.add('open')}setMood('waiting','확인이 필요해요')}break;
@@ -1453,9 +1455,9 @@ function render(ev){
     // The line opens the other bot's chat for this task.
     el.onclick=async()=>{setBot(el.dataset.bot);await refreshChats();if(chats.some(c=>c.id===el.dataset.id))open(el.dataset.id)}}
    el.className='handoffLine '+(ev.status||'');el.innerHTML=`→ <b>${esc(ev.botName)}</b>에게 넘김 · ${st}<span class="tk">${esc(String(ev.task||'').slice(0,60))}</span>`}break;
-  case 'approval_done':{if(ev.allow&&isBotTool(ev.tool))setTimeout(loadBots,1500);const el=wrap().querySelector(`.ask[data-id="${CSS.escape(ev.request_id)}"]`);if(el){el.className='ask done';const w=el.dataset.what?` · ${esc(el.dataset.what)}`:'';el.innerHTML=ev.allow?`허용했어요${w}${ev.always?' · 이 대화에선 계속':''}`:ev.reason==='stopped'?'답하지 않았어요 (멈춤)':`거절했어요${w}`}
+  case 'approval_done':{if(ev.allow&&isBotTool(ev.tool))setTimeout(loadBots,1500);const el=wrap().querySelector(`.ask[data-id="${CSS.escape(ev.request_id)}"]`);if(el){el.className='ask done';const w=el.dataset.what?` · ${esc(el.dataset.what)}`:'';el.innerHTML=ev.allow?`허용했어요${w}${ev.scope==='chat'?' · 이 대화에선 다 허용':ev.scope==='all'?' · 앞으로 전부 허용':ev.always?' · 이 대화에선 계속':''}`:ev.reason==='stopped'?'답하지 않았어요 (멈춤)':`거절했어요${w}`}
    if(mood.state==='waiting'&&!wrap().querySelector('.ask:not(.done)'))setMood('thinking','이어서 하는 중…')}break;
-  case 'auto_allowed':if(ev.judged){const row=document.createElement('div');row.className='m autoallow';row.textContent=`자동 허용 · ${stepName(ev.tool)} · ${ev.reason}`;actBlock().querySelector('.actL').appendChild(row)}break;
+  case 'auto_allowed':{const row=document.createElement('div');row.className='m autoallow';row.textContent=`알아서 함 · ${stepName(ev.tool)}${ev.reason?' · '+ev.reason:''}`;actBlock().querySelector('.actL').appendChild(row)}break;
   case 'judgment':if(ev.judge==='route')add(`판단 · ${esc(ROUTE_KO[ev.route]||ev.route)} ${Math.round((ev.confidence||0)*100)}%${ev.hard!=null?` · 어려움 ${Math.round(ev.hard*100)}%`:''}${ev.planned?' · 나눠 맡김':''}${ev.effort==='high'?' · 추론 높음':ev.effort==='low'?' · 추론 낮음':''}`,null,'res');
    else if(ev.judge==='progress')add(`판단 · 진행 ${esc(ev.state)} ${Math.round((ev.confidence||0)*100)}%`,null,'res');
    // Said everywhere, not only in the developer view: the answer above it is being corrected.
@@ -1514,7 +1516,7 @@ function open(id){const c=chats.find(x=>x.id===id);if(!c)return;if(!c.maker&&(c.
 // events, so nothing is lost.
 function detach(){es?.close();es=null}
 async function answer(request_id,a,el){for(const b of el.querySelectorAll('button'))b.disabled=true;
- try{await post(`/api/chats/${cur.id}/approve`,{request_id,allow:a!=='deny',always:a==='always'})}catch(e){alert(e.message);for(const b of el.querySelectorAll('button'))b.disabled=false}}
+ try{await post(`/api/chats/${cur.id}/approve`,{request_id,allow:a!=='deny',scope:a==='deny'?'once':a==='allow'?'once':a});if(a==='all'){prefs.approve='all';for(const r of document.querySelectorAll('input[name=approve]'))r.checked=r.value==='all'}}catch(e){alert(e.message);for(const b of el.querySelectorAll('button'))b.disabled=false}}
 async function sendMsg(){const raw=$('input').value.trim();if(!raw)return;
  // No chat yet: this message starts one, in the folder chosen on the start card or in the sidebar.
  if(!cur){const box=PANEL?$('startCwd'):$('cwd'),cwd=box.value.trim();try{localStorage.setItem('dec-intern.cwd',cwd)}catch{}
@@ -2351,7 +2353,7 @@ $('metaOn').checked=META;
 $('metaOn').onchange=()=>{META=$('metaOn').checked;document.body.classList.toggle('meta',META);post('/api/prefs',{meta:META}).then(p=>{prefs=p}).catch(()=>{});
  for(const d of document.querySelectorAll('details.act'))d.open=META};
 function renderEngine(){for(const r of document.querySelectorAll('input[name=engine]')){r.checked=r.value===prefs.engine;r.disabled=!!prefs.engineForced&&!r.checked}
- for(const r of document.querySelectorAll('input[name=approve]'))r.checked=r.value===(prefs.approve||'risky');
+ for(const r of document.querySelectorAll('input[name=approve]'))r.checked=r.value===(prefs.approve||'auto');
  const native=prefs.engine==='native';
  $('approveRow').hidden=!native;
  // Each engine's own keys, spending and models; the other one's would only mislead.

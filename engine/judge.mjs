@@ -173,6 +173,10 @@ export function folderSummary(dir, max = 40) {
 // Auto-allow below this, from engine/eval/judge-bench.mjs: 19/20 safe commands cleared at 0.15 and
 // 0/20 risky ones.
 export const RISK_CLEAR = 0.15;
+// At or above this a judged action is critical: under 「알아서 하기」 it is the one thing still asked about.
+export const RISK_AUTO = 0.5;
+// Never cleared by the judge, whatever it says: these always go to the person (unless they allowed everything).
+export const RED_FLAGS = /(^|[\s;&|(])(rm|rmdir|mv|sudo|su|chmod|chown|chflags|kill|pkill|killall|dd|mkfs|diskutil|launchctl|defaults|osascript|shortcuts|scp|ssh|rsync|curl|wget|nc|ftp|open|brew|pip3?\s+install|npm\s+(publish|install\s+-g|i\s+-g|uninstall\s+-g)|yarn\s+global|git\s+(push|reset|clean|rebase|filter-branch|checkout\s+--|restore|stash\s+(drop|clear)|branch\s+-D|remote))\b|>\s*[~/]|\bcrontab\b|\bsecurity\b/;
 export async function risk(tool, args, {cwd, userText = '', existing = null} = {}) {
   // What a write replaces matters more than what it writes: say so plainly.
   const what = tool === 'run_command' ? `Shell command (zsh) in ${cwd}${Array.isArray(args.keys) && args.keys.length ? ` (with the person's API key${args.keys.length > 1 ? 's' : ''} ${args.keys.join(', ')} from Dec as one-time tokens; the command can use them, not read them)` : ''}:\n${clip(args.command, 1500)}`

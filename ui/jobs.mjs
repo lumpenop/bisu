@@ -219,8 +219,15 @@ function save() {
 function record(slug, patch) { fresh(); Object.assign(runOf(slug), patch); save() }
 const runOf = slug => state.runs[slug] || (state.runs[slug] = { lastRun: 0, lastAttempt: 0, lastError: null, lastResult: null, lastSession: null });
 
-// A job that may change things runs only as the person approved it, byte for byte.
-export const needsApproval = job => !job.error && job.tools !== 'read' && state.approved[job.slug] !== job.hash;
+// A job that may change things runs only as the person approved it, byte for byte — under 「전부 물어보기」 every edit or
+// full job, under 「알아서 하기」 (the default) only a full one (it runs any command unattended), under 「전부 허용」 none.
+const PREFS_FILE = path.join(path.dirname(DIR), 'ui.json');
+export function approveLevel() {
+  let v = process.env.DEC_INTERN_APPROVE;
+  if (!v) { try { v = JSON.parse(fs.readFileSync(PREFS_FILE, 'utf8')).approve } catch {} }
+  return {ask: 'ask', auto: 'auto', all: 'all', always: 'ask', risky: 'auto'}[v] || 'auto';
+}
+export const needsApproval = job => { if (job.error || job.tools === 'read') return false; const l = approveLevel(); if (l === 'all') return false; if (l === 'auto' && job.tools !== 'full') return false; return state.approved[job.slug] !== job.hash };
 
 // When this job fires next: after its last run, or after the file was written if it never ran, so
 // a job created at nine with "every day at eight" waits for tomorrow instead of firing at once.

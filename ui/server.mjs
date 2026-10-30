@@ -33,6 +33,7 @@ import {PRICES as GLM_PRICES} from '../engine/glm.mjs';
 import {eventKit} from '../engine/calendar.mjs';
 import * as dec from '../engine/dec.mjs';
 import * as keys from '../engine/keys.mjs';
+import * as judge from '../engine/judge.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.dirname(here);
 const PORT=Number(process.env.DEC_INTERN_UI_PORT||7878);
@@ -93,9 +94,11 @@ const rolesUntil=()=>{const r=readConfigRaw();return {until:r.until,expired:expi
 const PREFS=path.join(path.dirname(CONFIG),'ui.json');
 // engine: 'claude' (Claude Code over OpenRouter) or 'native' (Dec Intern's own engine on Z.ai GLM). It is
 // put in this process's environment, so every chat, job and suggestion started after a change uses it.
-const PREF_KEYS={meta:['boolean',false],font:[['system','dec'],'system'],onboarded:['boolean',false],engine:[['claude','native'],'claude'],approve:[['risky','always'],'risky']};
+const PREF_KEYS={meta:['boolean',false],font:[['system','dec'],'system'],onboarded:['boolean',false],engine:[['claude','native'],'claude'],approve:[['ask','auto','all'],'auto']};
 const prefOk=(t,v)=>Array.isArray(t)?t.includes(v):typeof v===t;
 function savedPrefs(){let p={};try{p=JSON.parse(fs.readFileSync(PREFS,'utf8'))||{}}catch{}
+ // The setting's old names (until 2026-10-30): 'risky' asked only for the risky, 'always' for everything.
+ if(p.approve==='risky')p.approve='auto';else if(p.approve==='always')p.approve='ask';
  return Object.fromEntries(Object.entries(PREF_KEYS).map(([k,[t,d]])=>[k,prefOk(t,p[k])?p[k]:d]))}
 function readPrefs(){const out=savedPrefs(),forced=process.env.DEC_INTERN_ENGINE_FORCED||null;
  if(forced)out.engine=forced;
@@ -358,9 +361,12 @@ function handle(c,j){
  if(j.type==='user'&&!parent&&replayed(c,j.message?.content))return;
  if(j.type==='user'){const content=j.message?.content;if(Array.isArray(content))for(const b of content)if(b.type==='tool_result'){
    const text=typeof b.content==='string'?b.content:Array.isArray(b.content)?b.content.map(x=>x.text||'').join('\n'):'';push(c,{kind:'tool_result',id:b.tool_use_id,text:text.slice(0,4000),error:!!b.is_error,parent})}return}
- if(j.type==='control_request'&&j.request?.subtype==='can_use_tool'){const q=j.request;
-  if(c.allowTools.has(q.tool_name)){send(c,{type:'control_response',response:{subtype:'success',request_id:j.request_id,response:{behavior:'allow',updatedInput:q.input}}});push(c,{kind:'auto_allowed',tool:q.tool_name,input:q.input});return}
-  c.pending.set(j.request_id,q);push(c,{kind:'approval',request_id:j.request_id,tool:q.tool_name,input:q.input,description:q.description||'',parent});handoffUp(c,{kind:'approval',request_id:j.request_id,tool:q.tool_name,input:q.input,description:q.description||''});return}
+ if(j.type==='control_request'&&j.request?.subtype==='can_use_tool'){const q=j.request,request_id=j.request_id;
+  // The person's setting decides: 「전부 허용」 and a conversation they allowed everything in answer at once, 「알아서 하기」
+  // answers everything but the critical, 「전부 물어보기」 asks for all of it.
+  policy(c,q).then(v=>{
+   if(v.allow){send(c,{type:'control_response',response:{subtype:'success',request_id,response:{behavior:'allow',updatedInput:q.input}}});push(c,{kind:'auto_allowed',tool:q.tool_name,input:q.input,reason:v.reason||'',judged:true});return}
+   c.pending.set(request_id,q);push(c,{kind:'approval',request_id,tool:q.tool_name,input:q.input,description:q.description||'',critical:!!v.critical,parent});handoffUp(c,{kind:'approval',request_id,tool:q.tool_name,input:q.input,description:q.description||''})}).catch(e=>{c.pending.set(request_id,q);push(c,{kind:'approval',request_id,tool:q.tool_name,input:q.input,description:q.description||'',parent})});return}
  if(j.type==='result'){c.turnsDone++;
   const usage={};for(const [m,u] of Object.entries(j.modelUsage||{}))usage[m]={input:(u.inputTokens||0)+(u.cacheCreationInputTokens||0),cacheRead:u.cacheReadInputTokens||0,output:u.outputTokens||0};
   // modelUsage adds up over the whole process, so a turn's cost is the difference from the previous result.
@@ -427,7 +433,7 @@ async function newChat({cwd,resume,bot,maker,teach}){
   c.title=cleanTitle(past.find(m=>m.kind==='user')?.text)||'Resumed session';push(c,{kind:'resumed',sessionId:resume,count:past.length});for(const m of past)push(c,{...m,past:true})}
  chats.set(c.id,c);saveChats();warm(c);return c}
 function say(c,text){
- c.lastAt=Date.now();
+ c.lastAt=Date.now();c.lastUser=String(text||'').slice(0,600);
  if(!c.title)c.title=cleanTitle(text);
  saveChats();
  clearTimeout(c.idle);if(!c.proc)start(c);
@@ -436,13 +442,38 @@ function say(c,text){
  if(c.busy){const id=randomUUID();c.queued.push({id,text});push(c,{kind:'user',text,queued:id})}
  else{push(c,{kind:'user',text});setBusy(c,true)}
  send(c,{type:'user',message:{role:'user',content:text}})}
-function decide(c,{request_id,allow,always,message}){
+// What is critical, for the Claude Code engine's requests (Dec Intern's own engine says so itself in `critical`): a red-flag
+// command or one the judge rates at RISK_AUTO or above, a write outside the folder, pressing a held web or screen step,
+// deleting from the calendar. Bot previews (a bot, a routine, tidied memory) are not: they are the person's own words saved.
+const bare=t=>String(t||'').replace(/^mcp__[^_]+(?:_[^_]+)*__/,'');
+async function critical(c,q){
+ if(typeof q.critical==='boolean')return q.critical;
+ const t=bare(q.tool_name),a=q.input||{};
+ if(/^(browser_approve|cu_approve|calendar_delete|reminder_delete)$/.test(t))return true;
+ if(t==='Bash'||t==='run_command'){const cmd=String(a.command||'');if(judge.RED_FLAGS.test(cmd))return true;
+  if(judge.available()){try{const r=await judge.risk('run_command',{command:cmd},{cwd:c.cwd,userText:c.lastUser||''});if(r)return Math.max(r.destructive,r.external,r.system)>=judge.RISK_AUTO}catch{}}return false}
+ if(/^(Write|Edit|MultiEdit|NotebookEdit|write_file|edit_file)$/.test(t)){const p=a.file_path||a.path||a.notebook_path;if(!p)return false;const abs=path.resolve(c.cwd,String(p).replace(/^~(?=\/|$)/,os.homedir()));return !(abs===c.cwd||abs.startsWith(c.cwd+path.sep))}
+ return false}
+async function policy(c,q){
+ if(c.allowTools.has(q.tool_name))return {allow:true,reason:'이 대화에서 허용한 도구'};
+ if(c.allowAll)return {allow:true,reason:'이 대화에선 전부 허용'};
+ const level=readPrefs().approve;
+ if(level==='all')return {allow:true,reason:'전부 허용 설정'};
+ if(level==='ask')return {allow:false};
+ const crit=await critical(c,q);
+ return crit?{allow:false,critical:true}:{allow:true,reason:'알아서'}}
+// scope: 'once' (this one), 'tool' (this tool in this conversation; the old `always`), 'chat' (everything in this
+// conversation), 'all' (the setting becomes 「전부 허용」).
+function decide(c,{request_id,allow,always,scope,message}){
+ scope=scope||(always?'tool':'once');
  // An approval shown here for a bot this chat handed work to is that chat's to answer.
  if(!c.pending.has(request_id))for(const id of c.handoffs?.keys?.()||[]){const k=chats.get(id);if(k?.pending.has(request_id))return decide(k,{request_id,allow,always,message})}
  const q=c.pending.get(request_id);if(!q)throw Error('no such approval (already answered?)');c.pending.delete(request_id);
- if(allow&&always)c.allowTools.add(q.tool_name);
+ if(allow&&scope==='tool')c.allowTools.add(q.tool_name);
+ if(allow&&scope==='chat')c.allowAll=true;
+ if(allow&&scope==='all'){writePrefs({approve:'all'});applyEngine()}
  send(c,{type:'control_response',response:{subtype:'success',request_id,response:allow?{behavior:'allow',updatedInput:q.input}:{behavior:'deny',message:message||'The person declined this on the dec-intern page.'}}});
- push(c,{kind:'approval_done',request_id,allow:!!allow,always:!!(allow&&always),tool:q.tool_name});handoffUp(c,{kind:'approval_done',request_id,allow:!!allow,tool:q.tool_name})}
+ push(c,{kind:'approval_done',request_id,allow:!!allow,always:!!(allow&&scope==='tool'),scope:allow?scope:'deny',tool:q.tool_name});handoffUp(c,{kind:'approval_done',request_id,allow:!!allow,tool:q.tool_name})}
 function stop(c){if(!c.proc)return;c.stopping=true;send(c,{type:'control_request',request_id:randomUUID(),request:{subtype:'interrupt'}});
  // A model that ignores the interrupt still gets stopped; the next message resumes the session.
  const p=c.proc;setTimeout(()=>{if(c.proc===p&&c.busy)p.kill('SIGTERM')},4000)}

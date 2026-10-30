@@ -3,8 +3,8 @@
 A scheduled job in which Dec Intern is the lead: it looks at the app as it runs and at its own code, gives each area to one
 worker to scan and test, reads their reports, and then hands each area its fixes — on a branch, re-tested, never pushed, and
 never the installed app. Copy this to `~/.config/dec-intern/jobs/self-check.md` (or ask: "하루 세 번 네 코드 점검해서 담당들한테
-나눠 맡기고 고칠 거 고쳐 줘"), then approve it once in Settings → 예약 작업 (it runs commands, so it waits for that; any
-change to the file asks again).
+나눠 맡기고 고칠 거 고쳐 줘"), then approve it once in Settings → 예약 작업 (it runs commands, so under the default 확인 방식 「알아서 하기」 it
+waits for that one approval; under 「모든 사항 승인」 it runs at once; any change to the file asks again).
 
 ```
 ---
