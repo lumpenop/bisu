@@ -1,0 +1,8 @@
+{
+  "note": "The numbers Dec Intern last accepted for itself (engine/eval/self-check.mjs): pass rates in percent. A run more than `margin` below one is reported as below the baseline. Measured 2026-10-30 after the bench fixes (bench 38 tasks once: 1-8 15/16 and 9-38 52/60 before the fixes, the failing five then 20/23; route 63/66; web holdout6 in dec 3/3).",
+  "margin": 5,
+  "bench": 90,
+  "benchQuick": 90,
+  "route": 93,
+  "web": 100
+}

@@ -9,6 +9,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dec-intern-routes-'));
+// A shell that puts OpenRouter first for GLM (GLM_VIA=openrouter) must not change this check's order.
+delete process.env.GLM_VIA;
 Object.assign(process.env, {
   DEC_INTERN_ROUTES_FILE: path.join(dir, 'model-routes.json'), DEC_INTERN_ROUTE_HEALTH: path.join(dir, 'health.json'),
   DEC_INTERN_ROUTE_KEYS: '1|GLM_API_KEY|https://api.z.ai;2|OPENROUTER_API_KEY|https://openrouter.ai;3|OR%20backup|https://openrouter.ai;4|OPENAI_API_KEY|https://api.openai.com;5|OAI%202|https://api.openai.com',

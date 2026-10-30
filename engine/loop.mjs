@@ -15,7 +15,7 @@ const TOOL_AS_TEXT = /```(?:json)?\s*[\[{][\s\S]*?"(?:tool_name|call|tool|functi
 
 // A first reply that only says what it is about to do ("파일 목록부터 보고 … 찾아볼게.", "list_files{path:\".\"}") and makes no call:
 // short, ending in an intention or a pseudo-call, nothing done yet.
-const ONLY_INTENT = /^(?=[\s\S]{0,400}$)(?:[\s\S]*(?:볼게|볼게요|할게|할게요|보겠습니다|하겠습니다|확인해\s*보죠|찾아보죠|해\s*보죠)[.!…\s]*$|[\s\S]*(?:(?:찾아|확인해|살펴|읽어|열어|돌려|실행해|고쳐|세어|뒤져|보고)\s*(?:볼게|볼께|보겠)|목록(?:을|부터)\s*볼게|^\s*(?:I will|I'll|Let me|First,? I)\b|I need to (?:find|look|check|read|see))[\s\S]*$|[\s\S]*\b(?:list_files|read_file|search_files|run_command|edit_file|write_file|web_fetch|web_search|calendar_\w+|reminders?_\w+)\s*[({][\s\S]*$)/;
+const ONLY_INTENT = /^(?=[\s\S]{0,400}$)(?:[\s\S]*(?:볼게|볼게요|할게|할게요|보겠습니다|하겠습니다|보려고|보려고요|하려고|하려고요|확인해\s*보죠|찾아보죠|해\s*보죠)[.!…\s]*$|[\s\S]*(?:(?:찾아|확인해|살펴|읽어|열어|돌려|실행해|고쳐|세어|뒤져|보고)\s*(?:볼게|볼께|보겠)|목록(?:을|부터)\s*볼게|^\s*(?:I will|I'll|Let me|First,? I)\b|I need to (?:find|look|check|read|see))[\s\S]*$|[\s\S]*\b(?:list_files|read_file|search_files|run_command|edit_file|write_file|web_fetch|web_search|calendar_\w+|reminders?_\w+)\s*[({][\s\S]*$)/;
 
 export async function runTurn({
   model, system, messages, tools = Object.keys(TOOLS), extraTools = {}, ctx,
