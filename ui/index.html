@@ -1040,6 +1040,7 @@ body:not(.panel) .chathead:not([hidden])~#msgs{border-top:1px solid color-mix(in
   <h2>역할별 모델</h2>
   <form id="roles"></form>
   <datalist id="modelList"></datalist>
+  <label class="sw" style="margin:6px 0"><input type="date" id="rolesUntil"> <span>까지만 이 모델을 쓰고, 그 뒤엔 기본값으로 돌아가요 (비워 두면 계속)</span></label>
   <div class="actions"><button class="primary" id="save" disabled>저장</button><span class="note" id="saveNote" style="margin:0"></span></div>
   <p class="note">저장한 모델은 새 대화와 새 <code>dec-intern</code> 실행부터 써요. 이미 열린 대화는 시작할 때 모델 그대로예요.</p>
  </section>
@@ -1611,11 +1612,12 @@ function renderRoles(){
   <div class="meta" data-for="${k}">${meta(r.saved||r.value)}</div>
   ${r.env?`<div class="meta"><span class="w">셸에서 export한 ${k}=${esc(r.env)}가 이 설정보다 우선해요.</span></div>`:''}</div></div>`).join('');
  for(const i of $('roles').querySelectorAll('input'))i.addEventListener('input',()=>{document.querySelector(`[data-for="${i.name}"]`).innerHTML=meta(i.value.trim());$('save').disabled=false;$('saveNote').textContent=''})}
-async function loadRoles(){const r=await api('/api/roles');roles=r.roles;$('saveNote').textContent='저장 위치: '+short(r.config);renderRoles();if(!models.size)loadModels()}
+async function loadRoles(){const r=await api('/api/roles');roles=r.roles;$('rolesUntil').value=r.until||'';$('saveNote').textContent=r.expired?`${r.until}까지였던 모델 선택이 끝나서 기본값을 쓰고 있어요.`:r.until?`${r.until}까지 이 모델을 써요. 저장 위치: ${short(r.config)}`:'저장 위치: '+short(r.config);renderRoles();if(!models.size)loadModels()}
+$('rolesUntil').addEventListener('input',()=>{$('save').disabled=false});
 async function loadModels(){try{const {models:list}=await api('/api/models');models=new Map(list.map(m=>[m.id,m]));
  $('modelList').innerHTML=list.filter(m=>m.tools).sort((a,b)=>a.id.localeCompare(b.id)).map(m=>`<option value="${esc(m.id)}">${esc(m.name)} · ${per1M(m.prompt)}/${per1M(m.completion)}</option>`).join('');renderRoles()}catch(e){$('saveNote').textContent='모델 목록을 못 불러왔어요: '+e.message}}
-$('save').onclick=async e=>{e.preventDefault();const body={};for(const i of $('roles').querySelectorAll('input'))body[i.name]=i.value.trim()||null;
- $('save').disabled=true;try{const r=await post('/api/roles',body);roles=r.roles;renderRoles();$('saveNote').textContent='저장했어요. 새 대화부터 이 모델을 써요.'}
+$('save').onclick=async e=>{e.preventDefault();const body={until:$('rolesUntil').value||null};for(const i of $('roles').querySelectorAll('input'))body[i.name]=i.value.trim()||null;
+ $('save').disabled=true;try{const r=await post('/api/roles',body);roles=r.roles;renderRoles();$('saveNote').textContent=r.expired?`${r.until}은 이미 지난 날이라 기본값을 써요.`:r.until?`저장했어요. ${r.until}까지 이 모델을 쓰고, 그 뒤엔 기본값으로 돌아가요.`:'저장했어요. 새 대화부터 이 모델을 써요.'}
  catch(err){$('save').disabled=false;$('saveNote').innerHTML=`<span class="err">${esc(err.message)}</span>`}};
 
 // ---- memory ----

@@ -51,6 +51,9 @@ DEC_INTERN_DEV_MODEL=qwen/qwen3-coder-next dec-intern     # any OpenRouter slug 
 
 These subagents exist only inside `dec-intern`; your normal `claude` never sees them.
 
+
+A choice can be for a while only: Settings → 역할별 모델 has a date, kept as `DEC_INTERN_MODELS_UNTIL=YYYY-MM-DD` in the same file, and through that day the saved models are used; from the next day both the page and `dec-intern` go back to the defaults by themselves, with the lines still there to read.
+
 ## Lean and brief by default
 
 - **Core tools only, no MCP:** `dec-intern` keeps what a coding sidekick needs and drops the rest, cutting every request from ~25k to ~6.8k input tokens (about a quarter of the cost; with DeepSeek flash the API time per request went from ~3.2 s to ~1.8 s).

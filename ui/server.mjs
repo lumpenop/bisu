@@ -75,11 +75,19 @@ function routeInfo(){const st=R.settings();return {auto:st.auto,file:true,famili
 const noKey=()=>process.env.DEC_INTERN_ENGINE==='native'?'No Z.ai key: save one for https://api.z.ai in Dec first.':'No OpenRouter key: save one for https://openrouter.ai in Dec first.';
 
 // ---- models config ----
-function readConfig(){const out={};try{for(const line of fs.readFileSync(CONFIG,'utf8').split('\n')){const m=/^(DEC_INTERN_[A-Z_]+)=(\S+)$/.exec(line.trim());const k=m&&(ALIAS[m[1]]||m[1]);if(k in ROLES&&SLUG.test(m[2])&&!(k in out&&ALIAS[m[1]]))out[k]=m[2]}}catch{}return out}
-function writeConfig(models){fs.mkdirSync(path.dirname(CONFIG),{recursive:true});const tmp=CONFIG+'.tmp';
- fs.writeFileSync(tmp,'# dec-intern models, written by `dec-intern ui`. Exported DEC_INTERN_* variables override these.\n'+Object.keys(ROLES).filter(k=>models[k]).map(k=>`${k}=${models[k]}`).join('\n')+'\n');fs.renameSync(tmp,CONFIG)}
+// The saved choice may be for a while only: DEC_INTERN_MODELS_UNTIL=YYYY-MM-DD keeps it through that day (local time),
+// and from the next day the defaults are back without anyone touching the file (dec-intern.zsh reads it the same way).
+const DATE=/^\d{4}-\d{2}-\d{2}$/;
+const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
+function readConfigRaw(){const out={},r={models:out,until:null};try{for(const line of fs.readFileSync(CONFIG,'utf8').split('\n')){const m=/^(DEC_INTERN_[A-Z_]+)=(\S+)$/.exec(line.trim());if(!m)continue;if(m[1]==='DEC_INTERN_MODELS_UNTIL'){if(DATE.test(m[2]))r.until=m[2];continue}const k=ALIAS[m[1]]||m[1];if(k in ROLES&&SLUG.test(m[2])&&!(k in out&&ALIAS[m[1]]))out[k]=m[2]}}catch{}return r}
+const expired=until=>!!until&&today()>until;
+function readConfig(){const r=readConfigRaw();return expired(r.until)?{}:r.models}
+function writeConfig(models,until=null){fs.mkdirSync(path.dirname(CONFIG),{recursive:true});const tmp=CONFIG+'.tmp';
+ fs.writeFileSync(tmp,'# dec-intern models, written by `dec-intern ui`. Exported DEC_INTERN_* variables override these.\n'+(until?`DEC_INTERN_MODELS_UNTIL=${until}\n`:'')+Object.keys(ROLES).filter(k=>models[k]).map(k=>`${k}=${models[k]}`).join('\n')+'\n');fs.renameSync(tmp,CONFIG)}
 const envOf=k=>process.env[k]||Object.keys(ALIAS).filter(a=>ALIAS[a]===k).map(a=>process.env[a]).find(Boolean)||null;
 function roles(){const saved=readConfig();return Object.fromEntries(Object.entries(ROLES).map(([k,d])=>[k,{value:envOf(k)||saved[k]||d,saved:saved[k]||null,default:d,env:envOf(k)}]))}
+// The end date of the saved choice, and whether it has passed (then the file's models are kept but not used).
+const rolesUntil=()=>{const r=readConfigRaw();return {until:r.until,expired:expired(r.until)}};
 
 // ---- page preferences ----
 const PREFS=path.join(path.dirname(CONFIG),'ui.json');
@@ -462,7 +470,7 @@ const server=http.createServer(async(req,res)=>{
   if(m==='GET'&&font){res.writeHead(200,{'Content-Type':'font/woff2','Cache-Control':'max-age=86400'});return res.end(fs.readFileSync(path.join(here,'fonts',font[1])))}
   if(!p.startsWith('/api/'))return json(res,404,{error:'not found'});
   if(!tokenOk(req,url))return json(res,401,{error:'token'});
-  if(m==='GET'&&p==='/api/roles')return json(res,200,{roles:roles(),config:CONFIG});
+  if(m==='GET'&&p==='/api/roles')return json(res,200,{roles:roles(),config:CONFIG,...rolesUntil()});
   // Page preferences live here, not in the page's storage: the menu bar app picks a new port on
   // every launch, and a new port is a new origin with empty storage.
   if(m==='GET'&&p==='/api/prefs')return json(res,200,readPrefs());
@@ -484,9 +492,10 @@ const server=http.createServer(async(req,res)=>{
   // refreshed in a child process first so a chat that just ended is already in it.
   if(m==='GET'&&p==='/api/search'){const q=url.searchParams.get('q')||'';const r=await sessions.refresh();
    return json(res,200,{...sessions.search(q,{days:Number(url.searchParams.get('days'))||0,limit:12}),refreshError:r?.error||null})}
-  if(m==='POST'&&p==='/api/roles'){const input=await body(req),next=readConfig();
+  if(m==='POST'&&p==='/api/roles'){const input=await body(req),raw=readConfigRaw(),next=raw.models;let until=raw.until;
    for(const k of Object.keys(ROLES)){const v=input[k];if(v===null||v===ROLES[k])delete next[k];else if(typeof v==='string'){if(!SLUG.test(v))return json(res,400,{error:`not an OpenRouter slug: ${v}`});next[k]=v}}
-   writeConfig(next);return json(res,200,{roles:roles()})}
+   if(input.until===null||input.until==='')until=null;else if(typeof input.until==='string'){if(!DATE.test(input.until))return json(res,400,{error:`not a date (YYYY-MM-DD): ${input.until}`});until=input.until}
+   writeConfig(next,until);return json(res,200,{roles:roles(),...rolesUntil()})}
   // Memory: the files the assistant keeps and the exact block a new run is given. Editing here is
   // immediate for the next chat or dec-intern run; a chat that is already running keeps what it started with.
   // Each bot's own memory: ?bot= (or bot in the body) picks the folder; none is the default bot's.

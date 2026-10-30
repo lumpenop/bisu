@@ -15,9 +15,12 @@
 _dec_intern_dir="${${(%):-%x}:A:h}"
 
 # Models saved by `dec-intern ui`: plain KEY=value lines, read without running anything. Exported DEC_INTERN_* win over these.
+# A choice with an end date (DEC_INTERN_MODELS_UNTIL=YYYY-MM-DD, through that day) is read only until then.
 _dec_intern_config() {
-  local file="${XDG_CONFIG_HOME:-$HOME/.config}/dec-intern/models" k v
+  local file="${XDG_CONFIG_HOME:-$HOME/.config}/dec-intern/models" k v until=""
   [ -r "$file" ] || return 0
+  while IFS='=' read -r k v; do [ "$k" = DEC_INTERN_MODELS_UNTIL ] && until="$v"; done < "$file"
+  [[ -n "$until" && "$(date +%F)" > "$until" ]] && return 0
   while IFS='=' read -r k v; do
     case "$k" in DEC_INTERN_MODEL|DEC_INTERN_CODE_MODEL|DEC_INTERN_DEV_MODEL|DEC_INTERN_FAST_MODEL) [[ "$v" == [a-z0-9]*/[A-Za-z0-9]* ]] && print -r -- "$k=$v";; esac
   done < "$file"
