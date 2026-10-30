@@ -44,16 +44,17 @@ const WANTS_ALL = goal => /전체\s*(메일|선택)|모든\s*메일|메일함\s*
 // at a time and does not compare twenty prices; GLM, given the whole page, does.
 const COMPARE = goal => /가장|제일|최저|최고|최신|최소|최대|비싼|저렴|cheapest|most|least|highest|lowest|best|latest|newest|oldest/i.test(goal);
 // A page listing things to compare: five or more lines with a price, a count or a score on them.
-const NUMBERED = /[£$€₩¥]\s?\d|\d[\d,.]*\s*(원|달러|개|명|점|%|권|건|회|€)|^\s*\d{1,3}(?:[.,\s]\d{3})*[.,]\d{2}\s*$/;
+const NUMBERED = /\p{Sc}\s?\d|\d[\d,.]*\s*(원|달러|개|명|점|%|권|건|회|\p{Sc})|^\s*\d{1,3}(?:[.,\s]\d{3})*[.,]\d{2}\s*$/u;
 const listy = view => String(view.body || parse(view.snap).rows.join('\n')).split('\n').filter(l => NUMBERED.test(l)).length >= 5;
 // 「가장 비싼 책」, "the cheapest hub": the item a plain price superlative means, read off the page text. The list is the
 // longest run of three or more items (click candidates whose label is a line of the page) each followed by a price
 // before the next item; buttons repeated on every item (「Add to basket」, three or more alike) are skipped. Anything else is GLM's: a goal
 // that narrows the choice before its superlative (재고 있는 것 중, refurbished, under ₩30,000), a price written before
 // its item's name, items without a price inside the list, or a tie.
-// A price: a currency sign before or after the number (£51.77, $1,799, 24,500원, 91,99 €). On a list a goal compares by
+// A price: a currency sign before or after the number (£51.77, $1,799, 24,500원, 91,99 €, ₹ 120 — any sign Unicode calls a
+// currency). On a list a goal compares by
 // price, a line that is only a number with cents counts too (「24.99」). 「91,99」 and 「1.299,00」 are read as cents.
-const PRICE = /[£$€₩¥]\s?\d[\d.,]*|\d[\d.,]*\s?(?:원|달러|엔|€|EUR|USD|GBP)(?![a-z])/i;
+const PRICE = /\p{Sc}\s?\d[\d.,]*|\d[\d.,]*\s?(?:\p{Sc}|원|달러|엔|EUR|USD|GBP|INR)(?![a-z])/iu;
 const BARE = /^\d{1,3}(?:[.,\s]\d{3})*[.,]\d{2}$/;
 const amount = raw => { let t = String(raw).replace(/[^\d.,]/g, ''); const k = Math.max(t.lastIndexOf('.'), t.lastIndexOf(',')); t = k >= 0 && t.length - k - 1 === 2 ? t.slice(0, k).replace(/[.,]/g, '') + '.' + t.slice(k + 1) : t.replace(/[.,]/g, ''); return Number(t) };
 const MOST = /비싼|최고가|가장\s*높은\s*가격|most expensive|priciest|highest[- ]priced?/i;
