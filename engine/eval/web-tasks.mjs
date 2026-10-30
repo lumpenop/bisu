@@ -1,6 +1,6 @@
 // Web tasks on public practice sites, the same in every browser dec-intern can drive: success and time.
 //   OPENAI_API_KEY=dec://OPENAI_API_KEY GLM_API_KEY=dec://GLM_API_KEY dec-secret run -- \
-//     node engine/eval/web-tasks.mjs [--set speed|complex|hard|holdout|holdout2|holdout3|holdout4|holdout5|holdout6|holdout7] [--modes dec,ego,aside,decfast] [--repeat 2] [--only O1,O2] [--budget 20]
+//     node engine/eval/web-tasks.mjs [--set speed|complex|hard|holdout|holdout2|holdout3|holdout4|holdout5|holdout6|holdout7|holdout8] [--modes dec,ego,aside,decfast] [--repeat 2] [--only O1,O2] [--budget 20]
 // dec = dec-intern drives dec (dec's fast mode must be off); decfast = dec's own fast mode (must be on); ego, aside = dec-intern
 // drives them. The sites are made for scraping practice (books.toscrape, quotes.toscrape, scrapethissite,
 // webscraper.io, the-internet, web-scraping.dev, scrapingcourse, Oxylabs' sandbox), so repeating is fine.
@@ -95,6 +95,18 @@ const SETS = {
     {key: 'V5', url: 'http://uitestingplayground.com/ajax', goal: 'AJAX 요청을 보내는 버튼을 누르고, 잠시 뒤 나타나는 문구를 그대로 알려줘', ok: a => /Data loaded with AJAX get request/i.test(a)},
     {key: 'V6', url: 'https://rahulshettyacademy.com/seleniumPractise/', goal: '상품 검색창에 @q 를 입력해서 나오는 상품들의 이름과 가격을 모두 알려줘', inputs: {q: 'ber'}, ok: a => /Cucumber/i.test(a) && /\b48\b/.test(a) && /Raspberry/i.test(a) && /\b160\b/.test(a) && /Strawberry/i.test(a) && /\b180\b/.test(a)},
     {key: 'V7', url: 'https://rahulshettyacademy.com/seleniumPractise/', goal: '전체 상품 중 가장 비싼 상품의 이름과 가격을 알려줘', ok: a => /Nuts Mixture/i.test(a) && /\b950\b/.test(a)},
+  ],
+  // Eighth held-out set (2026-10-30), written after holdout7's faults were fixed and before anything was tried on it:
+  // an OpenCart search, a store's category, a pet shop's item table, a React book store and its table, a page that
+  // takes seconds to load, and a button renamed from a text box.
+  holdout8: [
+    {key: 'X1', url: 'https://tutorialsninja.com/demo/', goal: '검색창에서 @q 를 검색해서, 나온 상품 중 가장 싼 상품의 이름과 가격을 알려줘', inputs: {q: 'mac'}, ok: a => /iMac/.test(a) && /122(\.00)?/.test(a)},
+    {key: 'X2', url: 'https://automationteststore.com/', goal: 'Skincare 카테고리에서 가장 비싼 상품의 이름과 가격을 알려줘', ok: a => /Creme Precieuse Nuit/i.test(a) && /220/.test(a)},
+    {key: 'X3', url: 'https://jpetstore.aspectran.com/', goal: 'Dogs 카테고리의 Bulldog 상품을 열어서, 가장 비싼 아이템의 설명(Description)과 가격을 알려줘', ok: a => /French Bulldog Puppy/i.test(a) && /180/.test(a)},
+    {key: 'X4', url: 'https://demoqa.com/books', goal: "'Speaking JavaScript' 책을 열어서 저자(Author)와 쪽수(Total Pages)를 알려줘", ok: a => /Axel Rauschmayer/i.test(a) && /\b460\b/.test(a)},
+    {key: 'X5', url: 'https://demoqa.com/webtables', goal: '표에서 Department가 Legal인 사람의 이름과 Salary를 알려줘', ok: a => /Kierra/i.test(a) && /\b2,?000\b/.test(a)},
+    {key: 'X6', url: 'http://uitestingplayground.com/', goal: 'Load Delay 페이지로 들어가서, 늦게 나타나는 버튼의 이름을 알려줘', ok: a => /Button Appearing After Delay/i.test(a)},
+    {key: 'X7', url: 'http://uitestingplayground.com/textinput', goal: '입력칸에 @q 를 입력하고 파란 버튼을 누른 뒤, 버튼에 새로 적힌 이름을 알려줘', inputs: {q: 'Dec Rocks'}, ok: a => /Dec Rocks/.test(a)},
   ],
 };
 const set = arg('set', 'holdout3'), only = arg('only', ''), T = (SETS[set] || []).filter(t => !only || only.split(',').includes(t.key));
