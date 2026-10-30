@@ -8,35 +8,35 @@ const onContext = new Set();
 const onShown = new Set();
 const onHidden = new Set();
 
-ipcRenderer.on('bisu:context', (_e, ctx) => {for (const fn of onContext) try {fn(ctx)} catch {}});
-ipcRenderer.on('bisu:shown', () => {for (const fn of onShown) try {fn()} catch {}});
-ipcRenderer.on('bisu:hidden', () => {for (const fn of onHidden) try {fn()} catch {}});
+ipcRenderer.on('dec-intern:context', (_e, ctx) => {for (const fn of onContext) try {fn(ctx)} catch {}});
+ipcRenderer.on('dec-intern:shown', () => {for (const fn of onShown) try {fn()} catch {}});
+ipcRenderer.on('dec-intern:hidden', () => {for (const fn of onHidden) try {fn()} catch {}});
 
-contextBridge.exposeInMainWorld('bisuHost', {
+contextBridge.exposeInMainWorld('decInternHost', {
   panel: true,
   platform: process.platform,
-  context: () => ipcRenderer.invoke('bisu:context'),
-  consume: () => ipcRenderer.invoke('bisu:consume'),
-  session: (sessionId, cwd) => ipcRenderer.send('bisu:session', {sessionId, cwd}),
-  hide: () => ipcRenderer.send('bisu:hide'),
-  openFull: () => ipcRenderer.send('bisu:full'),
-  resize: (width, height) => ipcRenderer.invoke('bisu:resize', {width, height}),
-  cuProbe: () => ipcRenderer.invoke('bisu:cu-probe'),
-  accessibility: () => ipcRenderer.invoke('bisu:accessibility'),
-  grantAccessibility: () => ipcRenderer.send('bisu:ax-grant'),
-  dismissAccessibility: () => ipcRenderer.send('bisu:ax-dismiss'),
-  accessibilityHintShown: () => ipcRenderer.send('bisu:ax-shown'),
+  context: () => ipcRenderer.invoke('dec-intern:context'),
+  consume: () => ipcRenderer.invoke('dec-intern:consume'),
+  session: (sessionId, cwd) => ipcRenderer.send('dec-intern:session', {sessionId, cwd}),
+  hide: () => ipcRenderer.send('dec-intern:hide'),
+  openFull: () => ipcRenderer.send('dec-intern:full'),
+  resize: (width, height) => ipcRenderer.invoke('dec-intern:resize', {width, height}),
+  cuProbe: () => ipcRenderer.invoke('dec-intern:cu-probe'),
+  accessibility: () => ipcRenderer.invoke('dec-intern:accessibility'),
+  grantAccessibility: () => ipcRenderer.send('dec-intern:ax-grant'),
+  dismissAccessibility: () => ipcRenderer.send('dec-intern:ax-dismiss'),
+  accessibilityHintShown: () => ipcRenderer.send('dec-intern:ax-shown'),
   onContext: fn => {onContext.add(fn); return () => onContext.delete(fn)},
   onShown: fn => {onShown.add(fn); return () => onShown.delete(fn)},
   onHidden: fn => {onHidden.add(fn); return () => onHidden.delete(fn)},
-  selectionEnabled: () => ipcRenderer.invoke('bisu:selection-enabled'),
-  setSelectionEnabled: on => ipcRenderer.invoke('bisu:selection-enabled', !!on),
+  selectionEnabled: () => ipcRenderer.invoke('dec-intern:selection-enabled'),
+  setSelectionEnabled: on => ipcRenderer.invoke('dec-intern:selection-enabled', !!on),
 });
 
 // Escape puts the panel away; it never closes a window or interrupts an answer.
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !e.isComposing && !e.defaultPrevented) {
     e.preventDefault();
-    ipcRenderer.send('bisu:hide');
+    ipcRenderer.send('dec-intern:hide');
   }
 }, true);

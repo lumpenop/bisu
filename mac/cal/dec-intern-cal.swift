@@ -1,4 +1,4 @@
-// bisu-cal — the person's Calendar and Reminders, through EventKit: the same events and to-dos their
+// dec-intern-cal — the person's Calendar and Reminders, through EventKit: the same events and to-dos their
 // iPhone shows.
 //
 // One JSON request on stdin, one JSON answer on stdout ({"ok": true, …} or {"ok": false, "error": …}):
@@ -19,8 +19,8 @@
 // and reminders due on a day. engine/calendar.mjs turns these into tools and checks the arguments
 // first; this file only talks to EventKit.
 //
-// The first use asks macOS for access. macOS asks on behalf of the app that started this (bisu), so
-// bisu's Info.plist carries the reasons; this binary carries them too, for a run from a terminal.
+// The first use asks macOS for access. macOS asks on behalf of the app that started this (dec-intern), so
+// Dec Intern's Info.plist carries the reasons; this binary carries them too, for a run from a terminal.
 import EventKit
 import Foundation
 

@@ -1,4 +1,4 @@
-// A pretend Calendar and Reminders for the benchmark. It answers exactly as mac/cal/bisu-cal.swift
+// A pretend Calendar and Reminders for the benchmark. It answers exactly as mac/cal/dec-intern-cal.swift
 // does (same fields, local "YYYY-MM-DD HH:MM" times, repeating events listed one occurrence at a
 // time), keeps everything in memory, and logs every change for the checks — so the calendar tools
 // are measured without touching anyone's real calendar.

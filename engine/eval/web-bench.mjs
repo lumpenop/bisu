@@ -1,4 +1,4 @@
-// Which model should pick bisu's steps in ego lite? Five everyday web tasks on pretend sites (web-sites.mjs), each
+// Which model should pick Dec Intern's steps in ego lite? Five everyday web tasks on pretend sites (web-sites.mjs), each
 // checked by where the run ended, what it reported and what the site received — not by asking a model.
 //
 //   OPENAI_API_KEY=dec://env/OPENAI_API_KEY GLM_API_KEY=dec://GLM_API_KEY dec-secret run -- node engine/eval/web-bench.mjs [--modes pair,decisions,glm] [--repeat 2] [--only shop,mail]
@@ -18,7 +18,7 @@ const OUT = arg('out', '');
 const sites = await startSites(Number(arg('port', 7931)));
 const has = (s, ...w) => w.every(x => String(s || '').includes(x));
 const form = space => new Promise(r => {
-  const child = execFile(process.env.BISU_EGO_BIN || 'ego-browser', ['nodejs'], {encoding: 'utf8', timeout: 30000}, (e, out, err) => {
+  const child = execFile(process.env.DEC_INTERN_EGO_BIN || 'ego-browser', ['nodejs'], {encoding: 'utf8', timeout: 30000}, (e, out, err) => {
     try { r(JSON.parse((out + '\n' + err).split('\n').find(l => l.startsWith('@@BISU ')).slice(7))) } catch { r([]) }
   });
   child.stdin.end(`const t = await taskSpace(${space}); const p = t.page("p1");
@@ -67,7 +67,7 @@ for (let rep = 0; rep < REPEAT; rep++) for (const T of TASKS) {
   if (ONLY && !ONLY.has(T.key)) continue;
   for (const mode of MODES) {
     sites.reset();
-    const space = `bisu-bench-${mode}-${T.key}-${Date.now() % 100000}`;
+    const space = `dec-intern-bench-${mode}-${T.key}-${Date.now() % 100000}`;
     let r, verdict;
     try {
       r = await ego.run({goal: T.goal, url: sites.url + T.start, inputs: T.inputs, space, mode, budget: 14});

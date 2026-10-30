@@ -1,14 +1,15 @@
 // Who the person is: the few facts that hold whatever the conversation and whichever bot — how to
 // address them, how they want to be spoken to, what they do, and whatever they wrote down about
-// themselves. One file, ~/.config/bisu/profile.md, shared by every bot (the person is the same person),
+// themselves. One file, ~/.config/dec-intern/profile.md, shared by every bot (the person is the same person),
 // given to every run as its own block ahead of memory, and never cut or compacted: memory is for what
 // comes up along the way, this is for what is simply true of them. They write it on the 기억 tab
-// (나에 대해), or the assistant saves what they say with profile_set (engine/bisu-tools.mjs).
+// (나에 대해), or the assistant saves what they say with profile_set (engine/dec-intern-tools.mjs).
+import './migrate.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-const CONFIG_DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu');
+const CONFIG_DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'dec-intern');
 export const FILE = path.join(CONFIG_DIR, 'profile.md');
 // The one-line fields, in the order they are shown and sent. `about` is the free text under them.
 export const FIELDS = [['name', '부르는 이름'], ['tone', '말투'], ['job', '하는 일']];
@@ -20,7 +21,7 @@ const PUT = {
   job: v => `What they do: ${v}.`,
 };
 // The block is on every request, so the free text is capped: a profile is a few lines, not a diary.
-export const LIMIT = Number(process.env.BISU_PROFILE_CHARS) || 1500;
+export const LIMIT = Number(process.env.DEC_INTERN_PROFILE_CHARS) || 1500;
 
 const oneLine = (v, n) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 

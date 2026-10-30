@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// PreToolUse hook for bisu ui chats: work handed to the developer, publisher, refactorer or researcher agent always runs in the
+// PreToolUse hook for dec-intern ui chats: work handed to the developer, publisher, refactorer or researcher agent always runs in the
 // background, so the assistant's turn ends and the person can keep talking while the agent works. Claude Code wakes the
 // assistant again with the agent's result. Other agents (mac, the built-in ones) and other tools are left alone.
 let s='';

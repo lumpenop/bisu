@@ -1,25 +1,25 @@
 // Doing things on the web for the person, in a browser where they are already signed in (both engines, and the
 // Claude Code chats through ui/cu/server.mjs). dec first: with its fast mode on (a paid plan), the whole task is
-// handed over in one call (engine/dec.mjs task()); with it off, bisu drives dec itself, step by step, with the same
+// handed over in one call (engine/dec.mjs task()); with it off, dec-intern drives dec itself, step by step, with the same
 // loop it drives ego with (engine/ego.mjs drive(), engine/dec.mjs directDriver()). Without dec, ego lite. One tab or
 // task space per conversation, reused task after task. The person approves what pays, sends, deletes or books: in
-// fast mode dec asks in dec with Touch ID; when bisu drives, the run stops on it and browser_approve goes through
-// bisu's approval card.
+// fast mode dec asks in dec with Touch ID; when dec-intern drives, the run stops on it and browser_approve goes through
+// Dec Intern's approval card.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import * as dec from './dec.mjs';
 import * as ego from './ego.mjs';
 
-const DATA = path.join(os.homedir(), 'Library', 'Application Support', 'bisu');
+const DATA = path.join(os.homedir(), 'Library', 'Application Support', 'dec-intern');
 const SHOTS = path.join(DATA, 'web');
-// dec runs still going when a call returned; the bisu page watches them and tells the chat when they end.
+// dec runs still going when a call returned; the dec-intern page watches them and tells the chat when they end.
 export const WAITS = path.join(DATA, 'web-waits');
 
 const ok = text => ({text});
 const err = text => ({text, error: true});
-const chat = () => process.env.BISU_CHAT_ID || `p${process.pid}`;
-const SPACE = () => `bisu-${chat().slice(0, 40)}`;
+const chat = () => process.env.DEC_INTERN_CHAT_ID || `p${process.pid}`;
+const SPACE = () => `dec-intern-${chat().slice(0, 40)}`;
 
 // What this conversation did last, so browser_read and browser_approve know where to look.
 const state = {space: null, decTab: null, held: new Map(), last: null, handedOff: false};
@@ -45,7 +45,7 @@ function inputsOf(typing, goal = '') {
 
 function remember(r) {
   fs.mkdirSync(WAITS, {recursive: true});
-  fs.writeFileSync(path.join(WAITS, `${r.runId}.json`), JSON.stringify({runId: r.runId, tabId: r.tabId, goal: r.goal, chat: process.env.BISU_CHAT_ID || null, at: Date.now()}));
+  fs.writeFileSync(path.join(WAITS, `${r.runId}.json`), JSON.stringify({runId: r.runId, tabId: r.tabId, goal: r.goal, chat: process.env.DEC_INTERN_CHAT_ID || null, at: Date.now()}));
 }
 
 const lines = (...xs) => xs.filter(Boolean).join('\n');
@@ -64,20 +64,20 @@ function decReport(r, goal) {
       : r.waitingFor === 'control' ? 'the person took over the tab in dec.'
       : 'dec is still working on it.';
     return ok(lines(`Not finished yet (dec run ${r.runId}): ${what}`,
-      'Tell the person in a sentence what is needed, if anything. dec carries on by itself once they do, and bisu tells this chat the result when the run ends; browser_check shows where it is.'));
+      'Tell the person in a sentence what is needed, if anything. dec carries on by itself once they do, and dec-intern tells this chat the result when the run ends; browser_check shows where it is.'));
   }
   return ok(lines(`Done in dec (${r.status}, ${r.steps ?? '?'} steps).`, r.answer && `Answer: ${r.answer}`, r.url && `Ended on: ${r.url}`,
     r.reason && /failed|stopped/.test(r.status) && `Why: ${r.reason}`,
     r.status === 'failed' && 'It did not get there: say so plainly, with what dec reported.'));
 }
 
-// dec with its fast mode off: bisu picks every step, dec carries it out in the conversation's tab.
+// dec with its fast mode off: dec-intern picks every step, dec carries it out in the conversation's tab.
 async function viaDecDirect({goal, url, inputs, budget}) {
   const driver = dec.directDriver({tab: state.decTab});
   const r = await ego.drive({goal, url, inputs, driver, budget});
   state.decTab = driver.tabId;
   state.last = {via: 'dec', tabId: driver.tabId};
-  const head = `${r.status === 'done' ? 'Done' : 'Stopped'} in dec, bisu driving (${r.status}, ${r.steps} steps, ${(r.ms / 1000).toFixed(0)} s). Page: ${r.title || ''} — ${r.url || ''}`;
+  const head = `${r.status === 'done' ? 'Done' : 'Stopped'} in dec, dec-intern driving (${r.status}, ${r.steps} steps, ${(r.ms / 1000).toFixed(0)} s). Page: ${r.title || ''} — ${r.url || ''}`;
   const did = r.history.length ? `What was done: ${r.history.slice(-8).join(' → ')}` : '';
   if (r.status === 'needs-approval') {
     const id = `h${++heldNo}`;
@@ -122,7 +122,7 @@ export const BROWSER_TOOLS = {
       url: {type: 'string', description: 'the page to start on (full address). If you do not know the site, a search page: https://search.naver.com/search.naver?query=...'},
       typing: {type: 'string', description: 'texts it may type, one per line as name: value, referred to as @name in the goal (search words, a name, a date). Never passwords or card numbers.'},
       look_only: {type: 'boolean', description: 'only look and read, never click anything that changes something'},
-      browser: {type: 'string', enum: ['auto', 'dec', 'ego'], description: 'auto (default): dec (fast mode hands it the whole task; without it bisu drives dec), else ego'},
+      browser: {type: 'string', enum: ['auto', 'dec', 'ego'], description: 'auto (default): dec (fast mode hands it the whole task; without it Dec Intern drives dec), else ego'},
     }, required: ['goal', 'url']},
     kind: 'net',
     async run(ctx, {goal, url, typing, look_only, browser = 'auto'}) {
@@ -281,7 +281,7 @@ export const BROWSER_TOOLS = {
       const missing = (Array.isArray(r.params) ? r.params : []).filter(p => !(p in vals));
       if (missing.length) return err(`"${r.name}" needs ${missing.map(p => `{${p}}`).join(', ')}: ask the person for ${missing.length > 1 ? 'them' : 'it'} and call again with args.`);
       try {
-        // With its fast mode on, dec runs the routine itself; without it, bisu drives the recipe as a task of its own.
+        // With its fast mode on, dec runs the routine itself; without it, dec-intern drives the recipe as a task of its own.
         if (st.fastMode?.enabled) return decReport(await dec.runRoutine(r.id, tab.id, vals, {dir: SHOTS}), r.goal);
         const fill = t => String(t || '').replace(/\{([a-z][a-z0-9_]{0,23})\}/g, (m, k) => k in vals ? vals[k] : m);
         const goal = [fill(r.goal), r.body && String(r.body).trim()].filter(Boolean).join('\n');

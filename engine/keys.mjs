@@ -1,15 +1,15 @@
 // The person's API keys live in Dec (Dec Browser → 설정 → 자격 증명), and nothing here ever holds one. A program that
 // needs a key is started through `dec-secret run` with a reference in its environment (OPENAI_API_KEY=dec://OPENAI_API_KEY):
 // it gets a one-time token in that variable and a local base URL in <PREFIX>_BASE_URL, and Dec's helper adds the real key
-// on the way out to the key's own site. The engine's own model keys come in the same way (bisu.zsh, mac/native/bisu.swift);
-// this module is for the work bisu does for the person — running their project, calling an API with their key — and for
+// on the way out to the key's own site. The engine's own model keys come in the same way (dec-intern.zsh, mac/native/dec-intern.swift);
+// this module is for the work dec-intern does for the person — running their project, calling an API with their key — and for
 // knowing which keys exist (`dec-secret list`: names and sites, never values).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {execFile} from 'node:child_process';
 
-const SUPPORT = path.join(os.homedir(), 'Library', 'Application Support', 'bisu');
+const SUPPORT = path.join(os.homedir(), 'Library', 'Application Support', 'dec-intern');
 const SHIM = path.join(os.homedir(), '.local', 'bin', 'dec-secret');
 // A readable copy of dec-secret for the menu-bar app (mac/install-app.sh): the original is under ~/Desktop on the
 // development Mac, where a Finder-launched app may not read.
@@ -19,11 +19,11 @@ const OUR_BIN = path.join(SUPPORT, 'dec', 'bin');
 const exec = p => { try { fs.accessSync(p, fs.constants.X_OK); return fs.statSync(p).isFile() } catch { return false } };
 
 // How to run dec-secret here: {file, pre} (file = the command, pre = arguments before dec-secret's own), or null when
-// Dec never installed it on this Mac. BISU_DEC_SECRET names one explicitly (the shim, or dec-secret.mjs). Inside the app
-// (BISU_UI_PARENT=stdin) the bridged copy comes first, since the shim's original may be unreadable there.
+// Dec never installed it on this Mac. DEC_INTERN_DEC_SECRET names one explicitly (the shim, or dec-secret.mjs). Inside the app
+// (DEC_INTERN_UI_PARENT=stdin) the bridged copy comes first, since the shim's original may be unreadable there.
 export function decSecret() {
-  const explicit = process.env.BISU_DEC_SECRET;
-  const inApp = process.env.BISU_UI_PARENT === 'stdin';
+  const explicit = process.env.DEC_INTERN_DEC_SECRET;
+  const inApp = process.env.DEC_INTERN_UI_PARENT === 'stdin';
   const order = [explicit, ...(inApp ? [BRIDGE, SHIM] : [SHIM, BRIDGE])].filter(Boolean);
   for (const c of order) {
     if (c.endsWith('.mjs')) { if (fs.existsSync(c)) return {file: process.execPath, pre: [c], path: c} }
@@ -33,7 +33,7 @@ export function decSecret() {
 }
 
 // `dec-secret` callable by name from a shell command (run_command, Claude Code's Bash): the shim's folder on PATH, or a
-// shim of bisu's own in front of the bridged copy. Once per process; nothing happens when there is no dec-secret.
+// shim of Dec Intern's own in front of the bridged copy. Once per process; nothing happens when there is no dec-secret.
 let pathDone = false;
 export function ensurePath() {
   if (pathDone) return; pathDone = true;

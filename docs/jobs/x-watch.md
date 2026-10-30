@@ -1,6 +1,6 @@
 # Watching an X account
 
-Copy one of these to `~/.config/bisu/jobs/x-<name>.md` (or ask Dec Intern: "@someone 새 글 올라오면 알려줘").
+Copy one of these to `~/.config/dec-intern/jobs/x-<name>.md` (or ask Dec Intern: "@someone 새 글 올라오면 알려줘").
 Each run keeps the last post it saw in `seen.txt` in its `cwd`, and stays quiet until there is a new one.
 
 ## Without a key: your own signed-in browser
@@ -14,7 +14,7 @@ every: 30m
 cwd: /Users/you/watch/x-someone
 tools: edit
 ---
-mcp__bisu__browser_task로 https://x.com/someone 를 읽기만(look_only) 하고, 이어서 mcp__bisu__browser_read로 그 페이지의 글과 링크를 읽어.
+mcp__dec-intern__browser_task로 https://x.com/someone 를 읽기만(look_only) 하고, 이어서 mcp__dec-intern__browser_read로 그 페이지의 글과 링크를 읽어.
 고정된 글을 빼고 가장 최근 글 3개: 글 주소는 날짜에 걸린 링크(https://x.com/someone/status/숫자)야.
 seen.txt(없으면 새로)에 적힌 주소와 비교해서:
 - 새 글이 없으면 [조용] 만 답해.

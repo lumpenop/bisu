@@ -6,9 +6,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bisu-jobs-check-'));
-Object.assign(process.env, {XDG_CONFIG_HOME: path.join(dir, 'config'), BISU_JOBS_STATE: path.join(dir, 'jobs.json'),
-  BISU_SCHEDULER_LOCK: path.join(dir, 'lock'), BISU_CLAUDE_PROJECTS: path.join(dir, 'projects'), BISU_NOTIFY: '0'});
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dec-intern-jobs-check-'));
+Object.assign(process.env, {XDG_CONFIG_HOME: path.join(dir, 'config'), DEC_INTERN_JOBS_STATE: path.join(dir, 'jobs.json'),
+  DEC_INTERN_SCHEDULER_LOCK: path.join(dir, 'lock'), DEC_INTERN_CLAUDE_PROJECTS: path.join(dir, 'projects'), DEC_INTERN_NOTIFY: '0'});
 const jobs = await import('../../ui/jobs.mjs');
 const watch = await import('../../ui/claude-watch.mjs');
 
@@ -71,7 +71,7 @@ assert.deepEqual([r.state, r.why], ['끝남', '다 했어요.']);
 // A sidechain (a subagent's) message after the answer does not reopen the session.
 r = state(session('side', [asst([{type: 'text', text: '끝.'}]), asst([{type: 'tool_use', name: 'Read'}], {isSidechain: true})]));
 assert.equal(r.state, '끝남');
-// bisu's own `claude -p` runs are not the app's; `all` includes them.
+// Dec Intern's own `claude -p` runs are not the app's; `all` includes them.
 fs.writeFileSync(path.join(proj, 'cli.jsonl'), JSON.stringify(asst([{type: 'text', text: 'ok'}], {entrypoint: 'sdk-cli'})) + '\n');
 assert.ok(!watch.sessions({now}).some(x => x.id === 'cli'));
 assert.ok(watch.sessions({now, all: true}).some(x => x.id === 'cli'));

@@ -1,12 +1,12 @@
-// Web tasks on public practice sites, the same in every browser bisu can drive: success and time.
+// Web tasks on public practice sites, the same in every browser dec-intern can drive: success and time.
 //   OPENAI_API_KEY=dec://OPENAI_API_KEY GLM_API_KEY=dec://GLM_API_KEY dec-secret run -- \
 //     node engine/eval/web-tasks.mjs [--set speed|complex|hard|holdout|holdout2|holdout3|holdout4|holdout5|holdout6] [--modes dec,ego,aside,decfast] [--repeat 2] [--only O1,O2] [--budget 20]
-// dec = bisu drives dec (dec's fast mode must be off); decfast = dec's own fast mode (must be on); ego, aside = bisu
+// dec = dec-intern drives dec (dec's fast mode must be off); decfast = dec's own fast mode (must be on); ego, aside = dec-intern
 // drives them. The sites are made for scraping practice (books.toscrape, quotes.toscrape, scrapethissite,
 // webscraper.io, the-internet, web-scraping.dev, scrapingcourse, Oxylabs' sandbox), so repeating is fine.
 // One JSON line per run on stdout; docs/web-eval.md keeps the results and what each round changed.
 // "holdout" and "holdout2" were measured before anything was tuned on them; holdout's faults were then fixed, so
-// only a set nobody has tuned on yet says how bisu does on unfamiliar pages.
+// only a set nobody has tuned on yet says how dec-intern does on unfamiliar pages.
 import * as ego from '../ego.mjs';
 import * as dec from '../dec.mjs';
 import * as aside from '../aside.mjs';
@@ -92,10 +92,10 @@ async function one(mode, t, rep) {
   const inputs = t.inputs || {};
   if (mode === 'decfast') {
     const r = await dec.task({goal: t.goal, url: t.url, inputs: Object.entries(inputs).map(([name, value]) => ({name, value})), budget: BUDGET, waitMs: 240_000});
-    if (r.tabId) await dec.api('POST', `/v1/tabs/${r.tabId}/close`, {agent: 'bisu'}).catch(() => {});
+    if (r.tabId) await dec.api('POST', `/v1/tabs/${r.tabId}/close`, {agent: 'dec-intern'}).catch(() => {});
     return {answer: r.answer, status: r.status, steps: r.steps};
   }
-  if (mode === 'ego') { const r = await ego.run({goal: t.goal, url: t.url, inputs, space: `bisu-eval-${set}-${t.key}-${rep}`, budget: BUDGET}); await ego.close(r.space).catch(() => {}); return r }
+  if (mode === 'ego') { const r = await ego.run({goal: t.goal, url: t.url, inputs, space: `dec-intern-eval-${set}-${t.key}-${rep}`, budget: BUDGET}); await ego.close(r.space).catch(() => {}); return r }
   const drv = mode === 'dec' ? dec.directDriver({tab: decTab}) : aside.driver();
   const r = await ego.drive({goal: t.goal, url: t.url, inputs, driver: drv, budget: BUDGET});
   if (mode === 'dec') decTab = drv.tabId;
@@ -107,4 +107,4 @@ for (let rep = 0; rep < REPS; rep++) for (const t of T) for (const mode of MODES
   const a = String(r.answer ?? '');
   console.log(JSON.stringify({set, task: t.key, mode, rep, s: +((Date.now() - t0) / 1000).toFixed(1), pass: t.ok(a), status: r.status, steps: r.steps, glm: r.reviews?.n, why: r.reviews?.why, answer: a.slice(0, 1200), error: r.error, last: r.history?.slice(-4)}));
 }
-if (decTab) await dec.api('POST', `/v1/tabs/${decTab}/close`, {agent: 'bisu'}).catch(() => {});
+if (decTab) await dec.api('POST', `/v1/tabs/${decTab}/close`, {agent: 'dec-intern'}).catch(() => {});

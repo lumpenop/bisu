@@ -16,11 +16,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const PROJECTS = process.env.BISU_CLAUDE_PROJECTS || path.join(os.homedir(), '.claude', 'projects');
+export const PROJECTS = process.env.DEC_INTERN_CLAUDE_PROJECTS || path.join(os.homedir(), '.claude', 'projects');
 const STILL_MIN = 10;
 const TAIL = 512 * 1024;
 
-// The app writes entrypoint claude-desktop on a session's first lines and sdk-cli after that, as bisu's own `claude -p`
+// The app writes entrypoint claude-desktop on a session's first lines and sdk-cli after that, as Dec Intern's own `claude -p`
 // runs do throughout; only the app's sessions have titles (custom-title, agent-name).
 function fromApp(file) {
   const fd = fs.openSync(file, 'r');

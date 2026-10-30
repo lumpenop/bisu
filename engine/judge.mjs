@@ -1,4 +1,4 @@
-// bisu's judgments, made by OpenAI's Decisions API (gpt-6-luna): GLM talks and acts, this decides.
+// Dec Intern's judgments, made by OpenAI's Decisions API (gpt-6-luna): GLM talks and acts, this decides.
 // Decisions is the only judge: GLM talks, acts and reviews, and judging was taken from both GLM and Jev. Measured
 // 2026-10-28 on the labeled examples, twice each, each at its own cut-offs:
 // - Decisions: routes 60/63, 19/20 safe commands cleared and no risky one, 18/20 stuck turns caught,
@@ -30,7 +30,7 @@ const PROVIDERS = {
     routes: () => R.routes('decisions'),
     url: r => r.base.replace(/\/$/, '') + '/v1/decisions',
     key: () => R.routes('decisions')[0]?.key || '',
-    model: () => process.env.BISU_DECISION_MODEL || 'gpt-6-luna',
+    model: () => process.env.DEC_INTERN_DECISION_MODEL || 'gpt-6-luna',
     price: 0.10,
     // A list of questions, choices as a list, yes/no as a predicate.
     body: (model, text, questions) => ({model, input: [{type: 'message', role: 'user', content: [{type: 'input_text', text}]}],
@@ -42,7 +42,7 @@ const PROVIDERS = {
 };
 export const provider = () => 'decisions';
 export const decisionModel = () => PROVIDERS[provider()].model();
-export const available = () => !!PROVIDERS[provider()].key() && process.env.BISU_DECISIONS !== '0';
+export const available = () => !!PROVIDERS[provider()].key() && process.env.DEC_INTERN_DECISIONS !== '0';
 
 export const usage = {calls: 0, inputTokens: 0, usd: 0, ms: 0, failures: 0, times: [], lastError: null};
 export const cost = () => usage.usd;
@@ -83,11 +83,11 @@ export const ROUTES = {
   chat: 'Conversation or a question that general knowledge answers, with no files, commands, web or memory needed. Not a question about the people, numbers or contents in the person\'s own files.',
   work: 'Needs to look at or change files in the working folder, or run commands there (reading, searching, editing, testing) — including questions about data the folder holds (how many users, which orders, what a setting is).',
   build: 'A sizeable piece of building: a new feature, many files, a whole page, a refactor across the project.',
-  past: 'Refers to earlier conversations or earlier work with bisu ("지난번에", "전에 얘기한", "그때"), or asks what another bot, a worker bisu handed work to, or a scheduled job did or found ("리서치 봇이 뭐 찾았어?", "어젯밤 예약 작업 어떻게 됐어?").',
+  past: 'Refers to earlier conversations or earlier work with dec-intern ("지난번에", "전에 얘기한", "그때"), or asks what another bot, a worker dec-intern handed work to, or a scheduled job did or found ("리서치 봇이 뭐 찾았어?", "어젯밤 예약 작업 어떻게 됐어?").',
   mac: "Operate the Mac outside the working folder: other apps, the screen, clipboard, windows, files elsewhere.",
   schedule: 'Asks the assistant itself to do a task later or repeatedly — check, summarize, report or run something then ("매일 아침 8시에 뉴스 요약해줘", "내일 9시에 빌드 돌려줘"). Not an event in their calendar, and not just reminding them of something.',
   calendar: 'Their calendar or reminders: what is on (today, this week), adding, moving or cancelling an event or appointment, finding a free time, their to-do lists, or being reminded of something at a time ("3시에 알려줘", "잊지 않게").',
-  remember: 'Asks bisu to remember a fact or preference for future conversations, or to forget one.',
+  remember: 'Asks dec-intern to remember a fact or preference for future conversations, or to forget one.',
   web: 'Needs current information from the internet (news, prices, docs, anything recent).',
 };
 // folder: what the assistant has open (top-level names), so "서울 사는 사용자는 몇 명이야?" reads as a
@@ -120,7 +120,7 @@ export async function route(userText, {recent = '', folder = ''} = {}) {
 //   tenth of the cost (engine/eval/bench.mjs, live runs 2026-10-27).
 // - Reasoning: GLM-5.3 needs it whenever tools are in play (at low effort it skipped the files); Flash
 //   did the folder work as well without it and twice as fast, so it reasons only for a build or what
-//   the judge calls hard. Plain conversation gets no tools and light reasoning. BISU_THINKING=on|off
+//   the judge calls hard. Plain conversation gets no tools and light reasoning. DEC_INTERN_THINKING=on|off
 //   forces it everywhere.
 export const HINTS = {
   web: 'This needs current information: use web_fetch on a reliable source rather than answering from memory, and say where it came from.',
@@ -136,11 +136,11 @@ export const WORK_ROUTES = new Set(['work', 'build']);
 // Work the judge puts at or above this is several jobs, so the assistant splits it (judge-bench.mjs
 // prints what each cut-off would have done).
 export const SPLIT_ACT = 0.7;
-// How hard a model reasons when it reasons: 「보통」 unless BISU_EFFORT says otherwise, and 「높음」 for a
-// build, a hard job or a split, whatever the base. Every model bisu uses takes the level (glm.mjs).
-export const EFFORT = ['low', 'medium', 'high'].includes(process.env.BISU_EFFORT) ? process.env.BISU_EFFORT : 'medium';
+// How hard a model reasons when it reasons: 「보통」 unless DEC_INTERN_EFFORT says otherwise, and 「높음」 for a
+// build, a hard job or a split, whatever the base. Every model dec-intern uses takes the level (glm.mjs).
+export const EFFORT = ['low', 'medium', 'high'].includes(process.env.DEC_INTERN_EFFORT) ? process.env.DEC_INTERN_EFFORT : 'medium';
 export function planTurn(r, {model, workModel, tools}) {
-  const force = process.env.BISU_THINKING;
+  const force = process.env.DEC_INTERN_THINKING;
   const think = wanted => force === 'on' ? true : force === 'off' ? false : wanted;
   const plan = {model, tools, thinking: think(true), effort: EFFORT, hint: '', heavy: false, split: false};
   if (!r) return plan;
@@ -216,7 +216,7 @@ export async function progress(userText, steps) {
   return {state: a.state.choice, confidence: a.state.p[a.state.choice] ?? 0, p: a.state.p};
 }
 // When a judgment is acted on, and what the model is told. A turn judged to go in circles three times
-// is stopped. BISU_PROGRESS=0 turns the check off.
+// is stopped. DEC_INTERN_PROGRESS=0 turns the check off.
 export const PROGRESS_ACT = {repeating: 0.75, finished: 0.85, blocked: 0.7};
 export const PROGRESS_NUDGE = {
   repeating: '같은 방법을 반복하고 있어. 접근을 바꾸거나, 지금까지 알아낸 것으로 답해.',
@@ -228,7 +228,7 @@ export const PROGRESS_NUDGE = {
 export function watchProgress(userText, messages, {startAt = messages.length, onJudgment = () => {}} = {}) {
   let lastJudged = 0, circles = 0;
   return async ({stats}) => {
-    if (process.env.BISU_PROGRESS === '0' || stats.steps < 5 || stats.steps - lastJudged < 3 || !available()) return true;
+    if (process.env.DEC_INTERN_PROGRESS === '0' || stats.steps < 5 || stats.steps - lastJudged < 3 || !available()) return true;
     lastJudged = stats.steps;
     const p = await progress(userText, stepsLog(messages.slice(startAt)));
     if (!p) return true;
@@ -261,7 +261,7 @@ export async function unbacked(userText, actions, answer) {
   return a && typeof a.unbacked === 'number' ? a.unbacked : null;
 }
 // ---- did a worker do what it was given ----
-// Read when a worker reports, before bisu does: the brief (and any feedback it was sent back with),
+// Read when a worker reports, before dec-intern does: the brief (and any feedback it was sent back with),
 // every call it made, and its report. The probability that something asked for is not done.
 export async function reviewReport(brief, actions, report, {feedback = ''} = {}) {
   const calls = actions.slice(-40);
@@ -274,14 +274,14 @@ export async function reviewReport(brief, actions, report, {feedback = ''} = {})
 }
 // Measured on three made-up reports (scratchpad team/review.mjs, 2026-10-28): a research report that did
 // everything 0.19, a write that was refused 1.00, a part of the brief left out 0.43 — omissions land in
-// the middle, so the middle band asks bisu to check each part rather than calling it fine.
+// the middle, so the middle band asks dec-intern to check each part rather than calling it fine.
 export const REVIEW = {short: 0.5, unsure: 0.3};
 
 export const CLAIM_ACT = 0.5;
 export const CLAIM_NUDGE = '방금 답에 이번에 실제로 하지 않은 일이 있어 (그 일을 한 도구 호출이 없거나 실패했어). 지금 도구로 하거나, 못 했으면 못 했다고 고쳐서 답해.';
 export function watchClaims(userText, {onJudgment = () => {}} = {}) {
   return async ({text, stats}) => {
-    if (process.env.BISU_CLAIMS === '0' || !available() || !claimsSomething(text)) return null;
+    if (process.env.DEC_INTERN_CLAIMS === '0' || !available() || !claimsSomething(text)) return null;
     const p = await unbacked(userText, stats.actions, text);
     if (p == null) return null;
     const acted = p >= CLAIM_ACT;

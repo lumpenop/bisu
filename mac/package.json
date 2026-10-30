@@ -1,9 +1,9 @@
 {
-  "name": "bisu-desktop",
-  "productName": "bisu",
+  "name": "dec-intern-desktop",
+  "productName": "dec-intern",
   "version": "0.1.0",
   "private": true,
-  "description": "bisu in the menu bar",
+  "description": "dec-intern in the menu bar",
   "main": "main.cjs",
   "scripts": {
     "start": "electron ."

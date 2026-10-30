@@ -1,11 +1,11 @@
-// How well does a model drive bisu's tools? Fifteen everyday tasks on a small project, each checked
+// How well does a model drive Dec Intern's tools? Fifteen everyday tasks on a small project, each checked
 // by looking at the files or the answer afterwards — not by asking another model.
 //
 //   GLM_API_KEY=dec://GLM_API_KEY dec-secret run -- node engine/eval/bench.mjs [--models glm-5.3,glm-5.3-flash] [--repeat 2] [--only 4,5] [--out file.jsonl] [--progress on,off]
 //
 // A model named routed:<assistant>/<worker> runs each task the way the engine would: Decisions
 // classifies the request, and judge.planTurn picks the model, tools and reasoning (needs
-// OPENAI_API_KEY as well). routed:glm-5.3/glm-5.3-flash is bisu's default.
+// OPENAI_API_KEY as well). routed:glm-5.3/glm-5.3-flash is Dec Intern's default.
 //
 // --progress on,off runs every task both with and without the engine's progress check (from the
 // fifth step, every third, Decisions says whether the turn is still going somewhere), interleaved so
@@ -32,7 +32,7 @@ import {runTurn} from '../loop.mjs';
 import * as judge from '../judge.mjs';
 import {TOOLS} from '../tools.mjs';
 import {CALENDAR_TOOLS, nowLines} from '../calendar.mjs';
-import {BISU_TOOLS} from '../bisu-tools.mjs';
+import {DEC_INTERN_TOOLS} from '../dec-intern-tools.mjs';
 import {parseCron} from '../../ui/jobs.mjs';
 import {fakeCalendar} from './fake-calendar.mjs';
 
@@ -43,7 +43,7 @@ const MODELS = arg('models', 'glm-5.3,glm-5.3-flash').split(',');
 const REPEAT = Number(arg('repeat', 2));
 // --only 4,5 or --only 20-35
 const ONLY = arg('only', '') ? new Set(arg('only').split(',').flatMap(x => { const [a, b] = x.split('-').map(Number); return b ? Array.from({length: b - a + 1}, (_, i) => a + i) : [a] })) : null;
-const OUT = arg('out', path.join(os.tmpdir(), `bisu-bench-${Date.now()}.jsonl`));
+const OUT = arg('out', path.join(os.tmpdir(), `dec-intern-bench-${Date.now()}.jsonl`));
 const CONCURRENCY = Number(arg('concurrency', 4));
 const THINKING = arg('thinking', 'on') !== 'off';
 const PROGRESS = arg('progress', 'on').split(',').map(x => x === 'on');
@@ -55,10 +55,10 @@ const CONFIGS = MODELS.flatMap(m => PROGRESS.flatMap(p => CLAIMS.map(c => label(
 // ---- the fixture: a tiny shop with one bug, some TODOs, a CSV and a long log ----
 const CITIES = ['서울', '부산', '서울', '대구', '인천', '서울', '광주', '대전', '서울', '울산', '수원', '서울', '부산', '서울', '대구', '제주', '서울', '전주', '청주', '포항'];
 function fixture() {
-  // BISU_BENCH_DIR keeps every run's folder under one place that can be cleared as a whole.
-  const root = process.env.BISU_BENCH_DIR || os.tmpdir();
+  // DEC_INTERN_BENCH_DIR keeps every run's folder under one place that can be cleared as a whole.
+  const root = process.env.DEC_INTERN_BENCH_DIR || os.tmpdir();
   fs.mkdirSync(root, {recursive: true});
-  const dir = fs.mkdtempSync(path.join(root, 'bisu-bench-'));
+  const dir = fs.mkdtempSync(path.join(root, 'dec-intern-bench-'));
   const w = (p, s) => { fs.mkdirSync(path.dirname(path.join(dir, p)), {recursive: true}); fs.writeFileSync(path.join(dir, p), s) };
   w('package.json', JSON.stringify({name: 'shop', version: '1.0.0', type: 'module', scripts: {test: 'node test.mjs'}}, null, 2) + '\n');
   w('src/cart.mjs', `import { formatPrice } from './format.mjs';
@@ -189,10 +189,10 @@ const TASKS = [
   {id: 25, name: '반복 일정', calendar: true, prompt: "매주 월요일 아침 9시에 30분짜리 '주간 계획' 반복 일정 만들어줘",
     check: (d, r) => { const a = added(r.cal); if (a.length !== 1) return false; const s = at(a[0].start);
       return a[0].repeat === 'weekly' && s.getDay() === 1 && ymd(s) >= '2026-10-27' && ymd(s) <= '2026-11-02' && /09:00$/.test(a[0].start) && /09:30$/.test(a[0].end) }},
-  // Reminding them is a reminder, not a job bisu runs …
+  // Reminding them is a reminder, not a job dec-intern runs …
   {id: 26, name: '알려줘', calendar: true, prompt: '내일 아침 9시에 약 먹으라고 알려줘',
     check: (d, r) => { const x = r.cal.data.reminders.filter(m => /약/.test(m.title)); return x.length === 1 && x[0].due === '2026-10-28 09:00' && !r.jobs.length && !added(r.cal).length }},
-  // … and work bisu must do later is a job, not a reminder.
+  // … and work dec-intern must do later is a job, not a reminder.
   {id: 27, name: '예약 작업', calendar: true, prompt: '매일 아침 8시에 오늘 일정 요약해서 보여줘',
     check: (d, r) => r.jobs.length === 1 && /^0?0 8 \* \* (\*|0-6|1-7)$/.test(String(r.jobs[0].cron || '').trim()) && !r.cal.log.length},
   {id: 28, name: '목록 보기', calendar: true, prompt: '장보기 목록에 뭐 있어?', check: (d, r) => /우유/.test(r.text) && /계란/.test(r.text) && !r.cal.log.length},
@@ -250,13 +250,13 @@ const calendarFixture = (fail = {}) => fakeCalendar({fail,
 // What the engine offers next to the calendar: scheduling and memory, recorded instead of saved.
 const ASSISTANT_TOOLS = {
   ...CALENDAR_TOOLS,
-  schedule_job: {...BISU_TOOLS.schedule_job, run(ctx, a) {
+  schedule_job: {...DEC_INTERN_TOOLS.schedule_job, run(ctx, a) {
     if (!a.cron && !a.at) return {text: 'Give cron (repeating) or at (once).', error: true};
     if (a.cron) { try { parseCron(a.cron) } catch (e) { return {text: `cron: ${e.message}`, error: true} } }
     ctx.jobs.push(a);
     return {text: `Created the job "${a.name}" (${a.slug}).`};
   }},
-  remember: {...BISU_TOOLS.remember, run: (ctx, a) => ({text: `Saved "${a.title}". It applies from the next conversation.`})},
+  remember: {...DEC_INTERN_TOOLS.remember, run: (ctx, a) => ({text: `Saved "${a.title}". It applies from the next conversation.`})},
 };
 
 // ---- the sandbox ----

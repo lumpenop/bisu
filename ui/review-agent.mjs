@@ -1,22 +1,22 @@
 #!/usr/bin/env node
-// SubagentStop hook for bisu ui chats: before a worker's report reaches bisu, the judge reads it against
+// SubagentStop hook for dec-intern ui chats: before a worker's report reaches dec-intern, the judge reads it against
 // the brief and against what the worker actually did (engine/judge.mjs reviewReport). If something
 // asked for looks missing, failed or unbacked, the worker is sent on once with that note — Claude Code
 // lets a stop hook block the stop, and stop_hook_active keeps it to one round. A report that ends in a
-// question for the person (질문: …) goes through: that is bisu's to answer.
+// question for the person (질문: …) goes through: that is Dec Intern's to answer.
 //
-// Each judgment is appended to ~/Library/Application Support/bisu/reviews.jsonl, so the threshold can
+// Each judgment is appended to ~/Library/Application Support/dec-intern/reviews.jsonl, so the threshold can
 // be checked against real reports later.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import * as judge from '../engine/judge.mjs';
 
-const LOG = path.join(os.homedir(), 'Library', 'Application Support', 'bisu', 'reviews.jsonl');
+const LOG = path.join(os.homedir(), 'Library', 'Application Support', 'dec-intern', 'reviews.jsonl');
 const text = c => typeof c === 'string' ? c : Array.isArray(c) ? c.filter(b => b?.type === 'text').map(b => b.text).join('\n') : '';
 
 // The brief (first message), any feedback sent with SendMessage since (the last other message from
-// bisu), and every call with its result, from the worker's own transcript.
+// dec-intern), and every call with its result, from the worker's own transcript.
 export function readTranscript(file) {
   const asks = [], actions = [], calls = new Map();
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
@@ -38,8 +38,8 @@ export function readTranscript(file) {
 }
 
 export function reason(p) {
-  if (p >= judge.REVIEW.short) return '검토(bisu): 보고와 실제로 한 일을 맞춰 보면, 맡긴 일 중 빠졌거나 실패했거나 확인되지 않은 게 있어 보여. 맡긴 일을 항목마다 다시 확인해서 빠진 건 마저 하고, 할 수 없는 건 왜 못 했는지 보고에 적어. 그다음 다시 짧게 보고해.';
-  if (p >= judge.REVIEW.unsure) return '검토(bisu): 맡긴 일 중 일부가 빠졌을 수 있어. 항목마다 결과를 직접 확인하고, 보고에 항목별로 됐는지 적어서 다시 짧게 보고해.';
+  if (p >= judge.REVIEW.short) return '검토(dec-intern): 보고와 실제로 한 일을 맞춰 보면, 맡긴 일 중 빠졌거나 실패했거나 확인되지 않은 게 있어 보여. 맡긴 일을 항목마다 다시 확인해서 빠진 건 마저 하고, 할 수 없는 건 왜 못 했는지 보고에 적어. 그다음 다시 짧게 보고해.';
+  if (p >= judge.REVIEW.unsure) return '검토(dec-intern): 맡긴 일 중 일부가 빠졌을 수 있어. 항목마다 결과를 직접 확인하고, 보고에 항목별로 됐는지 적어서 다시 짧게 보고해.';
   return null;
 }
 

@@ -1,10 +1,11 @@
 // Which key a model call goes out with, in the order the person set, and whether a key that fails hands the call to the
-// next. The order is dec's: one file both apps read and write (dec's 설정 → 모델 키 순서, bisu's 설정 → 모델 키 순서):
+// next. The order is dec's: one file both apps read and write (dec's 설정 → 모델 키 순서, Dec Intern's 설정 → 모델 키 순서):
 //   ~/Library/Application Support/Dec Browser/model-routes.json  {schema:1, auto:true, order:{glm:[name…], decisions:[…], openrouter:[…]}}
 // Names are the keys' dec:// names. The keys themselves come from the launcher: every saved key for OpenRouter, Z.AI and
-// OpenAI as BISU_RK<n>_API_KEY (dec-secret run gives each its BISU_RK<n>_BASE_URL), listed in BISU_ROUTE_KEYS as
-// "n|name|site;…". Without that list (bisu run by hand) the old variables are the keys: GLM_API_KEY (Z.AI),
+// OpenAI as DEC_INTERN_RK<n>_API_KEY (dec-secret run gives each its DEC_INTERN_RK<n>_BASE_URL), listed in DEC_INTERN_ROUTE_KEYS as
+// "n|name|site;…". Without that list (dec-intern run by hand) the old variables are the keys: GLM_API_KEY (Z.AI),
 // OPENROUTER_API_KEY, OPENAI_API_KEY.
+import '../ui/migrate.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,16 +17,16 @@ export const FAMILIES = {
   openrouter: {label: 'OpenRouter 모델 (Claude Code)', sites: [OR_SITE]},
 };
 export const SITE_LABEL = {[OR_SITE]: 'OpenRouter', [ZAI_SITE]: 'Z.AI', [OPENAI_SITE]: 'OpenAI'};
-const FILE = () => process.env.BISU_ROUTES_FILE || path.join(os.homedir(), 'Library', 'Application Support', 'Dec Browser', 'model-routes.json');
+const FILE = () => process.env.DEC_INTERN_ROUTES_FILE || path.join(os.homedir(), 'Library', 'Application Support', 'Dec Browser', 'model-routes.json');
 // A key that is out of money or refused rests ten minutes, one that was busy or down one minute. Each chat is its own
 // process, so the rest is kept in a file: the next chat does not ask an empty key again.
-const HEALTH = () => process.env.BISU_ROUTE_HEALTH || path.join(os.homedir(), '.config', 'bisu', 'route-health.json');
+const HEALTH = () => process.env.DEC_INTERN_ROUTE_HEALTH || path.join(os.homedir(), '.config', 'dec-intern', 'route-health.json');
 const LONG_MS = 600_000, SHORT_MS = 60_000;
 
 // The keys this process was given, each with where its requests go (the local proxy, or the site itself).
 export function keys(env = process.env) {
-  const list = String(env.BISU_ROUTE_KEYS || '').split(';').map(x => x.split('|')).filter(x => x.length >= 3 && env[`BISU_RK${x[0]}_API_KEY`])
-    .map(([n, name, site]) => ({name: decodeURIComponent(name), site, key: env[`BISU_RK${n}_API_KEY`], base: env[`BISU_RK${n}_BASE_URL`] || site}));
+  const list = String(env.DEC_INTERN_ROUTE_KEYS || '').split(';').map(x => x.split('|')).filter(x => x.length >= 3 && env[`DEC_INTERN_RK${x[0]}_API_KEY`])
+    .map(([n, name, site]) => ({name: decodeURIComponent(name), site, key: env[`DEC_INTERN_RK${n}_API_KEY`], base: env[`DEC_INTERN_RK${n}_BASE_URL`] || site}));
   if (list.length) return list;
   const out = [];
   if (env.OPENROUTER_API_KEY) out.push({name: 'OPENROUTER_API_KEY', site: OR_SITE, key: env.OPENROUTER_API_KEY, base: env.OPENROUTER_BASE_URL || OR_SITE});

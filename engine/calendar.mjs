@@ -1,7 +1,7 @@
 // The person's Calendar and Reminders as tools: what is on, adding and moving events, to-dos, and
 // "remind me at…" (a reminder with a time is what notifies them, on the phone too).
 //
-// The real ones go through EventKit (mac/cal/bisu-cal.swift, which mac/native/build.sh builds next to
+// The real ones go through EventKit (mac/cal/dec-intern-cal.swift, which mac/native/build.sh builds next to
 // the computer-use helper). The benchmark hands in a pretend calendar as ctx.calendar instead
 // (engine/eval/fake-calendar.mjs), so the same tools are measured without touching a real one.
 //
@@ -89,7 +89,7 @@ function failure(e) {
   const m = String(e?.message || e);
   if (m.startsWith('access-denied')) {
     const what = m.endsWith('reminders') ? ['reminders', '미리 알림'] : ['calendar', '캘린더'];
-    return err(`bisu is not allowed to see their ${what[0]}. Tell them to allow bisu in 시스템 설정 → 개인정보 보호 및 보안 → ${what[1]} (전체 접근), then ask again.`);
+    return err(`덱 인턴 is not allowed to see their ${what[0]}. Tell them to allow 덱 인턴 in 시스템 설정 → 개인정보 보호 및 보안 → ${what[1]} (전체 접근), then ask again.`);
   }
   return err(`The calendar did not answer: ${m}`);
 }
@@ -269,7 +269,7 @@ export const CALENDAR_TOOLS = {
 };
 
 // ---- EventKit, through the helper ----
-const HELPER = () => process.env.BISU_CAL_BIN || path.join(os.homedir(), 'Library', 'Application Support', 'bisu', 'bin', 'bisu-cal');
+const HELPER = () => process.env.DEC_INTERN_CAL_BIN || path.join(os.homedir(), 'Library', 'Application Support', 'dec-intern', 'bin', 'dec-intern-cal');
 export function eventKit(bin = HELPER()) {
   const call = (op, args = {}) => new Promise((resolve, reject) => {
     if (!fs.existsSync(bin)) return reject(new Error('the calendar helper is not installed (mac/native/build.sh builds it)'));

@@ -25,4 +25,4 @@ for (const [i, t] of items.entries()) {
 }
 console.log(`${reopened} of ${items.length} reopened`);
 await d.end();
-await dec.api('POST', `/v1/tabs/${d.tabId}/close`, {agent: 'bisu'}).catch(() => {});
+await dec.api('POST', `/v1/tabs/${d.tabId}/close`, {agent: 'dec-intern'}).catch(() => {});

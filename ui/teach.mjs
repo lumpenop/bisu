@@ -1,19 +1,20 @@
-// Show and teach: the person does a task on the Mac once while bisu watches, and the steps become a routine.
+// Show and teach: the person does a task on the Mac once while dec-intern watches, and the steps become a routine.
 //
-// The shell (mac/native/bisu.swift) records; this file keeps and describes what it recorded:
+// The shell (mac/native/dec-intern.swift) records; this file keeps and describes what it recorded:
 //  * a step is one of {type:'app', app}, {type:'click', app, role, title}, {type:'type', app, field, text},
 //    {type:'shortcut', app, keys}. The shell never records password fields or anything typed while macOS
 //    has secure input on, and it reads a field's text once when the typing is done rather than keystrokes.
-//  * the steps stay on this Mac (~/.config/bisu/teach/<time>.json). What goes to the model is only the
+//  * the steps stay on this Mac (~/.config/dec-intern/teach/<time>.json). What goes to the model is only the
 //    one-line description of each step below, never a screenshot.
 //  * the description starts an ordinary chat of the bot, which turns it into a routine with routine_save, so
 //    the person sees the draft and agrees before anything is saved; a later run does the steps with the cu_*
 //    tools (look, click, type, press keys).
+import './migrate.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export const DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu', 'teach');
+export const DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'dec-intern', 'teach');
 const MAX = 200;
 const one = (v, n) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 const ROLE = { AXButton: '버튼', AXMenuItem: '메뉴 항목', AXMenuBarItem: '메뉴', AXTextField: '입력 칸', AXTextArea: '입력 칸', AXCheckBox: '체크박스', AXRadioButton: '선택지', AXPopUpButton: '팝업 메뉴', AXLink: '링크', AXCell: '목록 항목', AXRow: '목록 항목', AXStaticText: '글자', AXImage: '그림', AXTab: '탭', AXTabGroup: '탭' };
@@ -46,7 +47,7 @@ export function describe(steps) {
   }).join('\n');
 }
 
-export function save(steps, { bot = 'bisu' } = {}) {
+export function save(steps, { bot = 'dec-intern' } = {}) {
   const list = clean(steps);
   fs.mkdirSync(DIR, { recursive: true });
   const file = path.join(DIR, `${new Date().toISOString().replace(/[:.]/g, '-')}.json`);

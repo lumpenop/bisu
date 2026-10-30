@@ -2,11 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleIdentifier</key><string>com.bisu.desktop.cal</string>
-  <key>CFBundleName</key><string>bisu</string>
-  <key>NSCalendarsFullAccessUsageDescription</key><string>bisu reads your calendar and adds or moves events when you ask it to.</string>
-  <key>NSCalendarsUsageDescription</key><string>bisu reads your calendar and adds or moves events when you ask it to.</string>
-  <key>NSRemindersFullAccessUsageDescription</key><string>bisu reads your reminders and adds or checks them off when you ask it to.</string>
-  <key>NSRemindersUsageDescription</key><string>bisu reads your reminders and adds or checks them off when you ask it to.</string>
+  <key>CFBundleIdentifier</key><string>local.dec.intern.cal</string>
+  <key>CFBundleName</key><string>dec-intern</string>
+  <key>NSCalendarsFullAccessUsageDescription</key><string>덱 인턴 reads your calendar and adds or moves events when you ask it to.</string>
+  <key>NSCalendarsUsageDescription</key><string>덱 인턴 reads your calendar and adds or moves events when you ask it to.</string>
+  <key>NSRemindersFullAccessUsageDescription</key><string>덱 인턴 reads your reminders and adds or checks them off when you ask it to.</string>
+  <key>NSRemindersUsageDescription</key><string>덱 인턴 reads your reminders and adds or checks them off when you ask it to.</string>
 </dict>
 </plist>

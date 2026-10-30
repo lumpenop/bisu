@@ -1,6 +1,6 @@
 // dec runs a chat left waiting (the person had to confirm a step or sign in, or it simply ran long): engine/browser.mjs
 // writes one file per run, this checks them every few seconds and hands each ended run to the page, which tells the
-// chat that asked (so bisu reports the result, on Telegram too when that is where the chat lives).
+// chat that asked (so dec-intern reports the result, on Telegram too when that is where the chat lives).
 import fs from 'node:fs';
 import path from 'node:path';
 import * as dec from '../engine/dec.mjs';

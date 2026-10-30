@@ -1,11 +1,11 @@
-// bisu's shell, in AppKit instead of Electron.
+// Dec Intern's shell, in AppKit instead of Electron.
 //
 // The engine (ui/server.mjs) and the page (ui/index.html) are unchanged: this file only replaces what
 // Electron was doing — a status item, a popover under it, the full window, the ⌥Space shortcut, and
 // the context handed to the page. That is roughly 430 MB of Chromium replaced by one WebKit view.
 //
 // It owns exactly the same things the Electron shell owned, so nothing about the assistant changes:
-//   • the engine child process, started through dec so bisu never holds the key
+//   • the engine child process, started through dec so dec-intern never holds the key
 //   • a frameless panel the page can drag and resize through the same JS bridge it already used
 //   • what the person was looking at (front app, selected text, clipboard), read in-process
 //   • the Accessibility permission, now asked for by the app itself rather than by a helper
@@ -19,9 +19,9 @@ import UserNotifications
 func bin(_ data: Data) -> String { String(decoding: data, as: UTF8.self) }
 
 let SUPPORT = (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!)
-  .appendingPathComponent("bisu", isDirectory: true)
+  .appendingPathComponent("dec-intern", isDirectory: true)
 let LOGS = (FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!)
-  .appendingPathComponent("Logs/bisu", isDirectory: true)
+  .appendingPathComponent("Logs/dec-intern", isDirectory: true)
 let STATE = SUPPORT.appendingPathComponent("desktop.json")
 
 func ensureDirs() {
@@ -37,7 +37,7 @@ func log(_ parts: String...) {
   let line = "\(ISO8601DateFormatter().string(from: Date())) \(parts.joined(separator: " "))\n"
   if logHandle == nil {
     try? FileManager.default.createDirectory(at: LOGS, withIntermediateDirectories: true)
-    let path = LOGS.appendingPathComponent("bisu.log")
+    let path = LOGS.appendingPathComponent("dec-intern.log")
     if !FileManager.default.fileExists(atPath: path.path) {
       FileManager.default.createFile(atPath: path.path, contents: nil)
     }
@@ -181,18 +181,18 @@ final class Engine {
 
   func start(server: URL, root: URL) throws {
     guard let node = nodePath() else {
-      throw NSError(domain: "bisu", code: 1, userInfo: [NSLocalizedDescriptionKey: "node was not found (install Node, or run `bisu app install` from Terminal once)"])
+      throw NSError(domain: "dec-intern", code: 1, userInfo: [NSLocalizedDescriptionKey: "node was not found (install Node, or run `dec-intern app install` from Terminal once)"])
     }
     port = freePort()
-    guard port > 0 else { throw NSError(domain: "bisu", code: 2, userInfo: [NSLocalizedDescriptionKey: "could not find a free local port"]) }
+    guard port > 0 else { throw NSError(domain: "dec-intern", code: 2, userInfo: [NSLocalizedDescriptionKey: "could not find a free local port"]) }
 
     var env = ProcessInfo.processInfo.environment
     for k in env.keys where k.hasPrefix("CLAUDE") || k.hasPrefix("ANTHROPIC") { env.removeValue(forKey: k) }
     env["PATH"] = "\((node as NSString).deletingLastPathComponent):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-    env["BISU_UI_NO_OPEN"] = "1"
-    env["BISU_UI_PARENT"] = "stdin"
-    env["BISU_UI_PORT"] = String(port)
-    env["BISU_UI_TOKEN"] = token
+    env["DEC_INTERN_UI_NO_OPEN"] = "1"
+    env["DEC_INTERN_UI_PARENT"] = "stdin"
+    env["DEC_INTERN_UI_PORT"] = String(port)
+    env["DEC_INTERN_UI_TOKEN"] = token
     env.removeValue(forKey: "OPENAI_API_KEY")
     env.removeValue(forKey: "OPENAI_BASE_URL")
 
@@ -203,28 +203,28 @@ final class Engine {
       env["OPENROUTER_API_KEY"] = "dec://OPENROUTER_API_KEY"
       let list = decList(node)
       if decHas(list, "OPENAI_API_KEY") { env["OPENAI_API_KEY"] = "dec://OPENAI_API_KEY" }
-      // bisu's own engine thinks with Z.ai GLM; the key is passed the same use-only way.
+      // Dec Intern's own engine thinks with Z.ai GLM; the key is passed the same use-only way.
       if decHas(list, "GLM_API_KEY") { env["GLM_API_KEY"] = "dec://GLM_API_KEY" }
       // Telegram: the bot token saved in dec for api.telegram.org, whatever its name. Read at every
-      // engine start, so Settings' "bisu 다시 켜기" picks up a token saved a moment ago.
+      // engine start, so Settings' "dec-intern 다시 켜기" picks up a token saved a moment ago.
       if let ref = decRef(list, site: "https://api.telegram.org") { env["TELEGRAM_BOT_TOKEN"] = ref }
       // Every key saved for the model sites, for the engine's key order (engine/routes.mjs, the order being dec's
-      // model-routes.json): BISU_RK<n>_API_KEY each, listed in BISU_ROUTE_KEYS as "n|name|site".
+      // model-routes.json): DEC_INTERN_RK<n>_API_KEY each, listed in DEC_INTERN_ROUTE_KEYS as "n|name|site".
       var routeKeys: [String] = []
       for line in list.split(separator: "\n") {
         let cols = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
         guard cols.count >= 2, cols[0].hasPrefix("dec://"), !cols[0].hasPrefix("dec://env/"), routeKeys.count < 12,
               ["https://openrouter.ai", "https://api.z.ai", "https://api.openai.com"].contains(cols[1]) else { continue }
         let n = routeKeys.count + 1
-        env["BISU_RK\(n)_API_KEY"] = cols[0]
+        env["DEC_INTERN_RK\(n)_API_KEY"] = cols[0]
         routeKeys.append("\(n)|\(cols[0].dropFirst(6))|\(cols[1])")
       }
-      if !routeKeys.isEmpty { env["BISU_ROUTE_KEYS"] = routeKeys.joined(separator: ";") }
+      if !routeKeys.isEmpty { env["DEC_INTERN_ROUTE_KEYS"] = routeKeys.joined(separator: ";") }
     } else if let key = env["OPENROUTER_API_KEY"], !key.isEmpty {
       p.executableURL = URL(fileURLWithPath: node)
       p.arguments = [server.path]
     } else {
-      throw NSError(domain: "bisu", code: 3, userInfo: [NSLocalizedDescriptionKey: "dec-secret is missing: run `bisu app install` in Terminal once so bisu has a readable copy of it."])
+      throw NSError(domain: "dec-intern", code: 3, userInfo: [NSLocalizedDescriptionKey: "dec-secret is missing: run `dec-intern app install` in Terminal once so 덱 인턴 has a readable copy of it."])
     }
     p.environment = env
     p.currentDirectoryURL = root
@@ -232,7 +232,7 @@ final class Engine {
     let pipe = Pipe()
     p.standardOutput = pipe
     p.standardError = pipe
-    // Held open for the shell's lifetime: when bisu quits or crashes, the engine sees EOF and stops
+    // Held open for the shell's lifetime: when dec-intern quits or crashes, the engine sees EOF and stops
     // instead of being left running on its own.
     stdinPipe = Pipe()
     p.standardInput = stdinPipe
@@ -273,7 +273,7 @@ final class Engine {
   private func syncGet(_ path: String) -> Data? {
     var req = URLRequest(url: base.appendingPathComponent(path))
     req.timeoutInterval = 2
-    req.setValue(token, forHTTPHeaderField: "X-Bisu-Token")
+    req.setValue(token, forHTTPHeaderField: "X-Dec-Intern-Token")
     var result: Data?
     let sem = DispatchSemaphore(value: 0)
     URLSession.shared.dataTask(with: req) { data, resp, _ in
@@ -292,7 +292,7 @@ final class Engine {
     }
     var req = URLRequest(url: url)
     req.timeoutInterval = 8
-    req.setValue(token, forHTTPHeaderField: "X-Bisu-Token")
+    req.setValue(token, forHTTPHeaderField: "X-Dec-Intern-Token")
     URLSession.shared.dataTask(with: req) { data, _, _ in
       let j = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
       DispatchQueue.main.async { done(j) }
@@ -303,7 +303,7 @@ final class Engine {
     var req = URLRequest(url: base.appendingPathComponent(path))
     req.httpMethod = "POST"
     req.timeoutInterval = 20
-    req.setValue(token, forHTTPHeaderField: "X-Bisu-Token")
+    req.setValue(token, forHTTPHeaderField: "X-Dec-Intern-Token")
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     req.httpBody = try? JSONSerialization.data(withJSONObject: body)
     URLSession.shared.dataTask(with: req) { data, _, _ in
@@ -352,7 +352,7 @@ enum Context {
   static func capture(withSelection: Bool, selfName: String = "덱 인턴") -> [String: Any] {
     let app = frontApp()
     // Its own window under either name: the display name, or the bundle name an older build had.
-    let own = app?.caseInsensitiveCompare(selfName) == .orderedSame || app?.caseInsensitiveCompare("bisu") == .orderedSame
+    let own = app?.caseInsensitiveCompare(selfName) == .orderedSame || app?.caseInsensitiveCompare("dec-intern") == .orderedSame
     let clip = clipboard()
     var sel: (String?, String?) = (nil, nil)
     if withSelection && !own { sel = selection() }
@@ -379,14 +379,14 @@ final class Bridge: NSObject, WKScriptMessageHandler {
   }
 }
 
-// The page expects window.bisuHost, which Electron's preload used to provide. Same shape, so
+// The page expects window.decInternHost, which Electron's preload used to provide. Same shape, so
 // index.html does not know the shell changed.
 let shimJS = """
 (function(){
-  if (window.bisuHost) return;
+  if (window.decInternHost) return;
   const pending = new Map();
   let seq = 0;
-  const post = (cmd, args) => window.webkit.messageHandlers.bisu.postMessage({cmd, args: args || {}});
+  const post = (cmd, args) => window.webkit.messageHandlers.decIntern.postMessage({cmd, args: args || {}});
   const call = (cmd, args) => new Promise((res, rej) => {
     const id = ++seq;
     pending.set(id, {res, rej});
@@ -440,7 +440,7 @@ let shimJS = """
     },
     __emit: (name, value) => { for (const fn of subs[name] || []) { try { fn(value) } catch (e) {} } },
   };
-  window.bisuHost = host;
+  window.decInternHost = host;
 
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !e.isComposing && !e.defaultPrevented) { e.preventDefault(); post('hide') }
@@ -451,7 +451,7 @@ let shimJS = """
   // the drag alive past the window edge. In the full window the headers and the strip along the top
   // (where a title bar would be) move it too, and double-clicking there zooms it like a title bar.
   let drag = null;
-  const DRAG = '.dragbar, .chathead, #panelStart .startWrap > .bisu, #panelStart .startTitle, #panelStart .ccStatus';
+  const DRAG = '.dragbar, .chathead, #panelStart .startWrap > .intern, #panelStart .startTitle, #panelStart .ccStatus';
   const FULL = '.chathead, .listHead, .side .brand, .hero';
   const skip = 'button, input, textarea, select, a, label, summary, .grip, [contenteditable]';
   const full = () => !document.body.classList.contains('panel');
@@ -586,7 +586,7 @@ struct Combo: Equatable {
   static func == (a: Combo, b: Combo) -> Bool { a.code == b.code && a.mods == b.mods }
 }
 
-/// 설정 → 단축키. The defaults are the keys bisu always had; desktop.json keeps only what someone changed
+/// 설정 → 단축키. The defaults are the keys dec-intern always had; desktop.json keeps only what someone changed
 /// ("shortcuts": {id: combo, or {} for none}). 창 닫기 and 종료 can be changed too; text editing, hide and minimize
 /// keep the system's keys.
 enum Shortcuts {
@@ -691,7 +691,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     ensureDirs()
-    log("bisu (native) starting")
+    log("dec-intern (native) starting")
     engine = Engine()
     // terminationHandler runs on a background queue; everything it leads to touches AppKit.
     engine.onExit = { [weak self] in DispatchQueue.main.async { self?.engineExited() } }
@@ -781,7 +781,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
   }
 
   /// One place decides the icon: a filled dot when something needs the person (an approval, or a
-  /// card nobody has read), a ring while bisu is working, nothing when it is idle.
+  /// card nobody has read), a ring while dec-intern is working, nothing when it is idle.
   private func refreshTray() {
     guard let button = statusItem?.button else { return }
     let needsYou = chatState == "waiting" || suggestUnread > 0
@@ -812,7 +812,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
 
   // MARK: notifications
 
-  /// macOS asks once whether bisu may show notifications; after that the answer lives in System
+  /// macOS asks once whether dec-intern may show notifications; after that the answer lives in System
   /// Settings, which Settings in the page links to.
   private func setUpNotifications() {
     let center = UNUserNotificationCenter.current()
@@ -839,8 +839,8 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     }
   }
 
-  /// Whether the person can already see bisu: then a banner about a conversation is noise.
-  private var bisuOnScreen: Bool {
+  /// Whether the person can already see dec-intern: then a banner about a conversation is noise.
+  private var internOnScreen: Bool {
     NSApp.isActive && (panel.isVisible || fullWindow?.isVisible == true)
   }
 
@@ -861,13 +861,13 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
   private func showNotice(_ n: [String: Any], boot: String) {
     let kind = n["kind"] as? String ?? ""
     let chat = n["chat"] as? String
-    if ["approval", "reply", "card"].contains(kind) && bisuOnScreen { return }
+    if ["approval", "reply", "card"].contains(kind) && internOnScreen { return }
     let content = UNMutableNotificationContent()
     content.title = n["title"] as? String ?? "덱 인턴"
     content.body = n["body"] as? String ?? ""
     if kind == "approval" || kind == "event" { content.sound = .default }
     if let chat { content.userInfo = ["chat": chat]; content.threadIdentifier = chat } else { content.threadIdentifier = kind }
-    let id = "bisu-\(boot)-\(n["id"] as? Int ?? 0)"
+    let id = "dec-intern-\(boot)-\(n["id"] as? Int ?? 0)"
     UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: nil)) { error in
       if let error { log("notification failed:", error.localizedDescription) }
     }
@@ -894,7 +894,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       }
       if let chat {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-          target?.evaluateJavaScript("window.bisuHost.__emit('open', '\(chat)')", completionHandler: nil)
+          target?.evaluateJavaScript("window.decInternHost.__emit('open', '\(chat)')", completionHandler: nil)
         }
       }
     }
@@ -906,7 +906,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     if let button = statusItem.button {
       button.image = trayImage()
       button.image?.isTemplate = true
-      button.toolTip = "bisu · \(shortcutLabel)"
+      button.toolTip = "덱 인턴 · \(shortcutLabel)"
       button.target = self
       button.action = #selector(statusClicked(_:))
       button.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -935,7 +935,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     // Nothing: the menu is rebuilt in statusMenu() so state (Accessibility, spend) is current.
   }
 
-  /// Laid out like Control Center: who and how bisu is, the one thing to do, the switches, then open,
+  /// Laid out like Control Center: who and how dec-intern is, the one thing to do, the switches, then open,
   /// settings and quit. Rebuilt on every click so the switches and the spend are current.
   private func statusMenu() -> NSMenu {
     let menu = NSMenu()
@@ -1010,7 +1010,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     }
   }
   private func emitTeach(stop: Bool) {
-    let js = "window.bisuHost.__emit('teach', {recording: \(recorder.recording), steps: \(recorder.steps.count), stop: \(stop)})"
+    let js = "window.decInternHost.__emit('teach', {recording: \(recorder.recording), steps: \(recorder.steps.count), stop: \(stop)})"
     web?.evaluateJavaScript(js, completionHandler: nil)
     if !stop { (fullWindow?.contentView as? WKWebView)?.evaluateJavaScript(js, completionHandler: nil) }
   }
@@ -1061,12 +1061,12 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
   private func applyHotKey(_ combo: Combo? = Shortcuts.combo("talk")) -> Bool {
     if let h = hotKey { UnregisterEventHotKey(h); hotKey = nil }
     guard let combo else { return true }
-    let hotKeyID = EventHotKeyID(signature: OSType(0x62697375), id: 1) // 'bisu'
+    let hotKeyID = EventHotKeyID(signature: OSType(0x62697375), id: 1) // 'dec-intern'
     let status = RegisterEventHotKey(UInt32(combo.code), combo.carbonMods, hotKeyID,
                                     GetApplicationEventTarget(), 0, &hotKey)
     if status != noErr {
       log("hot key could not be registered (\(status))")
-      statusItem?.button?.toolTip = "bisu · \(combo.label) is taken by another app"
+      statusItem?.button?.toolTip = "덱 인턴 · \(combo.label) is taken by another app"
       return false
     }
     return true
@@ -1094,7 +1094,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     bridge = Bridge()
     bridge.shell = self
     let config = WKWebViewConfiguration()
-    config.userContentController.add(bridge, name: "bisu")
+    config.userContentController.add(bridge, name: "decIntern")
     config.userContentController.addUserScript(WKUserScript(source: shimJS, injectionTime: .atDocumentStart, forMainFrameOnly: true))
     config.websiteDataStore = .default()
 
@@ -1211,7 +1211,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     captureContextSoon()
     NSApp.activate(ignoringOtherApps: true)
     panel.makeKeyAndOrderFront(nil)
-    web.evaluateJavaScript("window.bisuHost.__emit('shown')", completionHandler: nil)
+    web.evaluateJavaScript("window.decInternHost.__emit('shown')", completionHandler: nil)
     log("panel shown", "web:", NSStringFromRect(web.frame), "hidden:", String(web.isHidden),
         "inWindow:", String(web.window != nil), "panel:", NSStringFromRect(panel.frame))
     showCount += 1
@@ -1222,7 +1222,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
   /// Lets a build check what the web view actually paints: the window server can hand back a frame
   /// without the accelerated layers in it, so a working page can look empty from a screen capture.
   private func debugSnapshot(tag: String) {
-    guard let base = ProcessInfo.processInfo.environment["BISU_SNAPSHOT"] else { return }
+    guard let base = ProcessInfo.processInfo.environment["DEC_INTERN_SNAPSHOT"] else { return }
     web.takeSnapshot(with: nil) { image, error in
       guard let image, let tiff = image.tiffRepresentation,
             let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else {
@@ -1240,7 +1240,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     lastHidden = Date()
     // The page drops its event stream here, which lets the engine stop Claude Code instead of
     // holding a few hundred megabytes for a panel nobody is looking at.
-    web.evaluateJavaScript("window.bisuHost.__emit('hidden')", completionHandler: nil)
+    web.evaluateJavaScript("window.decInternHost.__emit('hidden')", completionHandler: nil)
     panel.orderOut(nil)
     log("panel hidden")
   }
@@ -1253,7 +1253,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
         guard let self else { return }
         self.pendingContext = ctx
         if let data = try? JSONSerialization.data(withJSONObject: ctx), let json = String(data: data, encoding: .utf8) {
-          self.web.evaluateJavaScript("window.bisuHost.__emit('context', \(json))", completionHandler: nil)
+          self.web.evaluateJavaScript("window.decInternHost.__emit('context', \(json))", completionHandler: nil)
         }
       }
     }
@@ -1266,11 +1266,11 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
   /// minutes means it is not going to stay up, and saying so beats a restart loop.
   private func engineExited() {
     log("engine exited")
-    web?.evaluateJavaScript("window.bisuHost.__emit('engineDown')", completionHandler: nil)
+    web?.evaluateJavaScript("window.decInternHost.__emit('engineDown')", completionHandler: nil)
     guard !quitting else { return }
     engineRestarts = engineRestarts.filter { $0.timeIntervalSinceNow > -120 }
     if engineRestarts.count >= 4 {
-      showFatal("the engine stopped \(engineRestarts.count) times in two minutes. The log is in ~/Library/Logs/bisu/bisu.log; quit bisu and open it again once it is fixed.")
+      showFatal("the engine stopped \(engineRestarts.count) times in two minutes. The log is in ~/Library/Logs/dec-intern/dec-intern.log; quit dec-intern and open it again once it is fixed.")
       return
     }
     engineRestarts.append(Date())
@@ -1307,12 +1307,12 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
         self.loadPanel()
         // After a restart the port is new, so an open full window has to follow it.
         if let view = self.fullWindow?.contentView as? WKWebView { view.load(URLRequest(url: self.fullURL())) }
-        // The engine may already have something waiting from a run that happened while bisu was
+        // The engine may already have something waiting from a run that happened while dec-intern was
         // closed, so the dot has to be right before any page has had a chance to report it.
         self.engine.getJSON("api/proactive") { j in
           if let waiting = j?["waiting"] as? Int { self.setSuggest(waiting) }
         }
-        if ProcessInfo.processInfo.environment["BISU_OPEN_FULL"] == "1" { self.openFull() }
+        if ProcessInfo.processInfo.environment["DEC_INTERN_OPEN_FULL"] == "1" { self.openFull() }
       }
     }
   }
@@ -1326,7 +1326,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
 
   private func showFatal(_ message: String) {
     let alert = NSAlert()
-    alert.messageText = "bisu could not start"
+    alert.messageText = "dec-intern could not start"
     alert.informativeText = message
     alert.addButton(withTitle: "OK")
     NSApp.activate(ignoringOtherApps: true)
@@ -1339,7 +1339,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     if let w = fullWindow {
       // Screen names are plain words ("settings"); anything else is ignored rather than quoted into script.
       if !view.isEmpty, view.allSatisfy({ $0.isASCII && $0.isLetter }), let web = w.contentView as? WKWebView {
-        web.evaluateJavaScript("window.bisuHost.__emit('view', '\(view)')", completionHandler: nil)
+        web.evaluateJavaScript("window.decInternHost.__emit('view', '\(view)')", completionHandler: nil)
       }
       w.makeKeyAndOrderFront(nil)
       NSApp.activate(ignoringOtherApps: true)
@@ -1350,7 +1350,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     let bridge = Bridge()
     bridge.shell = self
     let config = WKWebViewConfiguration()
-    config.userContentController.add(bridge, name: "bisu")
+    config.userContentController.add(bridge, name: "decIntern")
     config.userContentController.addUserScript(WKUserScript(source: shimJS, injectionTime: .atDocumentStart, forMainFrameOnly: true))
     config.websiteDataStore = .default()
     let view = WKWebView(frame: NSRect(x: 0, y: 0, width: 1080, height: 760), configuration: config)
@@ -1390,7 +1390,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       let which = webView === self.web ? "panel" : "full"
       log("page loaded (\(which)):", (value as? String) ?? "?", error.map { "error: \($0.localizedDescription)" } ?? "")
     }
-    if ProcessInfo.processInfo.environment["BISU_DEBUG_DOM"] == "1" {
+    if ProcessInfo.processInfo.environment["DEC_INTERN_DEBUG_DOM"] == "1" {
       let probe = """
       JSON.stringify({
         inputs: [...document.querySelectorAll('input,textarea')].map(e => (e.id || e.className) + ':' + (e.placeholder || '')),
@@ -1407,15 +1407,15 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     }
     // Proves the bridge the page talks to actually answers, without needing a mouse: every command
     // goes out and its result comes back through the same path the page uses.
-    if ProcessInfo.processInfo.environment["BISU_DEBUG_BRIDGE"] == "1" {
+    if ProcessInfo.processInfo.environment["DEC_INTERN_DEBUG_BRIDGE"] == "1" {
       let test = """
-      const out = {panel: window.bisuHost.panel, platform: window.bisuHost.platform};
-      out.bounds = await window.bisuHost.bounds();
-      out.accessibility = await window.bisuHost.accessibility();
-      out.selectionEnabled = await window.bisuHost.selectionEnabled();
-      out.context = await window.bisuHost.context();
-      await window.bisuHost.resize(430, 610);
-      out.afterResize = await window.bisuHost.bounds();
+      const out = {panel: window.decInternHost.panel, platform: window.decInternHost.platform};
+      out.bounds = await window.decInternHost.bounds();
+      out.accessibility = await window.decInternHost.accessibility();
+      out.selectionEnabled = await window.decInternHost.selectionEnabled();
+      out.context = await window.decInternHost.context();
+      await window.decInternHost.resize(430, 610);
+      out.afterResize = await window.decInternHost.bounds();
       return JSON.stringify(out);
       """
       webView.callAsyncJavaScript(test, arguments: [:], in: nil, in: .page) { result in
@@ -1437,7 +1437,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
 
   // MARK: app menu and 설정 → 단축키
 
-  /// The app's own menu. bisu shows no menu bar (it is an accessory app), but macOS still sends a window's key
+  /// The app's own menu. dec-intern shows no menu bar (it is an accessory app), but macOS still sends a window's key
   /// equivalents through it: without 편집 the panel's text box ignored ⌘C ⌘V ⌘A ⌘Z. Changes in 설정 → 단축키
   /// rebuild it.
   func buildMainMenu() {
@@ -1537,7 +1537,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     reply?(shortcutRows(message))
   }
 
-  /// `bisu --shortcut-test`: the menu answers ⌘C ⌘V ⌘A ⌘Z … with the standard actions, keys are named the way
+  /// `dec-intern --shortcut-test`: the menu answers ⌘C ⌘V ⌘A ⌘Z … with the standard actions, keys are named the way
   /// menus name them, and taken keys are refused. Reads desktop.json; writes nothing.
   func shortcutSelfTest() -> Bool {
     buildMainMenu()
@@ -1636,7 +1636,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
       open.allowsMultipleSelection = false
       open.canCreateDirectories = true
       open.prompt = "Use this folder"
-      open.message = "bisu works in the folder you pick."
+      open.message = "dec-intern works in the folder you pick."
       let answer: (NSApplication.ModalResponse) -> Void = { response in
         reply(response == .OK ? open.url?.path : nil)
       }
@@ -1707,7 +1707,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
         self?.notificationStatus { reply(["status": $0]) }
       }
     case "notifySettings":
-      let pane = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=com.bisu.desktop")!
+      let pane = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=local.dec.intern")!
       if !NSWorkspace.shared.open(pane) {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.notifications")!)
       }
@@ -1744,7 +1744,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
        let wrapped = String(data: data, encoding: .utf8), wrapped.count >= 2 {
       payload = String(wrapped.dropFirst().dropLast())
     }
-    view?.evaluateJavaScript("window.bisuHost.__reply(\(id), true, \(payload))", completionHandler: nil)
+    view?.evaluateJavaScript("window.decInternHost.__reply(\(id), true, \(payload))", completionHandler: nil)
   }
 }
 
@@ -1755,7 +1755,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
 /// Records what the person does on the Mac for 보여 주고 가르치기, only between 시작 and 멈추기: switching apps,
 /// the control clicked (its Accessibility role and name, never a screenshot), the text a field ended up with
 /// (read once when the typing is done, not keystroke by keystroke) and shortcuts. Nothing is recorded from
-/// password fields, while macOS has secure input on, or in bisu's own windows. The steps go to the engine,
+/// password fields, while macOS has secure input on, or in Dec Intern's own windows. The steps go to the engine,
 /// which keeps them on this Mac and sends the model only a one-line description of each (ui/teach.mjs).
 final class Recorder {
   private(set) var steps: [[String: Any]] = []

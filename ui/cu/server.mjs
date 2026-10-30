@@ -1,4 +1,4 @@
-// bisu's computer use, as tools Claude Code can call: look at the window, pick one of the things on
+// Dec Intern's computer use, as tools Claude Code can call: look at the window, pick one of the things on
 // it, click or type, and check what happened.
 //
 // The split matters. Accessibility says what is actually on the window — every button with its real
@@ -9,6 +9,7 @@
 // Anything destructive — delete, buy, send, quit, format, overwrite — is not executed on the spot.
 // It is held and handed back as an approval request, and `cu_approve` (which the person sees, because
 // it is deliberately not pre-allowed) is the only way to run it.
+import '../migrate.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,23 +17,23 @@ import {spawn, execFile} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import * as sessions from '../sessions.mjs';
 import {CALENDAR_TOOLS} from '../../engine/calendar.mjs';
-import {BISU_TOOLS, isDefaultBot} from '../../engine/bisu-tools.mjs';
+import {DEC_INTERN_TOOLS, isDefaultBot} from '../../engine/dec-intern-tools.mjs';
 import {BROWSER_TOOLS} from '../../engine/browser.mjs';
 import {WATCH_TOOLS} from '../claude-watch.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const SUPPORT = path.join(os.homedir(), 'Library', 'Application Support', 'bisu');
-const BIN = path.join(SUPPORT, 'bin', 'bisu-cu');
-const SOURCE = path.join(here, '..', '..', 'mac', 'cu', 'bisu-cu.swift');
+const SUPPORT = path.join(os.homedir(), 'Library', 'Application Support', 'dec-intern');
+const BIN = path.join(SUPPORT, 'bin', 'dec-intern-cu');
+const SOURCE = path.join(here, '..', '..', 'mac', 'cu', 'dec-intern-cu.swift');
 const SHOTS = path.join(SUPPORT, 'shots');
-const LOG = path.join(os.homedir(), 'Library', 'Logs', 'bisu', 'cu.log');
+const LOG = path.join(os.homedir(), 'Library', 'Logs', 'dec-intern', 'cu.log');
 
 const OPENROUTER = (process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai').replace(/\/$/, '');
 const OR_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENAI = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
 const OAI_KEY = process.env.OPENAI_API_KEY || '';
-const VISION_MODEL = process.env.BISU_CU_VISION_MODEL || 'z-ai/glm-5.3-flash';
-const DECISION_MODEL = process.env.BISU_CU_DECISION_MODEL || 'gpt-6-luna';
+const VISION_MODEL = process.env.DEC_INTERN_CU_VISION_MODEL || 'z-ai/glm-5.3-flash';
+const DECISION_MODEL = process.env.DEC_INTERN_CU_DECISION_MODEL || 'gpt-6-luna';
 const APPROVE_TTL = 180_000;
 
 function log(...parts) {
@@ -55,7 +56,7 @@ function build() {
     c.on('close', code => {
       building = null;
       if (code === 0 && fs.existsSync(BIN)) resolve(BIN);
-      else reject(Error(`bisu-cu build failed (${code}): ${err.slice(-400)}`));
+      else reject(Error(`dec-intern-cu build failed (${code}): ${err.slice(-400)}`));
     });
   });
   return building;
@@ -117,7 +118,7 @@ function render(s, {max = 120, onlyClickable = false} = {}) {
 // ---- screenshots ----
 
 let shotCounter = 0;
-// Screenshots are the most sensitive thing bisu writes to disk: a picture of whatever was on screen,
+// Screenshots are the most sensitive thing dec-intern writes to disk: a picture of whatever was on screen,
 // including anything the person had open. They are kept only long enough for the model to read one,
 // and the folder is not readable by other accounts.
 const SHOT_TTL = 15 * 60_000;
@@ -442,7 +443,7 @@ const tools = {
 
   async cu_state() {
     const t = await cu(['trust']);
-    // Accessibility is per-binary, so a helper spawned by bisu does not inherit bisu's grant. The
+    // Accessibility is per-binary, so a helper spawned by dec-intern does not inherit Dec Intern's grant. The
     // AppleScript route (System Events, which is already allowed) is the fallback that needs no
     // extra permission — this probe says which one is actually usable here.
     const se = await new Promise(resolve => {
@@ -477,18 +478,18 @@ tools.session_show = async ({id, offset, limit} = {}) => {
 const sessionDefinitions = [
   {
     name: 'session_search',
-    description: 'Full-text search over every past bisu conversation: every bot\'s chats, scheduled-job and goal runs, and what the workers bisu delegated to reported and did (what the person and bisu said; not raw tool output). Use it when they refer to earlier work — "지난번에", "저번 주에 했던", "전에 얘기한" — or ask what was done or decided, by bisu, another bot, a worker or a scheduled job. Korean works with any word of two or more characters. Returns the best-matching sessions with the matching lines and an id for session_show.',
+    description: 'Full-text search over every past Dec Intern conversation: every bot\'s chats, scheduled-job and goal runs, and what the workers Dec Intern delegated to reported and did (what the person and dec-intern said; not raw tool output). Use it when they refer to earlier work — "지난번에", "저번 주에 했던", "전에 얘기한" — or ask what was done or decided, by dec-intern, another bot, a worker or a scheduled job. Korean works with any word of two or more characters. Returns the best-matching sessions with the matching lines and an id for session_show.',
     inputSchema: {type: 'object', properties: {
       query: {type: 'string', description: 'a few words that would appear in the conversation, e.g. "결제 테스트"'},
       days: {type: 'number', description: 'only sessions from the last N days'},
       project: {type: 'string', description: 'only sessions whose folder path contains this, e.g. "PawOV"'},
-      bot: {type: 'string', description: 'only one bot\'s conversations, by its id (the default bot is "bisu"); leave out to search every bot'},
+      bot: {type: 'string', description: 'only one bot\'s conversations, by its id (the default bot is "dec-intern"); leave out to search every bot'},
       limit: {type: 'number', description: 'how many sessions to return (default 8, max 20)'},
     }, required: ['query']},
   },
   {
     name: 'session_show',
-    description: 'Read one past session in order (person and bisu, with times), 40 messages a page. The 8-character id prefix from session_search is enough. Read before summarising what happened; do not paste the transcript back, say what it amounts to.',
+    description: 'Read one past session in order (person and Dec Intern, with times), 40 messages a page. The 8-character id prefix from session_search is enough. Read before summarising what happened; do not paste the transcript back, say what it amounts to.',
     inputSchema: {type: 'object', properties: {
       id: {type: 'string', description: 'session id or its prefix'},
       offset: {type: 'number', description: 'skip this many messages (for the next page)'},
@@ -497,8 +498,8 @@ const sessionDefinitions = [
   },
 ];
 
-// BISU_CU=0 keeps the session tools and drops computer use (no Accessibility prompt on a machine
-// where bisu is only ever a terminal sidekick).
+// DEC_INTERN_CU=0 keeps the session tools and drops computer use (no Accessibility prompt on a machine
+// where dec-intern is only ever a terminal sidekick).
 const cuDefinitions = [
   {
     name: 'cu_look',
@@ -574,10 +575,10 @@ const cuDefinitions = [
   },
 ];
 // ---- the assistant's own tools: calendar and reminders, web search, goals, the browser, the Claude app's sessions ----
-// The same tools bisu's own engine has (engine/calendar.mjs, engine/bisu-tools.mjs, engine/browser.mjs), so a
+// The same tools Dec Intern's own engine has (engine/calendar.mjs, engine/dec-intern-tools.mjs, engine/browser.mjs), so a
 // Claude Code chat can do what a native one does. Short ids (e1, r2, h1) live in this process, which lasts as long
 // as the chat. calendar_delete and browser_approve are not pre-allowed by launch.zsh: they go through the approval card.
-const ASSISTANT = {...CALENDAR_TOOLS, web_search: BISU_TOOLS.web_search, goal_add: BISU_TOOLS.goal_add, goal_list: BISU_TOOLS.goal_list, goal_update: BISU_TOOLS.goal_update, bot_create: BISU_TOOLS.bot_create, bot_update: BISU_TOOLS.bot_update, routine_save: BISU_TOOLS.routine_save, bot_handoff: BISU_TOOLS.bot_handoff, memory_compact: BISU_TOOLS.memory_compact, profile_set: BISU_TOOLS.profile_set, secret_list: BISU_TOOLS.secret_list, ...(isDefaultBot() ? {bot_memory: BISU_TOOLS.bot_memory} : {}), ...BROWSER_TOOLS, ...WATCH_TOOLS};
+const ASSISTANT = {...CALENDAR_TOOLS, web_search: DEC_INTERN_TOOLS.web_search, goal_add: DEC_INTERN_TOOLS.goal_add, goal_list: DEC_INTERN_TOOLS.goal_list, goal_update: DEC_INTERN_TOOLS.goal_update, bot_create: DEC_INTERN_TOOLS.bot_create, bot_update: DEC_INTERN_TOOLS.bot_update, routine_save: DEC_INTERN_TOOLS.routine_save, bot_handoff: DEC_INTERN_TOOLS.bot_handoff, memory_compact: DEC_INTERN_TOOLS.memory_compact, profile_set: DEC_INTERN_TOOLS.profile_set, secret_list: DEC_INTERN_TOOLS.secret_list, ...(isDefaultBot() ? {bot_memory: DEC_INTERN_TOOLS.bot_memory} : {}), ...BROWSER_TOOLS, ...WATCH_TOOLS};
 const failed = new WeakSet();
 for (const [name, t] of Object.entries(ASSISTANT)) tools[name] = async args => {
   const r = await t.run({cwd: process.cwd()}, args);
@@ -586,7 +587,7 @@ for (const [name, t] of Object.entries(ASSISTANT)) tools[name] = async args => {
   return out;
 };
 const assistantDefinitions = Object.entries(ASSISTANT).map(([name, t]) => ({name, description: t.description, inputSchema: t.parameters}));
-const definitions = [...sessionDefinitions, ...assistantDefinitions, ...(process.env.BISU_CU === '0' ? [] : cuDefinitions)];
+const definitions = [...sessionDefinitions, ...assistantDefinitions, ...(process.env.DEC_INTERN_CU === '0' ? [] : cuDefinitions)];
 const allowed = new Set(definitions.map(d => d.name));
 
 // ---- MCP plumbing ----
@@ -612,7 +613,7 @@ async function handle(msg) {
       return reply({
         protocolVersion: params?.protocolVersion || '2024-11-05',
         capabilities: {tools: {listChanged: false}},
-        serverInfo: {name: 'bisu', version: '0.2.0'},
+        serverInfo: {name: 'dec-intern', version: '0.2.0'},
       });
     }
     if (method === 'ping') return reply({});

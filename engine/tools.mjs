@@ -1,4 +1,4 @@
-// The tools bisu's own engine gives the model: files, search, the shell and the web.
+// The tools Dec Intern's own engine gives the model: files, search, the shell and the web.
 //
 // Each tool is a JSON schema (what the model sees) and a function (what runs). They all take a
 // context — the chat's folder, the files read so far, an abort signal — and return text for the
@@ -232,7 +232,7 @@ export const TOOLS = {
       let u;
       try { u = new URL(url) } catch { return err('Not a valid URL.') }
       if (!/^https?:$/.test(u.protocol)) return err('Only http and https URLs.');
-      const r = await fetch(u, {redirect: 'follow', signal: AbortSignal.any([AbortSignal.timeout(20_000), ...(ctx.signal ? [ctx.signal] : [])]), headers: {'user-agent': 'bisu/1.0', accept: 'text/html,application/json,text/plain;q=0.9,*/*;q=0.5'}});
+      const r = await fetch(u, {redirect: 'follow', signal: AbortSignal.any([AbortSignal.timeout(20_000), ...(ctx.signal ? [ctx.signal] : [])]), headers: {'user-agent': 'dec-intern/1.0', accept: 'text/html,application/json,text/plain;q=0.9,*/*;q=0.5'}});
       const type = r.headers.get('content-type') || '';
       const body = await r.text();
       const text = /html/.test(type) ? htmlText(body) : body;

@@ -1,10 +1,10 @@
 // dec, the person's own browser, through its local agent endpoint (127.0.0.1, found from the discovery file dec
-// writes while the endpoint is on). bisu pairs once as the agent "bisu" and keeps its own key, the same place dec's
-// SDK keeps every agent's (~/.config/dec-browser/pairings), so dec's settings list bisu by name.
+// writes while the endpoint is on). dec-intern pairs once as the agent "dec-intern" and keeps its own key, the same place dec's
+// SDK keeps every agent's (~/.config/dec-browser/pairings), so dec's settings list dec-intern by name.
 //
-// With dec's fast mode on, a whole web task is one call: bisu gives the goal and the texts it may type, and dec's
-// own Decisions + GLM make every step — the same split bisu itself uses. Fast mode is dec's paid plan (always open on
-// the owner's Mac); dec decides it, bisu only reads the switch. Risky steps (paying, sending, deleting) stay dec's to
+// With dec's fast mode on, a whole web task is one call: dec-intern gives the goal and the texts it may type, and dec's
+// own Decisions + GLM make every step — the same split dec-intern itself uses. Fast mode is dec's paid plan (always open on
+// the owner's Mac); dec decides it, dec-intern only reads the switch. Risky steps (paying, sending, deleting) stay dec's to
 // confirm with the person, in dec, with Touch ID.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -12,8 +12,8 @@ import path from 'node:path';
 import http from 'node:http';
 import {execFile} from 'node:child_process';
 
-const DISCOVERY = process.env.BISU_DEC_ENDPOINT || path.join(os.homedir(), 'Library', 'Application Support', 'Dec Browser', 'agent-endpoint.json');
-const PAIR_FILE = path.join(os.homedir(), '.config', 'dec-browser', 'pairings', 'bisu.key');
+const DISCOVERY = process.env.DEC_INTERN_DEC_ENDPOINT || path.join(os.homedir(), 'Library', 'Application Support', 'Dec Browser', 'agent-endpoint.json');
+const PAIR_FILE = path.join(os.homedir(), '.config', 'dec-browser', 'pairings', 'dec-intern.key');
 const BUNDLE = 'local.dec.browser';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -52,7 +52,7 @@ async function pairKey(d, fresh) {
   if (fresh) { key = null; fs.rmSync(PAIR_FILE, {force: true}) }
   if (!key) { try { const k = fs.readFileSync(PAIR_FILE, 'utf8').trim(); if (/^[0-9a-f]{64}$/.test(k)) key = k } catch {} }
   if (!key) {
-    const r = await raw(d, d.token, 'POST', '/v1/pair', {agent: 'bisu'}, 10_000);
+    const r = await raw(d, d.token, 'POST', '/v1/pair', {agent: 'dec-intern'}, 10_000);
     key = r.pairing.token;
     fs.mkdirSync(path.dirname(PAIR_FILE), {recursive: true, mode: 0o700});
     fs.writeFileSync(PAIR_FILE, key + '\n', {mode: 0o600});
@@ -60,7 +60,7 @@ async function pairKey(d, fresh) {
   return key;
 }
 
-// One request with bisu's own key: re-pairs once when dec no longer knows it, and waits out the 60-a-minute limit.
+// One request with Dec Intern's own key: re-pairs once when dec no longer knows it, and waits out the 60-a-minute limit.
 export async function api(method, p, body, {timeoutMs = 15_000} = {}) {
   const d = discovery();
   if (!d) throw new DecError('DEC_OFF');
@@ -76,17 +76,17 @@ export async function api(method, p, body, {timeoutMs = 15_000} = {}) {
 
 // The app itself, not a script run with its Electron as node (dec's dec-browser command does that): flags only after it.
 const running = () => new Promise(r => execFile('/usr/bin/pgrep', ['-f', 'Dec Browser\\.app/Contents/MacOS/Electron( -[^ ]*)*$'], e => r(!e)));
-// Which Dec Browser.app to open. Old development copies share dec's bundle id, so a path: BISU_DEC_APP, the usual
+// Which Dec Browser.app to open. Old development copies share dec's bundle id, so a path: DEC_INTERN_DEC_APP, the usual
 // places, then the app dec's own dec-browser command runs (~/.local/bin/dec-browser names its Electron).
 export function decApp(home = os.homedir()) {
   const shim = (() => { try { return /exec "([^"]*\/Dec Browser\.app)\/Contents\/MacOS\//.exec(fs.readFileSync(path.join(home, '.local', 'bin', 'dec-browser'), 'utf8'))?.[1] } catch { return null } })();
-  return [process.env.BISU_DEC_APP, '/Applications/Dec Browser.app', path.join(home, 'Applications', 'Dec Browser.app'), shim].find(a => a && fs.existsSync(a)) ?? null;
+  return [process.env.DEC_INTERN_DEC_APP, '/Applications/Dec Browser.app', path.join(home, 'Applications', 'Dec Browser.app'), shim].find(a => a && fs.existsSync(a)) ?? null;
 }
 
 // dec's status, starting dec in the background first when it is installed but not running. Null when there is no
 // dec to use: not installed, or running with its agent endpoint switched off.
 export async function up({start = true, waitMs = 25_000, front = false} = {}) {
-  if (process.env.BISU_DEC === '0') return null;
+  if (process.env.DEC_INTERN_DEC === '0') return null;
   try { return await api('GET', '/v1/status') } catch (e) { if (!['DEC_OFF', 'DEC_UNREACHABLE'].includes(e.code)) throw e }
   if (!start || await running()) return null;
   // -g: dec comes up behind whatever the person is doing. --agent-connect: dec turns its agent connection on unless the
@@ -117,7 +117,7 @@ export async function show({newTab = false} = {}) {
   const st = await up({front: true});
   if (!st) return null;
   let tab = null;
-  if (newTab) tab = (await api('POST', '/v1/tabs', {home: true, agent: 'bisu'})).tab ?? null;
+  if (newTab) tab = (await api('POST', '/v1/tabs', {home: true, agent: 'dec-intern'})).tab ?? null;
   return {tab, front: await front()};
 }
 
@@ -130,7 +130,7 @@ export async function front() {
 const tabsOf = r => Array.isArray(r) ? r : r?.tabs ?? [];
 const NEEDS_PERSON = {'user-confirmation': 'confirm', 'user-handoff': 'handoff', 'user-control': 'control'};
 
-// What a run says now, in the shape bisu reports.
+// What a run says now, in the shape dec-intern reports.
 export function view(run) {
   const r = run?.run ?? run ?? {};
   const res = r.result ?? null;
@@ -158,7 +158,7 @@ export async function finish(v, tabId, dir) {
 // A whole task in fast mode: a tab of its own at the start page, then dec does the rest. Returns when the run ends,
 // when dec needs the person (a risky step to confirm, a login), or after waitMs — still running then, check later.
 export async function task({goal, url, inputs = [], readOnly = false, budget, waitMs = 240_000, dir, onWait}) {
-  const o = await api('POST', '/v1/tabs', {url, background: true, agent: 'bisu'});
+  const o = await api('POST', '/v1/tabs', {url, background: true, agent: 'dec-intern'});
   const tabId = o.tab?.id;
   if (!tabId) throw new DecError('TAB_NOT_OPENED');
   for (let i = 0; i < 50; i++) { let t = null; try { t = (await api('GET', `/v1/tabs/${tabId}`)).tab } catch {} if (t && t.loading === false) break; await sleep(200) }
@@ -216,13 +216,13 @@ export async function runRoutine(id, tabId, args = {}, opts = {}) {
   return follow(r.runId ?? r.id, tabId, opts);
 }
 
-// Where dec and bisu stand with each other, for the settings page: installed, running, its agent connection, bisu's
-// pairing, and the switches that decide what bisu may do there. Never starts dec.
+// Where dec and dec-intern stand with each other, for the settings page: installed, running, its agent connection, Dec Intern's
+// pairing, and the switches that decide what dec-intern may do there. Never starts dec.
 export async function health() {
   const app = decApp();
-  const out = {installed: !!app, app, running: await running(), endpoint: 'closed', paired: fs.existsSync(PAIR_FILE), agent: 'bisu', error: null,
+  const out = {installed: !!app, app, running: await running(), endpoint: 'closed', paired: fs.existsSync(PAIR_FILE), agent: 'dec-intern', error: null,
     fastMode: null, credentials: null, tabControl: null, taskCache: null, tabs: null, hidden: null};
-  if (process.env.BISU_DEC === '0') return {...out, endpoint: 'disabled'};
+  if (process.env.DEC_INTERN_DEC === '0') return {...out, endpoint: 'disabled'};
   try {
     const st = await api('GET', '/v1/status');
     out.endpoint = 'on';
@@ -236,9 +236,9 @@ export async function health() {
   return out;
 }
 
-// ---- dec with its fast mode off: bisu makes every pick ----
+// ---- dec with its fast mode off: dec-intern makes every pick ----
 
-// dec offers numbered actions each step (pendingDecision) and carries out the one bisu sends back; its own
+// dec offers numbered actions each step (pendingDecision) and carries out the one dec-intern sends back; its own
 // confirmation of risky steps stays with the person, in dec. The view handed to the shared loop (engine/ego.mjs
 // drive()) is the page's visible text in ego's snapshot format plus dec's own candidates; the tab's whole text,
 // read through the endpoint, is what the loop searches for answers off screen.
@@ -250,7 +250,7 @@ export function directDriver({readText = true, tab = null} = {}) {
   const pending = async (waitMs = 120_000) => {
     const t0 = Date.now();
     for (const end = Date.now() + waitMs; Date.now() < end;) {
-      if (process.env.BISU_DEC_DEBUG && Date.now() - t0 > 3000 && (Date.now() - t0) % 5000 < 100) { const r = (await api('GET', `/v1/runs/${runId}`)).run; process.stderr.write(`[dec wait ${((Date.now() - t0) / 1000).toFixed(0)}s] awaiting=${r.awaiting} status=${r.status} progress=${JSON.stringify(r.progress)}\n`) }
+      if (process.env.DEC_INTERN_DEC_DEBUG && Date.now() - t0 > 3000 && (Date.now() - t0) % 5000 < 100) { const r = (await api('GET', `/v1/runs/${runId}`)).run; process.stderr.write(`[dec wait ${((Date.now() - t0) / 1000).toFixed(0)}s] awaiting=${r.awaiting} status=${r.status} progress=${JSON.stringify(r.progress)}\n`) }
       const r = (await api('GET', `/v1/runs/${runId}`)).run;
       if (r.end || r.result) return {ended: true, run: r};
       if (NEEDS_PERSON[r.awaiting]) return {waiting: NEEDS_PERSON[r.awaiting], run: r};
@@ -271,14 +271,14 @@ export function directDriver({readText = true, tab = null} = {}) {
     const lines = (page.texts || []).map(t => typeof t === 'string' ? t : t.text);
     let body = lines.join('\n');
     if (readText && lines.length === 20) { try { body = String((await api('POST', `/v1/tabs/${tabId}/content`, {limit: 12000})).text || '') } catch {} }
-    // dec rates each action's risk itself: what is not "safe" is a step bisu holds for the person.
+    // dec rates each action's risk itself: what is not "safe" is a step dec-intern holds for the person.
     const cands = (q.candidates || []).map((c, i) => ({index: i, decIndex: c.index, requestId: w.p.requestId, kind: c.kind, name: c.name || c.kind, label: c.name || '', risk: c.risk ?? 'safe'}));
     viewNow = {snap: lines.map(t => `text ${esc(t)}`).join('\n'), url: page.url || q.url || q.origin || '', title: page.title || '', did, cands, body, y: 0, maxY: 0};
     return viewNow;
   };
   const start = async (goal, ins = []) => {
-    // bisu counts its own steps; dec's run must not end first (its default is 12).
-    const s = await api('POST', '/v1/runs', {tabId, goal: String(goal || 'bisu drives this tab').slice(0, 500), decider: 'agent', budget: 40, ...(ins.length ? {inputs: ins.slice(0, 8).map(([name, value]) => ({name, value}))} : {})});
+    // dec-intern counts its own steps; dec's run must not end first (its default is 12).
+    const s = await api('POST', '/v1/runs', {tabId, goal: String(goal || 'dec-intern drives this tab').slice(0, 500), decider: 'agent', budget: 40, ...(ins.length ? {inputs: ins.slice(0, 8).map(([name, value]) => ({name, value}))} : {})});
     runId = s.runId ?? s.id; lastReq = null;
   };
   // Loaded at the address asked for: a tab sent to another site still shows the old page for a moment, and a run
@@ -302,10 +302,10 @@ export function directDriver({readText = true, tab = null} = {}) {
       let moved = false;
       if (tabId) {
         const was = await tabNow();
-        if (was && origin(was.url) === origin(url)) { await api('POST', `/v1/tabs/${tabId}/navigate`, {url, agent: 'bisu'}); moved = true }
-        else if (was) await api('POST', `/v1/tabs/${tabId}/close`, {agent: 'bisu'}).catch(() => {});
+        if (was && origin(was.url) === origin(url)) { await api('POST', `/v1/tabs/${tabId}/navigate`, {url, agent: 'dec-intern'}); moved = true }
+        else if (was) await api('POST', `/v1/tabs/${tabId}/close`, {agent: 'dec-intern'}).catch(() => {});
       }
-      if (!moved) tabId = (await api('POST', '/v1/tabs', {url, background: true, agent: 'bisu'})).tab.id;
+      if (!moved) tabId = (await api('POST', '/v1/tabs', {url, background: true, agent: 'dec-intern'})).tab.id;
       await loaded(url);
       await start(goal, ins);
       return look([`opened ${url}`]);
@@ -350,7 +350,7 @@ export function directDriver({readText = true, tab = null} = {}) {
     // The step held for the person, once they said yes: a fresh run on the same tab, the same action found again by
     // what it does and says, and only that one step.
     async approve(held) {
-      await start('bisu: the person approved this step');
+      await start('dec-intern: the person approved this step');
       let v = await look();
       const c = v.cands?.find(x => x.kind === held.kind && x.label === held.label) ?? v.cands?.find(x => x.kind === held.kind && x.label.includes(held.label));
       if (!c) { await stop(); return {ok: false, error: `"${held.label}" is not on the page any more`} }

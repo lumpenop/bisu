@@ -3,7 +3,7 @@
 // No model is asked. The card is the calendar's own entries in a few lines, so it costs nothing,
 // takes a second and cannot invent a meeting. It comes once a day, from `hour` (8 by default) for
 // four hours: a Mac asleep at eight gets it when it wakes, but nobody gets an "오늘" card at dinner.
-// It reads only what bisu may already read — asking macOS for access is the person's step, in
+// It reads only what dec-intern may already read — asking macOS for access is the person's step, in
 // Settings — so a tick never puts a permission prompt on the screen.
 //
 //   node briefing.mjs        # what today's card would say, without leaving it
@@ -17,7 +17,7 @@ import { eventKit, parseWhen, ymd } from '../engine/calendar.mjs';
 import * as proactive from './proactive.mjs';
 import { holdsSchedule } from './lock.mjs';
 
-const CONFIG_DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu');
+const CONFIG_DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'dec-intern');
 const FILE = path.join(CONFIG_DIR, 'briefing.json');
 const DEFAULTS = { enabled: true, hour: 8 };
 const WINDOW_H = 4;
@@ -40,7 +40,7 @@ function save(s) {
     const tmp = FILE + '.' + process.pid + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(s, null, 1));
     fs.renameSync(tmp, FILE);
-  } catch (e) { console.error('bisu briefing: cannot save:', e.message) }
+  } catch (e) { console.error('dec-intern briefing: cannot save:', e.message) }
 }
 
 // ---- the card ----
@@ -143,7 +143,7 @@ export async function run({ force = false, now = new Date(), cal = eventKit() } 
 
 let timer = null;
 export function start() {
-  if (timer || process.env.BISU_BRIEFING === '0') return;
+  if (timer || process.env.DEC_INTERN_BRIEFING === '0') return;
   const tick = () => { if (holdsSchedule()) run().catch(() => {}) };
   setTimeout(tick, 60e3).unref?.();
   timer = setInterval(tick, TICK_MS);
@@ -155,7 +155,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (process.argv[2] === 'run') process.stdout.write(JSON.stringify(await run({ force: true }), null, 1) + '\n');
   else {
     const cal = eventKit(), can = await access(cal);
-    if (!can.events && !can.reminders) process.stdout.write(`bisu: no calendar access (${can.error || JSON.stringify(can.status)})\n`);
+    if (!can.events && !can.reminders) process.stdout.write(`dec-intern: no calendar access (${can.error || JSON.stringify(can.status)})\n`);
     else { const c = await compose(cal, new Date(), can); process.stdout.write(`${c.title}\n${c.body}\n`) }
   }
 }

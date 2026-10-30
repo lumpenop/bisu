@@ -1,4 +1,4 @@
-// One turn of bisu's own agent: the model speaks, calls tools, reads what they returned, and goes
+// One turn of Dec Intern's own agent: the model speaks, calls tools, reads what they returned, and goes
 // on until it answers without calling anything (or is stopped).
 //
 // Everything the page shows comes out of onEvent in the same shapes the Claude Code path produced
@@ -49,7 +49,7 @@ export async function runTurn({
     if (res.finish === 'repetition') {
       stats.loops++;
       if (stats.loops <= 1 && !ctx.signal?.aborted) {
-        messages.push({role: 'user', content: '(bisu: 방금 답이 같은 말을 되풀이해서 끊었어. 처음부터 짧고 분명하게 다시 답해줘. 필요한 도구가 없으면 없다고 말해.)'});
+        messages.push({role: 'user', content: '(dec-intern: 방금 답이 같은 말을 되풀이해서 끊었어. 처음부터 짧고 분명하게 다시 답해줘. 필요한 도구가 없으면 없다고 말해.)'});
         continue;
       }
       stats.stop = 'error'; stats.error = '모델이 같은 말을 되풀이해서 멈췄어요.';
@@ -62,7 +62,7 @@ export async function runTurn({
     if (!calls.length && !String(res.text || '').trim()) {
       stats.empty++;
       if (stats.empty <= 2 && !ctx.signal?.aborted) {
-        messages.push({role: 'user', content: '(bisu: 방금 답이 비어 있었어. 지금까지 알아낸 것과 한 일을 바탕으로 사람에게 바로 답해줘. 일이 남았으면 이어서 해.)'});
+        messages.push({role: 'user', content: '(dec-intern: 방금 답이 비어 있었어. 지금까지 알아낸 것과 한 일을 바탕으로 사람에게 바로 답해줘. 일이 남았으면 이어서 해.)'});
         continue;
       }
     }
@@ -75,7 +75,7 @@ export async function runTurn({
       // An answer that says it did something no tool did this turn gets one chance to do it or say so.
       if (checkAnswer && !stats.claimNudges && res.text && !ctx.signal?.aborted) {
         const r = await checkAnswer({text: res.text, stats});
-        if (r?.nudge) { stats.claimNudges++; messages.push({role: 'user', content: `(bisu: ${r.nudge})`}); continue }
+        if (r?.nudge) { stats.claimNudges++; messages.push({role: 'user', content: `(dec-intern: ${r.nudge})`}); continue }
       }
       break;
     }
@@ -117,7 +117,7 @@ export async function runTurn({
       // The judge may stop the turn, or leave a note the model reads before its next step.
       const go = await shouldContinue({messages, stats});
       if (go === false) { stats.stop = 'judged_done'; break }
-      if (go && go.nudge) { stats.nudges++; messages.push({role: 'user', content: `(bisu: ${go.nudge})`}) }
+      if (go && go.nudge) { stats.nudges++; messages.push({role: 'user', content: `(dec-intern: ${go.nudge})`}) }
     }
   }
   stats.ms = Date.now() - t0;

@@ -1,16 +1,17 @@
-// bisu on Telegram: the person's own bot, long-polled from this Mac.
+// dec-intern on Telegram: the person's own bot, long-polled from this Mac.
 //
-// The token never lives here. bisu's shell finds the key saved in dec for https://api.telegram.org and
+// The token never lives here. Dec Intern's shell finds the key saved in dec for https://api.telegram.org and
 // starts the engine with it the use-only way (a one-time token and TELEGRAM_BOT_BASE_URL); dec's helper
 // puts the real token where the address says DEC_KEY. Run from a terminal with a plain
 // TELEGRAM_BOT_TOKEN it calls api.telegram.org directly.
 //
 // One Telegram chat is trusted: the one that sent the pairing code shown in Settings. Everything else is
-// ignored. Its messages go to one bisu chat (a fresh one after /new or six quiet hours) and the last thing
-// bisu says in a turn goes back; approvals, from any chat, come as buttons; and, if they want them,
+// ignored. Its messages go to one dec-intern chat (a fresh one after /new or six quiet hours) and the last thing
+// dec-intern says in a turn goes back; approvals, from any chat, come as buttons; and, if they want them,
 // suggestions, scheduled jobs' answers, the morning briefing and meetings about to start are sent too.
-// Long polling needs nothing reachable from outside, but it only works while this Mac is awake and bisu
+// Long polling needs nothing reachable from outside, but it only works while this Mac is awake and dec-intern
 // is running.
+import './migrate.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,18 +19,19 @@ import { randomInt, randomBytes } from 'node:crypto';
 import * as proactive from './proactive.mjs';
 import { holdsSchedule } from './lock.mjs';
 
-const CONFIG_DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu');
+const CONFIG_DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'dec-intern');
 const FILE = path.join(CONFIG_DIR, 'telegram.json');
 const CODE_MS = 30 * 60e3;          // how long a pairing code works
-const FRESH_MS = 6 * 3600e3;        // a quiet bisu chat older than this is not continued
+const FRESH_MS = 6 * 3600e3;        // a quiet dec-intern chat older than this is not continued
 const NOTIFY_MS = 20e3;
 const MAX_TEXT = 3800;              // Telegram takes 4096; leave room
 
 const DEFAULTS = { enabled: true, chatId: null, user: null, pairedAt: 0, code: null, codeAt: 0, offset: 0, goalMsgs: [],
-  notify: { approvals: true, suggestions: true, jobs: true, events: true }, cwd: '', bisuChat: null, chats: [], sent: [], bot: null, lastError: null };
+  notify: { approvals: true, suggestions: true, jobs: true, events: true }, cwd: '', internChat: null, chats: [], sent: [], bot: null, lastError: null };
 function load() {
   let s = {};
   try { s = JSON.parse(fs.readFileSync(FILE, 'utf8')) || {} } catch {}
+  if (s.bisuChat && !s.internChat) s.internChat = s.bisuChat;   // the field's old name
   return { ...DEFAULTS, ...s, notify: { ...DEFAULTS.notify, ...(s.notify || {}) }, chats: Array.isArray(s.chats) ? s.chats : [], sent: Array.isArray(s.sent) ? s.sent : [], goalMsgs: Array.isArray(s.goalMsgs) ? s.goalMsgs : [] };
 }
 function save(patch) {
@@ -39,14 +41,14 @@ function save(patch) {
     const tmp = FILE + '.' + process.pid + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(s, null, 1), { mode: 0o600 });
     fs.renameSync(tmp, FILE);
-  } catch (e) { console.error('bisu telegram: cannot save:', e.message) }
+  } catch (e) { console.error('dec-intern telegram: cannot save:', e.message) }
   return s;
 }
 
 // ---- the Bot API ----
 export const hasToken = () => !!process.env.TELEGRAM_BOT_TOKEN;
 function endpoint(method) {
-  const tok = process.env.TELEGRAM_BOT_TOKEN || '', base = process.env.TELEGRAM_BOT_BASE_URL, standIn = process.env.BISU_TELEGRAM_API;
+  const tok = process.env.TELEGRAM_BOT_TOKEN || '', base = process.env.TELEGRAM_BOT_BASE_URL, standIn = process.env.DEC_INTERN_TELEGRAM_API;
   if (standIn) return { url: `${standIn.replace(/\/$/, '')}/bot${tok}/${method}`, headers: {} };
   if (base) return { url: `${base.replace(/\/$/, '')}/botDEC_KEY/${method}`, headers: { authorization: `Bearer ${tok}` } };
   return { url: `https://api.telegram.org/bot${tok}/${method}`, headers: {} };
@@ -88,7 +90,7 @@ export function snapshot() {
     paired: !!s.chatId, user: s.user, pairedAt: s.pairedAt || null,
     code: s.chatId ? null : s.code, link: !s.chatId && s.bot?.username ? `https://t.me/${s.bot.username}?start=${s.code}` : null,
     notify: s.notify, cwd: s.cwd, polling: !!polling, lastError: s.lastError,
-    restartable: process.env.BISU_UI_PARENT === 'stdin',
+    restartable: process.env.DEC_INTERN_UI_PARENT === 'stdin',
   };
 }
 export function configure(patch = {}) {
@@ -103,27 +105,27 @@ export function configure(patch = {}) {
 export function newCode() { save({ code: String(randomInt(100000, 1000000)), codeAt: Date.now() }); return snapshot() }
 export async function unpair() {
   const s = load();
-  if (s.chatId) await send('bisu와 연결을 끊었어요. 다시 쓰려면 bisu 설정 → 텔레그램에서 연결해 주세요.').catch(() => {});
-  save({ chatId: null, user: null, pairedAt: 0, bisuChat: null, chats: [], code: null });
+  if (s.chatId) await send('덱 인턴과 연결을 끊었어요. 다시 쓰려면 덱 인턴 설정 → 텔레그램에서 연결해 주세요.').catch(() => {});
+  save({ chatId: null, user: null, pairedAt: 0, internChat: null, chats: [], code: null });
   return snapshot();
 }
 export async function test() {
   if (!load().chatId) throw Object.assign(Error('아직 연결되지 않았어요'), { status: 400 });
-  await send('bisu예요 ✦ 연결이 잘 되어 있어요.');
+  await send('덱 인턴이에요 ✦ 연결이 잘 되어 있어요.');
   return snapshot();
 }
 
 // ---- messages in ----
 const approvals = new Map();   // short key → {chat, request_id, message_id}
-const turns = new Map();       // bisu chat id → the last thing said this turn
+const turns = new Map();       // dec-intern chat id → the last thing said this turn
 const trusted = (s, chatId) => s.chatId && String(chatId) === String(s.chatId);
-const isOurs = id => { const s = load(); return s.bisuChat === id || s.chats.includes(id) };
+const isOurs = id => { const s = load(); return s.internChat === id || s.chats.includes(id) };
 export const owns = isOurs;
-function remember(chatId) { const s = load(); save({ bisuChat: chatId, chats: [chatId, ...s.chats.filter(x => x !== chatId)].slice(0, 20) }) }
+function remember(chatId) { const s = load(); save({ internChat: chatId, chats: [chatId, ...s.chats.filter(x => x !== chatId)].slice(0, 20) }) }
 
 async function ensureChat() {
   const s = load();
-  let c = s.bisuChat && hooks.getChat(s.bisuChat);
+  let c = s.internChat && hooks.getChat(s.internChat);
   if (!c || Date.now() - (c.lastAt || 0) > FRESH_MS) { c = await hooks.newChat({ cwd: s.cwd || undefined }); remember(c.id) }
   return c;
 }
@@ -135,15 +137,15 @@ async function onMessage(m) {
     if (code && s.code === code && Date.now() - s.codeAt < CODE_MS) {
       const name = [m.from?.first_name, m.from?.last_name].filter(Boolean).join(' ') || m.from?.username || '';
       save({ chatId: m.chat.id, user: { name, username: m.from?.username || null }, pairedAt: Date.now(), code: null });
-      await send('bisu와 연결됐어요 ✦\n이제 여기서 말 걸면 돼요. 승인이 필요하면 버튼으로 물어볼게요.\n\n/new 새 대화로  ·  /stop 하던 일 멈추기', { chatId: m.chat.id });
+      await send('덱 인턴과 연결됐어요 ✦\n이제 여기서 말 걸면 돼요. 승인이 필요하면 버튼으로 물어볼게요.\n\n/new 새 대화로  ·  /stop 하던 일 멈추기', { chatId: m.chat.id });
     } else if (/^\/start\b/.test(text) || code) {
-      await send('연결 코드가 맞지 않아요. 맥의 bisu → 설정 → 텔레그램에서 「텔레그램에서 연결하기」를 눌러 주세요.', { chatId: m.chat.id });
+      await send('연결 코드가 맞지 않아요. 맥의 덱 인턴 → 설정 → 텔레그램에서 「텔레그램에서 연결하기」를 눌러 주세요.', { chatId: m.chat.id });
     }
     return;
   }
   if (!trusted(s, m.chat?.id)) return;
-  if (text === '/new') { save({ bisuChat: null }); return void await send('새 대화로 시작할게요. 하고 싶은 말을 보내 주세요.') }
-  if (text === '/stop') { const c = s.bisuChat && hooks.getChat(s.bisuChat); if (c) hooks.stop(c); return void await send(c ? '멈췄어요.' : '하고 있는 일이 없어요.') }
+  if (text === '/new') { save({ internChat: null }); return void await send('새 대화로 시작할게요. 하고 싶은 말을 보내 주세요.') }
+  if (text === '/stop') { const c = s.internChat && hooks.getChat(s.internChat); if (c) hooks.stop(c); return void await send(c ? '멈췄어요.' : '하고 있는 일이 없어요.') }
   if (/^\/start\b/.test(text)) return void await send('이미 연결되어 있어요. 그냥 말 걸면 돼요.');
   if (!text) return void await send('아직 글자만 받을 수 있어요.');
   const goal = m.reply_to_message && s.goalMsgs.find(x => x.message === m.reply_to_message.message_id);
@@ -163,7 +165,7 @@ async function onCallback(q) {
   const [kind, key, choice] = String(q.data || '').split(':');
   if (kind === 'a') {
     const a = approvals.get(key), c = a && hooks.getChat(a.chat);
-    if (!a || !c) return done('이미 끝났거나 bisu가 다시 시작돼서 답할 수 없어요');
+    if (!a || !c) return done('이미 끝났거나 덱 인턴이 다시 시작돼서 답할 수 없어요');
     try { hooks.decide(c, { request_id: a.request_id, allow: choice !== 'n', always: choice === 'a', message: 'The person declined this on Telegram.' }) }
     catch { return done('이미 답한 요청이에요') }
     return done(choice === 'n' ? '거부했어요' : '허용했어요');
@@ -183,7 +185,7 @@ async function editButtons(message, note) {
   await api('editMessageText', { chat_id: message.chat.id, message_id: message.message_id, text: `${message.text || ''}\n\n${note}`, disable_web_page_preview: true }).catch(() => {});
 }
 
-// ---- what happens in bisu, out ----
+// ---- what happens in dec-intern, out ----
 const summarize = (tool, input = {}) => /browser_approve$/.test(tool) && input.step ? `웹에서 누르기: 「${String(input.step).slice(0, 120)}」`
   : input.command ? `$ ${String(input.command).slice(0, 300)}`
   : input.file_path || input.path ? `${tool} · ${input.file_path || input.path}` : tool;
@@ -214,7 +216,7 @@ export function onEvent(c, ev) {
   else if (ev.kind === 'result') {
     const said = turns.get(c.id); turns.delete(c.id);
     if (said) send(said).catch(e => noteError(e));
-    else if (ev.error) send('끝까지 하지 못했어요. 맥의 bisu에서 자세히 볼 수 있어요.').catch(e => noteError(e));
+    else if (ev.error) send('끝까지 하지 못했어요. 맥의 덱 인턴에서 자세히 볼 수 있어요.').catch(e => noteError(e));
   }
 }
 
@@ -229,8 +231,8 @@ async function notify() {
     if (job ? !s.notify.jobs : !s.notify.suggestions) continue;
     sent.add(it.id);
     save({ sent: [...sent].slice(-200) });
-    const head = job ? (it.job === 'briefing' ? '☀️ 아침 브리핑' : it.job === 'goal' ? (it.ask ? '🎯 목표 · 물어볼 게 있어요' : '🎯 목표') : '⏰ 예약 작업') : '✦ bisu가 하나 찾았어요';
-    const text = `${head} · ${it.title}\n\n${it.body || ''}${!job && it.action ? `\n\n「해볼게」를 누르면 이렇게 부탁해요: ${it.action}` : ''}${it.goal && it.ask ? '\n\n이 메시지에 답장하면 bisu가 이어서 해요.' : ''}`;
+    const head = job ? (it.job === 'briefing' ? '☀️ 아침 브리핑' : it.job === 'goal' ? (it.ask ? '🎯 목표 · 물어볼 게 있어요' : '🎯 목표') : '⏰ 예약 작업') : '✦ 덱 인턴이 하나 찾았어요';
+    const text = `${head} · ${it.title}\n\n${it.body || ''}${!job && it.action ? `\n\n「해볼게」를 누르면 이렇게 부탁해요: ${it.action}` : ''}${it.goal && it.ask ? '\n\n이 메시지에 답장하면 덱 인턴이 이어서 해요.' : ''}`;
     const buttons = job ? (it.sessionId ? [[{ text: '이어서 대화', callback_data: `s:${it.id}:do` }]] : null)
       : [[{ text: '해볼게', callback_data: `s:${it.id}:do` }, { text: '나중에', callback_data: `s:${it.id}:later` }]];
     const m = await send(text, { buttons }).catch(e => noteError(e));
@@ -277,7 +279,7 @@ async function poll() {
   })();
 }
 export function start() {
-  if (timer || process.env.BISU_TELEGRAM === '0') return;
+  if (timer || process.env.DEC_INTERN_TELEGRAM === '0') return;
   timer = setInterval(poll, 3e3); timer.unref?.();
   notifyTimer = setInterval(() => notify().catch(() => {}), NOTIFY_MS); notifyTimer.unref?.();
   setTimeout(poll, 1500).unref?.();

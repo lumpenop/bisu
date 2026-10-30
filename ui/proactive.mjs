@@ -1,6 +1,6 @@
-// What bisu brings you when you did not ask.
+// What dec-intern brings you when you did not ask.
 //
-// A secretary that only answers is a search box. This is the other half: on a slow cadence, bisu
+// A secretary that only answers is a search box. This is the other half: on a slow cadence, dec-intern
 // starts one short read-only Claude Code run of its own, looks at what you have been doing, and
 // leaves at most one thing worth your attention — a README that is still empty, a migration that
 // stopped halfway, a loose end from yesterday. It waits in the panel until you open it.
@@ -20,6 +20,7 @@
 //
 // The same list of items also carries what a scheduled job answered (ui/jobs.mjs, kind 'job'), so
 // the panel card and the dot on the menu bar are one mechanism; those never count as suggestions.
+import './migrate.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -30,7 +31,7 @@ import { holdsSchedule, releaseSchedule } from './lock.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(here);
-const CONFIG_DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu');
+const CONFIG_DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'dec-intern');
 const FILE = path.join(CONFIG_DIR, 'proactive.json');
 
 const DEFAULTS = { enabled: true, intervalHours: 24, quietFrom: 23, quietTo: 8 };
@@ -38,7 +39,7 @@ const KEEP = 40;      // how much history the page can show, and how far back de
 const JOB_KEEP = 20;  // job answers, counted apart: an hourly job must not push suggestions out of dedupe
 const MAX_WAITING = 2; // unread suggestions before it stops looking for more
 const RETRY_MS = 30 * 60e3;
-const TIMEOUT_MS = Number(process.env.BISU_SUGGEST_TIMEOUT || 150) * 1e3;
+const TIMEOUT_MS = Number(process.env.DEC_INTERN_SUGGEST_TIMEOUT || 150) * 1e3;
 const TICK_MS = 10 * 60e3;
 
 function load() {
@@ -55,7 +56,7 @@ function load() {
   return s;
 }
 
-// Re-read whenever the file changed under us (`bisu suggest` in a terminal writes it too), so
+// Re-read whenever the file changed under us (`dec-intern suggest` in a terminal writes it too), so
 // neither side saves over the other's cards with what it loaded at start.
 let state = null, stateMtime = -1;
 function fresh() {
@@ -85,7 +86,7 @@ function save() {
     fs.writeFileSync(tmp, JSON.stringify(state, null, 1));
     fs.renameSync(tmp, FILE);
     stateMtime = fs.statSync(FILE).mtimeMs;
-  } catch (e) { console.error('bisu proactive: cannot save:', e.message) }
+  } catch (e) { console.error('dec-intern proactive: cannot save:', e.message) }
 }
 export function setContext(fn) { if (typeof fn === 'function') contextFn = fn }
 
@@ -183,7 +184,7 @@ function userPrompt(ctx) {
 
   const runs = (ctx.runs || []).slice(0, 10);
   if (runs.length) {
-    lines.push('', '최근 작업 (bisu 실행, 최신순):');
+    lines.push('', '최근 작업 (dec-intern 실행, 최신순):');
     for (const r of runs) {
       const when = r.start ? new Date(r.start).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) : '?';
       lines.push(`- ${when} · ${r.cwd || '?'}${r.title ? ' · ' + r.title : ''}${r.prompt ? ' · ' + clean(r.prompt, 120) : ''}`);
@@ -210,16 +211,16 @@ function userPrompt(ctx) {
 let child = null;
 function runClaude(prompt, models) {
   return new Promise((resolve, reject) => {
-    const main = process.env.BISU_PROACTIVE_MODEL || models?.dev || process.env.BISU_DEV_MODEL || 'deepseek/deepseek-v4.1-flash';
+    const main = process.env.DEC_INTERN_PROACTIVE_MODEL || models?.dev || process.env.DEC_INTERN_DEV_MODEL || 'deepseek/deepseek-v4.1-flash';
     const args = ['-f', path.join(root, 'launch.zsh'), main, models?.code || 'qwen/qwen3.8-max-0902', main,
       path.join(root, 'agents.json'), '-p', prompt, '--output-format', 'json'];
     const env = {
       ...process.env,
       // Its own system prompt, its own tools, no computer use: this run reads and answers, nothing more.
-      BISU_PROMPT: path.join(root, 'prompt-suggest.md'),
-      BISU_TOOLS: 'Read,Glob,Grep',
-      BISU_CU: '0',
-      BISU_EFFORT: '',
+      DEC_INTERN_PROMPT: path.join(root, 'prompt-suggest.md'),
+      DEC_INTERN_TOOLS: 'Read,Glob,Grep',
+      DEC_INTERN_CU: '0',
+      DEC_INTERN_EFFORT: '',
     };
     const proc = spawn('zsh', args, { cwd: os.homedir(), env, stdio: ['ignore', 'pipe', 'pipe'] });
     child = proc;
@@ -336,9 +337,9 @@ export async function run({ reason = 'timer', force = false } = {}) {
 }
 
 let timer = null;
-// Started by the engine. The first look waits a little, so opening bisu is never slowed down by it.
+// Started by the engine. The first look waits a little, so opening dec-intern is never slowed down by it.
 export function start() {
-  if (timer || process.env.BISU_PROACTIVE === '0') return;
+  if (timer || process.env.DEC_INTERN_PROACTIVE === '0') return;
   const tick = () => { if (holdsSchedule()) run().catch(() => {}) };
   setTimeout(tick, 45e3).unref?.();
   timer = setInterval(tick, TICK_MS);
@@ -353,9 +354,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     // Typed by a person, so the clock and quiet hours do not apply — only a run that is going or a
     // queue that is already full.
     const out = await run({ reason: 'cli', force: true });
-    if (out.error) process.stdout.write(`bisu: could not look around — ${out.error}\n`);
-    else if (out.skipped) process.stdout.write(`bisu: not now (${out.skipped})\n`);
-    else if (!out.added) process.stdout.write('bisu: nothing worth bringing up.\n');
+    if (out.error) process.stdout.write(`dec-intern: could not look around — ${out.error}\n`);
+    else if (out.skipped) process.stdout.write(`dec-intern: not now (${out.skipped})\n`);
+    else if (!out.added) process.stdout.write('dec-intern: nothing worth bringing up.\n');
     else {
       const it = snapshot().items[0];
       process.stdout.write(`\n${it.title}\n${it.body}\n\n  → ${it.action}${it.cwd ? `   (${it.cwd})` : ''}\n\n`);

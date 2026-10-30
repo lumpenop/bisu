@@ -1,4 +1,4 @@
-// The tools that make bisu an assistant rather than a coding agent: the web, memory, and doing
+// The tools that make dec-intern an assistant rather than a coding agent: the web, memory, and doing
 // things later. They write through the same modules the page uses (ui/memory.mjs, ui/jobs.mjs), so
 // what the model saves is exactly what the Memory and Settings tabs show.
 import fs from 'node:fs';
@@ -15,9 +15,9 @@ import * as keys from './keys.mjs';
 
 const ok = text => ({text});
 const err = text => ({text, error: true});
-export const isDefaultBot = () => !process.env.BISU_BOT || process.env.BISU_BOT === bots.DEFAULT;
+export const isDefaultBot = () => !process.env.DEC_INTERN_BOT || process.env.DEC_INTERN_BOT === bots.DEFAULT;
 
-export const BISU_TOOLS = {
+export const DEC_INTERN_TOOLS = {
   secret_list: {
     description: 'The API keys the person keeps in Dec (their browser): names, sites and the variable each is handed in — never values. Call it before a command or project that needs a key (then run_command with keys), when they ask what keys they have, or when something fails with a missing key or 401.',
     parameters: {type: 'object', properties: {}},
@@ -38,7 +38,7 @@ export const BISU_TOOLS = {
     kind: 'net',
     // Z.AI's search engine first, with every Z.AI key in the person's order. A key that is out of money or refused rests
     // like any model call (engine/routes.mjs) and the search goes to OpenRouter's Perplexity Sonar instead (about
-    // $0.006 a search), with the OpenRouter keys bisu already has.
+    // $0.006 a search), with the OpenRouter keys dec-intern already has.
     async run(ctx, {query, count = 6}) {
       const q = String(query).slice(0, 300), n = Math.min(10, Math.max(1, count | 0 || 6)), failed = [];
       const signal = () => AbortSignal.any([AbortSignal.timeout(30_000), ...(ctx.signal ? [ctx.signal] : [])]);
@@ -172,10 +172,10 @@ export const BISU_TOOLS = {
       return ok(text.trimEnd());
     },
   },
-  // Bots (ui/bots.mjs): bisu for one job. Writing a bot file always waits for the person: kind 'bot' is
+  // Bots (ui/bots.mjs): dec-intern for one job. Writing a bot file always waits for the person: kind 'bot' is
   // never cleared by the judge, and in Claude Code these are not pre-allowed, so the call is the preview card.
   bot_create: {
-    description: 'Create a new bisu bot once you know its name and main job (from the bot-making conversation). The person sees a preview card and nothing is written until they press 만들기.',
+    description: 'Create a new Dec Intern bot once you know its name and main job (from the bot-making conversation). The person sees a preview card and nothing is written until they press 만들기.',
     parameters: {type: 'object', properties: {
       name: {type: 'string', description: 'the bot name, in their language'},
       job: {type: 'string', description: 'its one main job, one sentence'},
@@ -202,7 +202,7 @@ export const BISU_TOOLS = {
     },
   },
   // Another bot does it with its own instructions, folder and memory; its answer comes back to this chat as a
-  // message, and its approvals show here. Only in a bisu ui chat (the server holds the chats).
+  // message, and its approvals show here. Only in a dec-intern ui chat (the server holds the chats).
   bot_handoff: {
     description: 'Hand a task to another of the person\'s bots ("@리서치 봇 …", or when another bot\'s job fits better). Give one complete brief. It works in its own chat; its result comes back to this conversation as a message, so end your turn after handing off.',
     parameters: {type: 'object', properties: {
@@ -211,9 +211,9 @@ export const BISU_TOOLS = {
     }, required: ['bot', 'task']},
     kind: 'delegate',
     async run(ctx, {bot, task}) {
-      const key = process.env.BISU_HANDOFF_KEY, chat = process.env.BISU_CHAT_ID;
-      if (!key || !chat) return err('Handing work to another bot works only in a bisu ui conversation.');
-      const dir = path.join(process.env.XDG_CONFIG_HOME || path.join(process.env.HOME || '', '.config'), 'bisu', 'handoff');
+      const key = process.env.DEC_INTERN_HANDOFF_KEY, chat = process.env.DEC_INTERN_CHAT_ID;
+      if (!key || !chat) return err('Handing work to another bot works only in a dec-intern ui conversation.');
+      const dir = path.join(process.env.XDG_CONFIG_HOME || path.join(process.env.HOME || '', '.config'), 'dec-intern', 'handoff');
       const id = randomUUID(), file = path.join(dir, `${id}.json`), res = path.join(dir, `${id}.res.json`);
       fs.mkdirSync(dir, {recursive: true});
       fs.writeFileSync(file, JSON.stringify({key, chat, bot, task, at: Date.now()}), {mode: 0o600});
@@ -224,7 +224,7 @@ export const BISU_TOOLS = {
         return a.ok ? ok(`Handed to ${a.bot}. Its answer will come back to this conversation as a message; tell the person in one line who is on it, then end your turn.`) : err(a.error);
       }
       fs.rmSync(file, {force: true});
-      return err('bisu did not pick up the handoff (is the bisu window running?).');
+      return err('dec-intern did not pick up the handoff (is the dec-intern window running?).');
     },
   },
   routine_save: {
@@ -237,7 +237,7 @@ export const BISU_TOOLS = {
     }, required: ['name', 'steps']},
     kind: 'bot',
     run(ctx, {name, steps, inputs = [], tools = 'read'}) {
-      try { const r = routines.save({name, steps, inputs, tools, bot: process.env.BISU_BOT || 'bisu', source: process.env.BISU_TEACH === '1' ? 'teach' : ''}); return ok(`Saved the routine "${r.name}" (${r.slug}). It is in 루틴, where it can be run, paused or scheduled.`) }
+      try { const r = routines.save({name, steps, inputs, tools, bot: process.env.DEC_INTERN_BOT || 'dec-intern', source: process.env.DEC_INTERN_TEACH === '1' ? 'teach' : ''}); return ok(`Saved the routine "${r.name}" (${r.slug}). It is in 루틴, where it can be run, paused or scheduled.`) }
       catch (e) { return err(e.message) }
     },
   },
@@ -267,16 +267,16 @@ export const BISU_TOOLS = {
       const file = path.join(JOBS_DIR, `${s}.md`);
       const existed = fs.existsSync(file);
       fs.mkdirSync(JOBS_DIR, {recursive: true});
-      // A bot's own job runs as that bot (BISU_BOT is set for its conversations).
-      const bot = /^[a-z0-9][a-z0-9-]{0,39}$/.test(process.env.BISU_BOT || '') && process.env.BISU_BOT !== 'bisu' ? `bot: ${process.env.BISU_BOT}\n` : '';
+      // A bot's own job runs as that bot (DEC_INTERN_BOT is set for its conversations).
+      const bot = /^[a-z0-9][a-z0-9-]{0,39}$/.test(process.env.DEC_INTERN_BOT || '') && process.env.DEC_INTERN_BOT !== 'dec-intern' ? `bot: ${process.env.DEC_INTERN_BOT}\n` : '';
       fs.writeFileSync(file, `---\nname: ${String(name).replace(/\n/g, ' ')}\n${byEvery ? `every: ${every}` : cron ? `schedule: ${cron}` : `at: ${at}`}\ncwd: ${folder}\ntools: ${tools}\n${cu ? 'cu: true\n' : ''}${bot}---\n${String(request).trim()}\n`);
       const when = cron ? (() => { const t = nextRun(parseCron(cron)); return t ? new Date(t).toLocaleString('ko-KR', {dateStyle: 'medium', timeStyle: 'short'}) : '?' })() : at;
       return ok(`${existed ? 'Updated' : 'Created'} the job "${name}" (${s}). Next run: ${when}.${tools !== 'read' ? ' It can change things, so it waits until they approve it in Settings → 예약 작업.' : ''}`);
     },
   },
-  // Goals (ui/goals.mjs): what they want done over days or weeks, worked on by bisu a little at a time.
+  // Goals (ui/goals.mjs): what they want done over days or weeks, worked on by dec-intern a little at a time.
   goal_add: {
-    description: 'Take on something they want done over days or weeks ("이번 달 안에 …", "출장 준비 챙겨줘", "매주 블로그 한 편"): bisu then works on it by itself every few hours — plans it, does what can be done (research, notes, reminders, events), and asks them when it needs a decision. Not for one task to do now (do it) or a fixed repeating task (schedule_job).',
+    description: 'Take on something they want done over days or weeks ("이번 달 안에 …", "출장 준비 챙겨줘", "매주 블로그 한 편"): Dec Intern then works on it by itself every few hours — plans it, does what can be done (research, notes, reminders, events), and asks them when it needs a decision. Not for one task to do now (do it) or a fixed repeating task (schedule_job).',
     parameters: {type: 'object', properties: {
       title: {type: 'string', description: 'the goal in one line, in their language'},
       detail: {type: 'string', description: 'what done looks like, and anything they said that matters'},
@@ -317,7 +317,7 @@ export const BISU_TOOLS = {
     kind: 'memory',
     run(ctx, args) {
       // A goal run may only write its own goal.
-      if (process.env.BISU_GOAL_ID && args.id !== process.env.BISU_GOAL_ID) return err(`This session works on ${process.env.BISU_GOAL_ID}; it cannot change ${args.id}.`);
+      if (process.env.DEC_INTERN_GOAL_ID && args.id !== process.env.DEC_INTERN_GOAL_ID) return err(`This session works on ${process.env.DEC_INTERN_GOAL_ID}; it cannot change ${args.id}.`);
       try { return ok(`Saved: ${goals.applyUpdate(args.id, args).join(', ') || 'nothing changed'}.`) } catch (e) { return err(e.message) }
     },
   },

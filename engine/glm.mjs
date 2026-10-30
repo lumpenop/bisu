@@ -1,7 +1,7 @@
 // Z.ai GLM over its OpenAI-compatible endpoint: one streamed chat completion at a time.
 //
 // The engine never holds the key itself: in development `dec-secret run` gives it a one-time token
-// and a local base URL (GLM_BASE_URL); in the shipped app the base URL is bisu's own server. The
+// and a local base URL (GLM_BASE_URL); in the shipped app the base URL is Dec Intern's own server. The
 // default below is Z.ai's general API, billed to a Standard key (a Coding Plan key may not be used
 // from an app).
 //
@@ -72,7 +72,7 @@ export async function complete({model, messages, tools, thinking = true, effort,
   // Flash can switch reasoning off; GLM-5.3 always reasons and takes an effort level instead. When
   // reasoning is on, the effort is sent as given — 「보통」 unless the caller says otherwise (judge.planTurn
   // says 「높음」 for a build, a hard job or a split): at 「낮음」 GLM-5.3 got simple comparisons wrong, and
-  // its tokens are cheap. OpenRouter lists reasoning_effort for every model bisu uses (glm-5.3,
+  // its tokens are cheap. OpenRouter lists reasoning_effort for every model dec-intern uses (glm-5.3,
   // glm-5.3-flash, deepseek-v4.1-flash, qwen3.8-max; checked 2026-10-29).
   if (!thinking) { if (ALWAYS_THINKS.has(model)) body.reasoning_effort = effort || 'medium'; else body.thinking = {type: 'disabled'} }
   else body.reasoning_effort = effort || 'medium';

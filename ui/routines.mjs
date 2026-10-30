@@ -2,7 +2,7 @@
 // the person showed it on the Mac (ui/teach.mjs). A routine is the steps in short lines, the inputs it needs
 // each time, and how much it may do (read, edit or full, the same grades as scheduled jobs).
 //
-// One markdown file per routine in ~/.config/bisu/routines/<slug>.md:
+// One markdown file per routine in ~/.config/dec-intern/routines/<slug>.md:
 //   ---
 //   name: 주간 뉴스 요약
 //   bot: bot-83d1
@@ -16,11 +16,12 @@
 // Running one is an ordinary conversation of its bot that starts with the steps (approvals as usual).
 // Scheduling one writes a scheduled job with `routine: <slug>`; the job's approval hash covers the routine's
 // text too (ui/jobs.mjs), so an edit/full routine changed after approval waits to be approved again.
+import './migrate.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const CONFIG = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu');
+const CONFIG = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'dec-intern');
 export const DIR = path.join(CONFIG, 'routines');
 const SLUG = /^[a-z0-9][a-z0-9._-]{0,59}$/;
 const BOT = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -29,7 +30,7 @@ const one = (v, n) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 export const validSlug = s => typeof s === 'string' && SLUG.test(s);
 
 function parse(slug, text) {
-  const r = { slug, name: slug, bot: 'bisu', inputs: [], tools: 'read', paused: false, steps: '', source: '' };
+  const r = { slug, name: slug, bot: 'dec-intern', inputs: [], tools: 'read', paused: false, steps: '', source: '' };
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(String(text));
   if (m) {
     for (const line of m[1].split(/\r?\n/)) {
@@ -73,11 +74,11 @@ function slugFor(name) {
 }
 const stepsText = steps => Array.isArray(steps) ? steps.map((s, i) => `${i + 1}. ${one(s, 300)}`).join('\n') : String(steps || '').trim();
 const inputsOf = v => (Array.isArray(v) ? v : String(v || '').split(',')).map(x => one(x, 30)).filter(Boolean).slice(0, 8);
-export function save({ name, bot = 'bisu', steps, inputs = [], tools = 'read', source = '' } = {}) {
+export function save({ name, bot = 'dec-intern', steps, inputs = [], tools = 'read', source = '' } = {}) {
   if (!one(name, 80)) throw Object.assign(Error('루틴 이름이 필요해요.'), { status: 400 });
   const text = stepsText(steps);
   if (!text) throw Object.assign(Error('단계가 비어 있어요.'), { status: 400 });
-  const r = { slug: slugFor(name), name: one(name, 80), bot: BOT.test(bot) ? bot : 'bisu', inputs: inputsOf(inputs), tools: GRADES.includes(tools) ? tools : 'read', paused: false, steps: text, source: one(source, 20) };
+  const r = { slug: slugFor(name), name: one(name, 80), bot: BOT.test(bot) ? bot : 'dec-intern', inputs: inputsOf(inputs), tools: GRADES.includes(tools) ? tools : 'read', paused: false, steps: text, source: one(source, 20) };
   write(r);
   return read(r.slug);
 }

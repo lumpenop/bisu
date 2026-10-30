@@ -1,8 +1,8 @@
-// Bots: bisu for one job. Each bot has a name, one main job, how it works (instructions), a folder and a
+// Bots: Dec Intern for one job. Each bot has a name, one main job, how it works (instructions), a folder and a
 // tone, and its own conversations, memory and scheduled jobs. The person teaches a bot by talking to it;
 // there is no workflow builder.
 //
-// One markdown file per bot in ~/.config/bisu/bots/<id>.md, the same shape as a scheduled job:
+// One markdown file per bot in ~/.config/dec-intern/bots/<id>.md, the same shape as a scheduled job:
 //   ---
 //   name: 리서치 봇
 //   job: 매주 업계 뉴스를 찾아 요약해요
@@ -11,16 +11,17 @@
 //   ---
 //   (how it works, in the person's words)
 //
-// The default bot is 'bisu'. It owns everything that existed before bots: the memory folder
-// (~/.config/bisu/memory), every scheduled job without a `bot:` line and every conversation without a
+// The default bot is 'dec-intern'. It owns everything that existed before bots: the memory folder
+// (~/.config/dec-intern/memory), every scheduled job without a `bot:` line and every conversation without a
 // bot, so nothing is moved and nothing can be lost. Other bots keep their memory in bots/<id>/memory and
 // mark their jobs with `bot: <id>`.
 //
-// A run knows its bot from BISU_BOT (launch.zsh passes it on): the system prompt gets the bot's block,
+// A run knows its bot from DEC_INTERN_BOT (launch.zsh passes it on): the system prompt gets the bot's block,
 // memory reads and writes its folder, and a job it schedules carries its id.
 //
 //   node bots.mjs prompt <prompt.md>   # prompt.md + the bot's block + its memory, for --append-system-prompt-file
 //   node bots.mjs                      # the bots, for a look by hand
+import './migrate.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -30,9 +31,11 @@ import * as memory from './memory.mjs';
 import * as profile from './profile.mjs';
 import * as rules from './rules.mjs';
 
-const CONFIG = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu');
+const CONFIG = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'dec-intern');
 export const DIR = path.join(CONFIG, 'bots');
-export const DEFAULT = 'bisu';
+export const DEFAULT = 'dec-intern';
+// The default bot was 'bisu' until 2026-10-30: an old job file or chat still says so.
+export const norm = id => id === 'bisu' ? DEFAULT : id;
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const FIELDS = ['name', 'job', 'cwd', 'tone'];
 const home = p => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
@@ -51,7 +54,7 @@ function parse(id, text) {
       if (kv && FIELDS.includes(kv[1])) bot[kv[1]] = kv[1] === 'cwd' ? home(kv[2].trim()) || os.homedir() : kv[2].trim();
     }
     bot.instructions = m[2].trim();
-    if (bot.default && bot.name === 'bisu') bot.name = '덱 인턴';   // the old outward name, renamed 2026-10-29
+    if (bot.default && (bot.name === 'dec-intern' || bot.name === 'bisu')) bot.name = '덱 인턴';   // the old outward names
   } else bot.instructions = String(text).trim();
   return bot;
 }
@@ -62,7 +65,7 @@ function write(bot) {
   fs.renameSync(tmp, file);
 }
 
-// The default bot's file is written the first time bots are looked at; it describes the bisu that was
+// The default bot's file is written the first time bots are looked at; it describes the dec-intern that was
 // there before, so ownership of the old memory, jobs and chats is the migration.
 export function ensureDefault() {
   const file = path.join(DIR, `${DEFAULT}.md`);
@@ -84,6 +87,7 @@ export function list() {
   return out.sort((a, b) => (b.default - a.default) || a.name.localeCompare(b.name, 'ko'));
 }
 export function get(id) {
+  id = norm(id);
   if (!validId(id)) return null;
   try { return parse(id, fs.readFileSync(path.join(DIR, `${id}.md`), 'utf8')) } catch { return id === DEFAULT ? (ensureDefault(), get(DEFAULT)) : null }
 }
@@ -131,28 +135,28 @@ export function remove(id) {
   return { removed: id };
 }
 
-// What another bot has saved to remember, for the default bot only (engine/bisu-tools.mjs bot_memory):
+// What another bot has saved to remember, for the default bot only (engine/dec-intern-tools.mjs bot_memory):
 // a bot is given its own memory in its prompt and nothing of the others', and a delegated worker has no
 // memory tools at all. Reading only; nothing here writes into another bot's folder.
 export function memoryOf(who) {
-  const q = String(who || '').trim();
+  const q = norm(String(who || '').trim());
   const all = list();
   const bot = all.find(b => b.id === q || b.name === q) || (q ? all.find(b => b.name.includes(q) || q.includes(b.name)) : null);
   return bot ? { bot, entries: memory.inBot(bot.id, () => memory.list()) } : null;
 }
-export const memoryCount = id => memory.inBot(id, () => memory.list()).length;
+export const memoryCount = id => memory.inBot(norm(id), () => memory.list()).length;
 
-// What a run of this bot is told, after bisu's own prompt.
+// What a run of this bot is told, after Dec Intern's own prompt.
 export function block(id, { maker = false } = {}) {
   const bot = resolve(id);
   const parts = [];
   if (!bot.default || bot.instructions || bot.tone || bot.job !== '무엇이든 함께하는 비서') {
     parts.push(`## 이 봇 (${bot.name})`,
-      `You are "${bot.name}", one of the person's bisu bots.${bot.job ? ` Your main job: ${bot.job}` : ''}`,
+      `You are "${bot.name}", one of the person's Dec Intern bots.${bot.job ? ` Your main job: ${bot.job}` : ''}`,
       bot.tone ? `Tone: ${bot.tone}` : '',
       `Your folder is ${short(bot.cwd)}.`,
       bot.instructions ? `How the person wants you to work:\n${bot.instructions}` : '');
-    if (!bot.default) parts.push(`Your memory folder is ${short(memoryDir(bot.id))} — save and read memories there, not in ~/.config/bisu/memory. A scheduled job you create carries \`bot: ${bot.id}\` in its frontmatter so it runs as you.`);
+    if (!bot.default) parts.push(`Your memory folder is ${short(memoryDir(bot.id))} — save and read memories there, not in ~/.config/dec-intern/memory. A scheduled job you create carries \`bot: ${bot.id}\` in its frontmatter so it runs as you.`);
   }
   // Who else there is, for handing work over (bot_handoff); "@이름" in a message means that bot.
   const others = list().filter(b => b.id !== bot.id);
@@ -161,7 +165,7 @@ export function block(id, { maker = false } = {}) {
   return parts.filter(Boolean).join('\n');
 }
 const MAKER = `## 봇 만들기
-This conversation makes a new bot. A bot is bisu for one main job: a name, the job in one sentence, a folder, how it should work, and a tone.
+This conversation makes a new bot. A bot is Dec Intern for one main job: a name, the job in one sentence, a folder, how it should work, and a tone.
 - Ask what is still missing, one short question per message, at most four in all, in this order: its name; the one job it does; the folder it works in (default: home); how it should work and talk. Skip anything the person already said.
 - Then call bot_create once with name, job, cwd, instructions (their way of working, in their words, tidied into short lines) and tone. That call shows the person a preview card ("이렇게 만들까요?") and writes nothing until they press 만들기.
 - If they say to change something after it exists, use bot_update with its id.
@@ -171,15 +175,15 @@ async function main(argv) {
   const [mode] = argv;
   if (mode === 'prompt') {
     const base = fs.readFileSync(argv[1], 'utf8').trimEnd();
-    const id = validId(process.env.BISU_BOT) ? process.env.BISU_BOT : DEFAULT;
-    const mine = block(id, { maker: process.env.BISU_BOT_MAKER === '1' });
+    const id = validId(process.env.DEC_INTERN_BOT) ? process.env.DEC_INTERN_BOT : DEFAULT;
+    const mine = block(id, { maker: process.env.DEC_INTERN_BOT_MAKER === '1' });
     // The person is the same person for every bot. Their block comes last, after memory: it wins over
     // memory, and the end of the prompt is what the model weighs most. Memories about what the profile
     // now says (their name, their tone) are left out, so the two cannot disagree.
     const me = profile.get();
     const mem = memory.inBot(id, () => memory.digest(Number(argv[2]) || memory.BUDGET, profile.supersedes(me)));
-    // The folder's CLAUDE.md files, for bisu's own engine only: claude loads them itself (ui/rules.mjs).
-    const folder = process.env.BISU_ENGINE === 'native' ? rules.block(process.cwd()) : '';
+    // The folder's CLAUDE.md files, for Dec Intern's own engine only: claude loads them itself (ui/rules.mjs).
+    const folder = process.env.DEC_INTERN_ENGINE === 'native' ? rules.block(process.cwd()) : '';
     return process.stdout.write([base, mine, folder, mem, profile.block(me)].filter(Boolean).join('\n\n') + '\n');
   }
   for (const b of list()) process.stdout.write(`${b.id}${b.default ? ' (default)' : ''}  ${b.name}  — ${b.job}  [${short(b.cwd)}]\n`);

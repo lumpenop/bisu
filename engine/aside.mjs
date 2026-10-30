@@ -1,4 +1,4 @@
-// Aside driven by bisu itself, through the REPL its CLI opens (`aside repl`: Playwright-style JavaScript in the
+// Aside driven by dec-intern itself, through the REPL its CLI opens (`aside repl`: Playwright-style JavaScript in the
 // person's Aside, signed in as they are). One REPL per task keeps its refs between steps; a step is the action and
 // a fresh snapshot in one round trip. Aside's snapshot already covers the whole page, off screen included, so
 // nothing scrolls. The snapshot (Playwright's aria tree) is rewritten into ego's format for the shared loop
@@ -7,7 +7,7 @@ import {spawn} from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 
-const BIN = () => process.env.BISU_ASIDE_BIN || path.join(os.homedir(), '.local', 'bin', 'aside');
+const BIN = () => process.env.DEC_INTERN_ASIDE_BIN || path.join(os.homedir(), '.local', 'bin', 'aside');
 const quote = v => JSON.stringify(String(v));
 const unq = n => { try { return JSON.parse(n) } catch { return String(n).replace(/^"|"$/g, '') } };
 
@@ -59,7 +59,7 @@ function repl() {
         if (Date.now() > end) throw Error('aside repl timed out');
       }
       const i = buf.indexOf(mark), out = buf.slice(0, i).replace(/\x1b\[[0-9;]*m/g, '');
-      if (process.env.BISU_ASIDE_DEBUG) process.stderr.write(`[aside] ${out.slice(-1500)}\n`);
+      if (process.env.DEC_INTERN_ASIDE_DEBUG) process.stderr.write(`[aside] ${out.slice(-1500)}\n`);
       buf = buf.slice(i + mark.length);
       return out;
     },

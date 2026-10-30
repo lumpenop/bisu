@@ -8,12 +8,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bisu-routes-'));
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dec-intern-routes-'));
 Object.assign(process.env, {
-  BISU_ROUTES_FILE: path.join(dir, 'model-routes.json'), BISU_ROUTE_HEALTH: path.join(dir, 'health.json'),
-  BISU_ROUTE_KEYS: '1|GLM_API_KEY|https://api.z.ai;2|OPENROUTER_API_KEY|https://openrouter.ai;3|OR%20backup|https://openrouter.ai;4|OPENAI_API_KEY|https://api.openai.com;5|OAI%202|https://api.openai.com',
-  BISU_RK1_API_KEY: 'zai', BISU_RK1_BASE_URL: 'http://z.local', BISU_RK2_API_KEY: 'or1', BISU_RK2_BASE_URL: 'http://or.local',
-  BISU_RK3_API_KEY: 'or2', BISU_RK3_BASE_URL: 'http://or.local', BISU_RK4_API_KEY: 'oa1', BISU_RK4_BASE_URL: 'http://oa.local', BISU_RK5_API_KEY: 'oa2', BISU_RK5_BASE_URL: 'http://oa.local',
+  DEC_INTERN_ROUTES_FILE: path.join(dir, 'model-routes.json'), DEC_INTERN_ROUTE_HEALTH: path.join(dir, 'health.json'),
+  DEC_INTERN_ROUTE_KEYS: '1|GLM_API_KEY|https://api.z.ai;2|OPENROUTER_API_KEY|https://openrouter.ai;3|OR%20backup|https://openrouter.ai;4|OPENAI_API_KEY|https://api.openai.com;5|OAI%202|https://api.openai.com',
+  DEC_INTERN_RK1_API_KEY: 'zai', DEC_INTERN_RK1_BASE_URL: 'http://z.local', DEC_INTERN_RK2_API_KEY: 'or1', DEC_INTERN_RK2_BASE_URL: 'http://or.local',
+  DEC_INTERN_RK3_API_KEY: 'or2', DEC_INTERN_RK3_BASE_URL: 'http://or.local', DEC_INTERN_RK4_API_KEY: 'oa1', DEC_INTERN_RK4_BASE_URL: 'http://oa.local', DEC_INTERN_RK5_API_KEY: 'oa2', DEC_INTERN_RK5_BASE_URL: 'http://oa.local',
 });
 const R = await import('../routes.mjs'), {complete} = await import('../glm.mjs'), judge = await import('../judge.mjs');
 const calls = [], empty = new Set();

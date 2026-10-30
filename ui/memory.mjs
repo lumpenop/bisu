@@ -1,10 +1,10 @@
-// bisu's memory: what the person should not have to say twice.
+// Dec Intern's memory: what the person should not have to say twice.
 //
 // A session forgets, so the durable things — how they want answers, their name, the folder a project
 // lives in, a correction they made twice — live as one markdown file per memory in
-// ~/.config/bisu/memory. That shape is deliberate:
+// ~/.config/dec-intern/memory. That shape is deliberate:
 //  * the assistant reads and writes them with the tools it already has (Read, Write, Edit, Bash), so
-//    keeping something needs no new tool and no new process, and in `bisu ui` the write goes through
+//    keeping something needs no new tool and no new process, and in `dec-intern ui` the write goes through
 //    the ordinary approval card — the person sees the file before it exists;
 //  * the person can open the folder in Finder and edit them by hand, or do it on the Memory tab;
 //  * every new run gets them as a digest appended to its system prompt (launch.zsh), which is what
@@ -13,6 +13,7 @@
 //   node memory.mjs digest [chars]      # the block on its own
 //   node memory.mjs prompt <prompt.md>  # prompt.md + that block, for --append-system-prompt-file
 //   node memory.mjs                     # the folder and the digest, for a look by hand
+import './migrate.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -20,15 +21,15 @@ import { fileURLToPath } from 'node:url';
 
 // The digest is on every request, so it is capped: memory is a few facts, not a diary. Pinned entries
 // never fall off the end; the rest are taken newest first.
-export const BUDGET = Number(process.env.BISU_MEMORY_CHARS) || 3000;
-// Each bot keeps its own memory. The default bot ('bisu') owns the folder that existed before bots;
-// another bot's lives in bots/<id>/memory (ui/bots.mjs). A run knows its bot from BISU_BOT; the page's
+export const BUDGET = Number(process.env.DEC_INTERN_MEMORY_CHARS) || 3000;
+// Each bot keeps its own memory. The default bot ('dec-intern') owns the folder that existed before bots;
+// another bot's lives in bots/<id>/memory (ui/bots.mjs). A run knows its bot from DEC_INTERN_BOT; the page's
 // server, which serves every bot, switches with inBot() around each call.
-const CONFIG_DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu');
+const CONFIG_DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'dec-intern');
 export function dirFor(bot) {
-  return !bot || bot === 'bisu' || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(bot) ? path.join(CONFIG_DIR, 'memory') : path.join(CONFIG_DIR, 'bots', bot, 'memory');
+  return !bot || bot === 'dec-intern' || bot === 'bisu' || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(bot) ? path.join(CONFIG_DIR, 'memory') : path.join(CONFIG_DIR, 'bots', bot, 'memory');
 }
-export let DIR = dirFor(process.env.BISU_BOT);
+export let DIR = dirFor(process.env.DEC_INTERN_BOT);
 // Every function here is synchronous, so swapping the folder around one call cannot interleave with another.
 export function inBot(bot, fn) {
   const was = DIR;
@@ -264,7 +265,7 @@ export function remove(id) {
 }
 
 // Fewer, fuller memories. The assistant says which memories are about one thing (memory_compact in
-// engine/bisu-tools.mjs), the person approves on the card, and this applies it: each merge writes one
+// engine/dec-intern-tools.mjs), the person approves on the card, and this applies it: each merge writes one
 // new memory and retires the ones it was made from; drop retires memories that are simply out of date.
 // Retired files are moved to .compacted/<time>/ under the folder, not deleted, so a wrong merge can be
 // put back by hand. A pinned memory is never retired: pinning is the person saying "keep this as it is".

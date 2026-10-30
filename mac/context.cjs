@@ -1,7 +1,7 @@
 'use strict';
-// What the person was looking at when they called bisu: the frontmost app, the text they had
+// What the person was looking at when they called dec-intern: the frontmost app, the text they had
 // selected, and the clipboard. All of it is read-only — the selection is read through the
-// Accessibility API, so bisu never presses ⌘C, never touches the pasteboard and has nothing to
+// Accessibility API, so dec-intern never presses ⌘C, never touches the pasteboard and has nothing to
 // restore. Both reads are optional: an app that does not expose its selection simply reports
 // nothing, and everything else still works.
 const {execFile} = require('node:child_process');
@@ -38,7 +38,7 @@ async function clipboard() {
 }
 
 // The focused UI element of the frontmost process, and its AXSelectedText. Needs Accessibility
-// consent for the app running bisu; without it System Events answers with an error and we say so.
+// consent for the app running dec-intern; without it System Events answers with an error and we say so.
 const SELECTION_SCRIPT = [
   'tell application "System Events"',
   '  set frontProc to first application process whose frontmost is true',

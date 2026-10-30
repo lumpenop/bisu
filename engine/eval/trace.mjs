@@ -17,12 +17,12 @@ const timed = d => new Proxy(d, {get(o, k) {
   if (!TIMED.includes(k)) return f.bind(o);
   return async (...a) => { const t = Date.now(); try { return await f.apply(o, a) } finally { T.push(`${k}${k === 'act' ? `(${a[0].map(c => `${c.kind} ${String(c.label || '').slice(0, 24)}`).join(', ')})` : ''} ${Date.now() - t}ms`) } };
 }});
-const drv = mode === 'dec' ? dec.directDriver() : mode === 'aside' ? aside.driver() : ego.egoDriver(`bisu-trace-${Date.now() % 1e5}`);
+const drv = mode === 'dec' ? dec.directDriver() : mode === 'aside' ? aside.driver() : ego.egoDriver(`dec-intern-trace-${Date.now() % 1e5}`);
 const r = await ego.drive({goal, url, driver: timed(drv), budget: 20, log: x => T.push(`log ${JSON.stringify(x).slice(0, W)} @${Date.now() - t0}ms`)});
 console.log(JSON.stringify({mode, s: (Date.now() - t0) / 1000, status: r.status, steps: r.steps, glm: r.reviews, answer: String(r.answer ?? '').slice(0, 200)}));
 for (const l of T) console.log('  ' + l);
 if (mode === 'dec') {
   try { const run = (await dec.api('GET', '/v1/runs/' + drv.id)).run; console.log('  dec timing ' + JSON.stringify(run.result?.timing ?? null)) } catch {}
-  if (drv.tabId) await dec.api('POST', `/v1/tabs/${drv.tabId}/close`, {agent: 'bisu'}).catch(() => {});
+  if (drv.tabId) await dec.api('POST', `/v1/tabs/${drv.tabId}/close`, {agent: 'dec-intern'}).catch(() => {});
 }
 if (mode === 'ego') await ego.close(drv.id).catch(() => {});

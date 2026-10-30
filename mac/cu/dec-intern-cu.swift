@@ -1,15 +1,15 @@
-// bisu-cu — the hands and eyes bisu needs on this Mac.
+// dec-intern-cu — the hands and eyes dec-intern needs on this Mac.
 //
-//   bisu-cu trust                          is this process allowed to use Accessibility?
-//   bisu-cu snapshot [--pid N] [--depth N] [--max N] [--all]
+//   dec-intern-cu trust                          is this process allowed to use Accessibility?
+//   dec-intern-cu snapshot [--pid N] [--depth N] [--max N] [--all]
 //                                          the frontmost (or given) app's window tree as JSON
-//   bisu-cu click --x N --y N [--button right] [--count 2]
-//   bisu-cu move --x N --y N
-//   bisu-cu drag --x1 N --y1 N --x2 N --y2 N [--ms 300]
-//   bisu-cu scroll --dy N [--dx N] [--x N] [--y N]
-//   bisu-cu type --text "…"                types any script, Korean included
-//   bisu-cu key --combo "cmd shift l"      modifier+key, or a bare key (return, tab, escape, delete, up…)
-//   bisu-cu window                         frontmost window's id, frame and owning app
+//   dec-intern-cu click --x N --y N [--button right] [--count 2]
+//   dec-intern-cu move --x N --y N
+//   dec-intern-cu drag --x1 N --y1 N --x2 N --y2 N [--ms 300]
+//   dec-intern-cu scroll --dy N [--dx N] [--x N] [--y N]
+//   dec-intern-cu type --text "…"                types any script, Korean included
+//   dec-intern-cu key --combo "cmd shift l"      modifier+key, or a bare key (return, tab, escape, delete, up…)
+//   dec-intern-cu window                         frontmost window's id, frame and owning app
 //
 // Coordinates are screen points with the origin at the top-left of the main display, which is what
 // the Accessibility API reports — so an element's frame can be clicked without any conversion.
@@ -127,7 +127,7 @@ func frontApp() -> (pid_t, String)? {
 }
 
 // Elements worth showing: ones a person could point at. A static label with no action and no text
-// is noise, but text that can be read is worth keeping — bisu often needs to read the screen, not
+// is noise, but text that can be read is worth keeping — dec-intern often needs to read the screen, not
 // only click it.
 func interesting(_ role: String, _ title: String?, _ value: String?, _ acts: [String], _ f: [Double]?) -> Bool {
   let label = (title ?? "").isEmpty ? (value ?? "") : title!
@@ -241,7 +241,7 @@ func windowInfo() -> [String: Any] {
 
 func requireTrust() {
   guard AXIsProcessTrusted() else {
-    fail("Accessibility permission is missing: allow bisu in System Settings → Privacy & Security → Accessibility, then try again.")
+    fail("Accessibility permission is missing: allow dec-intern in System Settings → Privacy & Security → Accessibility, then try again.")
   }
 }
 
@@ -278,7 +278,7 @@ let keyCodes: [String: CGKeyCode] = [
 
 let argv = Array(CommandLine.arguments.dropFirst())
 guard let command = argv.first else {
-  fail("usage: bisu-cu <trust|snapshot|window|click|move|drag|scroll|type|key> [options]")
+  fail("usage: dec-intern-cu <trust|snapshot|window|click|move|drag|scroll|type|key> [options]")
 }
 let args = Args(Array(argv.dropFirst()))
 

@@ -1,4 +1,4 @@
-// Five small pretend sites on 127.0.0.1 for comparing how bisu drives a browser (engine/eval/web-bench.mjs):
+// Five small pretend sites on 127.0.0.1 for comparing how dec-intern drives a browser (engine/eval/web-bench.mjs):
 // a shop with search, a bookshop by category, a restaurant booking form, a mail inbox, and a long store page.
 // Nothing real is touched, so the same task can run as often as a comparison needs. Every POST (booking,
 // deleting mail) is written to `log`: a run that pressed something it should have held shows up there.
@@ -31,7 +31,7 @@ const BOOKS = {
 const MAILS0 = [
   ['m1', '쿠팡', '주문하신 상품이 발송되었습니다'], ['m2', 'LinkedIn', '이번 주 회원님의 프로필을 본 사람 5명'],
   ['m3', '김민지', '내일 회의 자료 공유드려요'], ['m4', 'LinkedIn', '새로운 채용 공고 12건'], ['m5', '네이버페이', '결제 내역 안내'],
-  ['m6', 'LinkedIn', '회원님이 알 수도 있는 사람'], ['m7', '박서준', '주말 등산 어때?'], ['m8', 'GitHub', '[bisu] New issue opened'],
+  ['m6', 'LinkedIn', '회원님이 알 수도 있는 사람'], ['m7', '박서준', '주말 등산 어때?'], ['m8', 'GitHub', '[dec-intern] New issue opened'],
 ];
 
 export function startSites(port = 0) {

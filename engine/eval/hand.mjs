@@ -1,4 +1,4 @@
-// bisu's browser drivers with someone else choosing every step (a person, or Claude in a session) instead of
+// Dec Intern's browser drivers with someone else choosing every step (a person, or Claude in a session) instead of
 // Decisions and GLM: what the decider adds, on the same pages, controls and browsers. One server per browser keeps
 // the tab between steps; every command, what it chose and what came back is a JSON line in the log.
 //   node engine/eval/hand.mjs serve <dec|ego|aside> --port 7801 --log results/<day>/hand-<browser>.jsonl
@@ -21,12 +21,12 @@ function serve(kind, port, logFile) {
   fs.mkdirSync(path.dirname(logFile), {recursive: true});
   const log = o => fs.appendFileSync(logFile, JSON.stringify({at: new Date().toISOString(), browser: kind, ...o}) + '\n');
   let driver = null, view = null, cands = [], task = null, t0 = 0, steps = 0, space = null, chose = null;
-  const make = name => kind === 'dec' ? dec.directDriver() : kind === 'aside' ? aside.driver() : ego.egoDriver(space = `bisu-hand-${name}-${Date.now() % 1e5}`);
+  const make = name => kind === 'dec' ? dec.directDriver() : kind === 'aside' ? aside.driver() : ego.egoDriver(space = `dec-intern-hand-${name}-${Date.now() % 1e5}`);
   const listOf = v => kind === 'dec' ? (v.cands || []).map((c, i) => ({...c, name: c.name || c.kind, n: i})) : ego._candidates(v, task?.goal || '').map((c, i) => ({...c, n: i}));
   const finish = async () => {
     if (!driver) return;
     try { await driver.end?.('done') } catch {}
-    if (kind === 'dec' && driver.tabId) await dec.api('POST', `/v1/tabs/${driver.tabId}/close`, {agent: 'bisu'}).catch(() => {});
+    if (kind === 'dec' && driver.tabId) await dec.api('POST', `/v1/tabs/${driver.tabId}/close`, {agent: 'dec-intern'}).catch(() => {});
     if (kind === 'ego' && space) await ego.close(space).catch(() => {});
     driver = null; view = null; cands = [];
   };

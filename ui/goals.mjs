@@ -1,9 +1,9 @@
 // Goals: what the person wants done over days or weeks ("이번 달 안에 블로그 글 세 편", "출장 준비 챙겨 줘"),
-// which bisu works on a little at a time, by itself, the way Muse keeps a Goals tab.
+// which dec-intern works on a little at a time, by itself, the way Muse keeps a Goals tab.
 //
-// A goal is one JSON file in ~/.config/bisu/goals/: what it is, what done looks like, the plan (a few
+// A goal is one JSON file in ~/.config/dec-intern/goals/: what it is, what done looks like, the plan (a few
 // steps with their state), notes, a log of what each session did, and the person's answers. Every few
-// hours (outside the quiet hours of 먼저 찾아오기) the engine gives it one short run of bisu's own
+// hours (outside the quiet hours of 먼저 찾아오기) the engine gives it one short run of Dec Intern's own
 // engine with prompt-goal.md: plan it if there is no plan yet, do the next step that can be done now,
 // and write down what happened with goal_update. When a run needs the person — a decision, something
 // only they know — it leaves a question: the goal waits, and the question goes to the panel, the
@@ -12,10 +12,11 @@
 // Deliberate limits: a goal run reads (files in its folder, the web, the calendar), adds events and
 // reminders, and writes only into the goal itself (plan, notes, log). It never edits files, runs
 // commands or deletes anything, so it needs no approval; one run at a time; nothing in quiet hours.
-// It runs on whichever engine the chats use: Claude Code reaches the same tools through bisu's MCP server.
+// It runs on whichever engine the chats use: Claude Code reaches the same tools through Dec Intern's MCP server.
 //
 //   node goals.mjs                 # every goal with its state
 //   node goals.mjs run <id>        # one session now, printing what it did
+import './migrate.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -25,12 +26,12 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(here);
-export const DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu', 'goals');
+export const DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'dec-intern', 'goals');
 const TICK_MS = 60e3;
 const RUN_MIN = 15;
 // What a goal run may use: looking (files in its folder, the web, the calendar), adding events and
-// reminders, and its own goal. bisu's own engine takes them by name; Claude Code gets the read tools
-// here and the rest from bisu's MCP server, which launch.zsh narrows to this list when BISU_GOAL_ID is set.
+// reminders, and its own goal. Dec Intern's own engine takes them by name; Claude Code gets the read tools
+// here and the rest from Dec Intern's MCP server, which launch.zsh narrows to this list when DEC_INTERN_GOAL_ID is set.
 export const RUN_TOOLS = 'Read,Glob,Grep,WebFetch,WebSearch,calendar_list,calendar_add,reminders_list,reminder_add,reminder_change,goal_update';
 const CLAUDE_TOOLS = 'Read,Glob,Grep,WebFetch';
 const STATUS = ['active', 'waiting', 'paused', 'done'];
@@ -75,7 +76,7 @@ export function create({ title, detail = '', due = null, cwd = '', every = 6 } =
   return write(g);
 }
 
-// What a run (goal_update) may change. Called inside bisu's engine, so it only writes the file; the
+// What a run (goal_update) may change. Called inside Dec Intern's engine, so it only writes the file; the
 // engine that started the run sees the change when the run ends.
 const MARKS = { x: 'done', X: 'done', '~': 'doing', '!': 'blocked', ' ': 'todo', '': 'todo' };
 // The plan as a model sends it: an array of {text, status}, that array as a JSON string, or plain lines
@@ -168,8 +169,8 @@ function runEngine(g, models) {
     const args = ['-f', path.join(root, 'launch.zsh'), models?.main || 'z-ai/glm-5.3', models?.code || 'qwen/qwen3.8-max-0902', models?.dev || 'deepseek/deepseek-v4.1-flash', path.join(root, 'agents.json'),
       '-p', brief(g), '--output-format', 'json'];
     // The engine the chats use (Settings → 엔진): both have the goal tools.
-    const native = process.env.BISU_ENGINE === 'native';
-    const env = { ...process.env, BISU_PROMPT: path.join(root, 'prompt-goal.md'), BISU_TOOLS: native ? RUN_TOOLS : CLAUDE_TOOLS, BISU_CU: '0', BISU_GOAL_ID: g.id };
+    const native = process.env.DEC_INTERN_ENGINE === 'native';
+    const env = { ...process.env, DEC_INTERN_PROMPT: path.join(root, 'prompt-goal.md'), DEC_INTERN_TOOLS: native ? RUN_TOOLS : CLAUDE_TOOLS, DEC_INTERN_CU: '0', DEC_INTERN_GOAL_ID: g.id };
     const proc = spawn('zsh', args, { cwd: g.cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
     child = proc;
     let out = '', err = '';
@@ -220,11 +221,11 @@ async function tick() {
   if (running || quietFn()) return;
   const now = Date.now();
   const g = all().find(x => x.status === 'active' && (x.nextAt || 0) <= now);
-  if (g) await run(g.id).catch(e => console.error('bisu goals:', e.message));
+  if (g) await run(g.id).catch(e => console.error('dec-intern goals:', e.message));
 }
 let timer = null;
 export function start(holds = () => true) {
-  if (timer || process.env.BISU_GOALS === '0') return;
+  if (timer || process.env.DEC_INTERN_GOALS === '0') return;
   timer = setInterval(() => { if (holds()) tick() }, TICK_MS);
   timer.unref?.();
 }

@@ -1,9 +1,9 @@
-// ego lite, driven by bisu itself: what bisu uses for the web when dec's fast mode is not there, and strong enough
+// ego lite, driven by dec-intern itself: what dec-intern uses for the web when dec's fast mode is not there, and strong enough
 // to need no dec at all. It follows the ego-browser skill: one task space per conversation, resumed by id on every
 // call (each call is a new process); the action and the next look happen in the same script, the snapshot printed
 // last, so a step is one ego call and one model call.
 //
-// Who picks the next step (BISU_WEB_PICKER, default rescue; engine/eval/web-bench.mjs compares them on the same
+// Who picks the next step (DEC_INTERN_WEB_PICKER, default rescue; engine/eval/web-bench.mjs compares them on the same
 // pretend sites):
 //   decisions — OpenAI Decisions picks one of the numbered actions read off the snapshot, like dec's fast mode.
 //   pair      — Decisions picks; GLM looks again only where a wrong pick costs something: a risky step, a
@@ -13,17 +13,17 @@
 //               answer looks wrong (done with no answer to a question, an unsure or page-dump answer). Then GLM
 //               takes that one step.
 // Clicks that pay, send, delete, book or submit are never made here: the run stops on them and says which one, and
-// bisu asks the person first (browser_approve). Passwords and card numbers are never typed.
+// dec-intern asks the person first (browser_approve). Passwords and card numbers are never typed.
 import {execFile} from 'node:child_process';
 import * as judge from './judge.mjs';
 import {complete} from './glm.mjs';
 
-const EGO = process.env.BISU_EGO_BIN || 'ego-browser';
+const EGO = process.env.DEC_INTERN_EGO_BIN || 'ego-browser';
 // GLM-5.3 thinks at 「보통」 here: at 「낮음」 it named the wrong winner of three dates once in six on the same task (and three
-// times in four in dec), at 「보통」 never, in the same time (11-14 s a task). BISU_WEB_GLM_EFFORT changes it.
-const GLM_MODEL = () => process.env.BISU_WEB_GLM || 'glm-5.3';
+// times in four in dec), at 「보통」 never, in the same time (11-14 s a task). DEC_INTERN_WEB_GLM_EFFORT changes it.
+const GLM_MODEL = () => process.env.DEC_INTERN_WEB_GLM || 'glm-5.3';
 // (GLM never picks the steps itself: it reviews and writes answers. GLM alone mode is gone.)
-export const picker = () => ['decisions', 'pair', 'rescue'].includes(process.env.BISU_WEB_PICKER) ? process.env.BISU_WEB_PICKER : 'rescue';
+export const picker = () => ['decisions', 'pair', 'rescue'].includes(process.env.DEC_INTERN_WEB_PICKER) ? process.env.DEC_INTERN_WEB_PICKER : 'rescue';
 
 // The site a page belongs to (news.daum.net and m.daum.net are one site; so are a.co.kr and b.co.kr's parents).
 export function siteOf(u) {
@@ -249,7 +249,7 @@ function ego(script, timeoutMs = 90_000) {
   // -e, so an -e script either waits forever on an open pipe or is replaced by an empty one.
   return new Promise(resolve => {
     const child = execFile(EGO, ['nodejs'], {encoding: 'utf8', timeout: timeoutMs, maxBuffer: 8 << 20}, (e, out, err) => {
-      if (process.env.BISU_EGO_DEBUG) process.stderr.write(`[ego] ${String(err || e?.message || '').slice(0, 2000)}\n${String(out).slice(0, 300)}\n`);
+      if (process.env.DEC_INTERN_EGO_DEBUG) process.stderr.write(`[ego] ${String(err || e?.message || '').slice(0, 2000)}\n${String(out).slice(0, 300)}\n`);
       // A script's console output arrives on stderr when ego-browser's stdout is not a terminal: read both.
       const line = (String(out) + '\n' + String(err)).split('\n').reverse().find(l => l.startsWith('@@BISU '));
       let data = null;
@@ -280,7 +280,7 @@ const look = async () => {
 const quote = v => JSON.stringify(String(v));
 
 // A page asking for the microphone, camera, location or notifications puts up a browser prompt that stops ego and
-// hands the space to the person. bisu never needs any of them: pages in its space get a refusal instead of a prompt.
+// hands the space to the person. dec-intern never needs any of them: pages in its space get a refusal instead of a prompt.
 // Raw CDP retires the snapshot's refs, so after it the first action finds its element again (find(), below).
 const GUARD = `(() => { const no = () => Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
   try { if (navigator.mediaDevices) { navigator.mediaDevices.getUserMedia = no; navigator.mediaDevices.getDisplayMedia = no } } catch {}
@@ -289,7 +289,7 @@ const GUARD = `(() => { const no = () => Promise.reject(new DOMException('Permis
 })()`;
 
 // One ego script: open or resume the space, run the steps, look, print. `space` is a name the first time (it
-// creates or resumes bisu's own space of that name) and the numeric id after.
+// creates or resumes Dec Intern's own space of that name) and the numeric id after.
 async function step(space, body, {timeoutMs} = {}) {
   const r = await ego(`const t = await taskSpace(${typeof space === 'number' ? space : quote(space)});
 const p = t.page("p1");${LOOK}${FIND}
@@ -585,7 +585,7 @@ async function decisionsPick(goal, view, cands, hist, inputs, seen, itemPage = f
     {type: 'choice', name: 'next', instructions: 'Which single action should the agent take next to make progress on the goal? Prefer the action whose label most directly matches the goal. Do not repeat an action that was already taken successfully. Choose "done" only if the goal is fully achieved on the current page.',
       choices: cands.map(c => ({value: String(c.index), description: `${c.kind}: ${c.name}`.slice(0, 300)}))},
   ], {timeoutMs: 12_000});
-  if (process.env.BISU_EGO_DEBUG) process.stderr.write(`[pick] lines=${JSON.stringify(lines.slice(0, 40))}\n[pick] answer=${JSON.stringify(a.answer)} parts=${JSON.stringify(parts.map((p, i) => [p, a['part' + i]]))}\n`);
+  if (process.env.DEC_INTERN_EGO_DEBUG) process.stderr.write(`[pick] lines=${JSON.stringify(lines.slice(0, 40))}\n[pick] answer=${JSON.stringify(a.answer)} parts=${JSON.stringify(parts.map((p, i) => [p, a['part' + i]]))}\n`);
   if (!a?.next) return null;
   const one = pickLine(a.answer, lines);
   let ac = one?.c ?? 0, answer = one && ac >= 0.5 ? one.line : null, composed = false;
@@ -598,7 +598,7 @@ async function decisionsPick(goal, view, cands, hist, inputs, seen, itemPage = f
       ac = Math.min(...got.map(g => g.c)); composed = true;
     }
   }
-  if (process.env.BISU_EGO_DEBUG) process.stderr.write(`[pick] chosen=${JSON.stringify(answer)} c=${ac} next=${a.next.choice}\n`);
+  if (process.env.DEC_INTERN_EGO_DEBUG) process.stderr.write(`[pick] chosen=${JSON.stringify(answer)} c=${ac} next=${a.next.choice}\n`);
   return {index: Number(a.next.choice), confidence: Number(a.next.confidence) || 0, answer, answerConfidence: ac, composed};
 }
 
@@ -619,7 +619,7 @@ async function glm(content, maxTokens = 3000, effort) {
   // GLM answers a look in 1.5-3 s, but now and then a provider queue holds one for 25-30 s: an answer not back in 6 s
   // gets the same ask sent again, the first back wins, and after 30 s the loop goes on without it.
   const asks = [], wait = ms => new Promise(r => setTimeout(r, ms).unref?.());
-  const ask = () => { const c = new AbortController(); asks.push(c); return complete({model: GLM_MODEL(), thinking: false, effort: effort || process.env.BISU_WEB_GLM_EFFORT || 'medium', temperature: 0, maxTokens, signal: c.signal, messages: [
+  const ask = () => { const c = new AbortController(); asks.push(c); return complete({model: GLM_MODEL(), thinking: false, effort: effort || process.env.DEC_INTERN_WEB_GLM_EFFORT || 'medium', temperature: 0, maxTokens, signal: c.signal, messages: [
     {role: 'system', content: 'You drive or review a browser agent. Reply with one JSON object and nothing else.'}, {role: 'user', content}]}) };
   try {
     const first = ask();
@@ -670,7 +670,7 @@ const boxLine = view => {
 
 // ---- a whole task ----
 
-// ego as a driver of the loop below: open a page, run steps, go to a page, close an alert. Other browsers bisu
+// ego as a driver of the loop below: open a page, run steps, go to a page, close an alert. Other browsers dec-intern
 // drives itself (Aside through its REPL, dec with its fast mode off) bring their own: engine/aside.mjs, engine/dec.mjs.
 export function egoDriver(space) {
   return {
@@ -720,7 +720,7 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
     // The browser ended the run itself (dec finishing or failing it), or wants the person (a login, its own check).
     if (view.ended) { status = view.status || 'ended'; if (view.answer && !answer) answer = view.answer; break }
     if (view.waiting) { status = view.waiting === 'handoff' ? 'needs-login' : 'needs-person'; held = {kind: 'person', label: view.why || view.waiting, url: view.url}; break }
-    // A sign-in form: bisu never types a password, so the person signs in themselves (browser.mjs hands ego over).
+    // A sign-in form: dec-intern never types a password, so the person signs in themselves (browser.mjs hands ego over).
     if (parse(view.snap).els.some(e => TYPABLE.has(e.role) && /비밀\s*번호|password|암호/i.test(e.name))) { status = 'needs-login'; break }
     let todo = [];
     if ((glmUse.failures || 0) > glmFails0) { glmFails0 = glmUse.failures; hard('glm-failed') }
@@ -733,7 +733,7 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
       if (noScroll.has(pageKey(view))) cands = cands.filter(c => !/^scroll/.test(c.kind)).map((c, i) => ({...c, index: i}));
       // Already on the page of the list the goal names (「1쪽」 on page 1): its "next" only leads away.
       if (goalPage(goal) != null && listy(view) && pageOf(view.url) === goalPage(goal)) cands = cands.filter(c => !(c.kind === 'click' && /^(next|다음|›|»|>|다음\s*(페이지|쪽))$/i.test(String(c.label || '').trim()))).map((c, i) => ({...c, index: i}));
-      if (process.env.BISU_EGO_DEBUG) log({url: view.url, cands: cands.map(c => `${c.index}. ${c.kind}: ${c.name}`)});
+      if (process.env.DEC_INTERN_EGO_DEBUG) log({url: view.url, cands: cands.map(c => `${c.index}. ${c.kind}: ${c.name}`)});
       // A comparing goal on a list page: the page's whole text, every line where it stands (a driver whose view leaves
       // some out reads it in full), gives the pages-visited note its cheapest and dearest item, for goals that span lists.
       // The page of the item just opened: its title names it (「The No. 1 Ladies' ...」 → 「The No. 1 Ladies' Detective Agency」).
@@ -767,7 +767,7 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
           // (this page's own note too: the notes passed along are of the pages before it)
           // (where the compared values can be read off the items' pages, the table goes with the question: the model names
           // the winner instead of comparing 1844 with 1879 itself, which it got wrong three times in four)
-          const table = process.env.BISU_COMPARE_TABLE === '0' ? null : checkCompare(goal, null, [...(seen.pinned || [])].map(k => seen.get(k)).filter(Boolean))?.hint;
+          const table = process.env.DEC_INTERN_COMPARE_TABLE === '0' ? null : checkCompare(goal, null, [...(seen.pinned || [])].map(k => seen.get(k)).filter(Boolean))?.hint;
           const ask = () => review(goal, view, cands, [...hist, ...(seen.get(pageKey(view)) ? [`(이 페이지 메모 — ${seen.get(pageKey(view))})`] : []), ...(table ? [table] : [])], ins, null, 'done-without-answer', seen);
           let r = await ask();
           if (!r.answer) hard('empty-answer');
@@ -892,7 +892,7 @@ export async function drive({goal, url, inputs = {}, driver, budget = 15, mode =
       // (a goal over several named things answers from all of their notes, not from a pick that read this page alone)
       if (stopping && targets?.length >= 2 && WANTS_ANSWER(goal) && !left.length && !eachTried.has('final#' + pageSig(view))) {
         eachTried.add('final#' + pageSig(view));
-        const table = process.env.BISU_COMPARE_TABLE === '0' ? null : checkCompare(goal, null, [...(seen.pinned || [])].map(k => seen.get(k)).filter(Boolean))?.hint;
+        const table = process.env.DEC_INTERN_COMPARE_TABLE === '0' ? null : checkCompare(goal, null, [...(seen.pinned || [])].map(k => seen.get(k)).filter(Boolean))?.hint;
         const r = await review(goal, view, cands, [...hist, ...(seen.get(pageKey(view)) ? [`(이 페이지 메모 — ${seen.get(pageKey(view))})`] : []), ...(table ? [table] : [])], ins, null, 'done-without-answer', seen);
         reviews.n++; reviews.why['each-done'] = (reviews.why['each-done'] || 0) + 1; log({review: 'each-final', answer: r.answer ? String(r.answer).slice(0, 160) : null});
         if (r.answer) { answer = r.answer; answerAt = pageKey(view); status = 'done'; break }

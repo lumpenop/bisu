@@ -1,7 +1,7 @@
 #!/bin/sh
-# Builds ~/Applications/bisu.app from mac/native/bisu.swift — the same bundle folder and identifier the
+# Builds ~/Applications/Dec Intern.app from mac/native/dec-intern.swift — the same bundle folder and identifier the
 # Electron build used, so the Accessibility grant, the login item and everything else macOS knows
-# about "bisu" keep pointing at it.
+# about "dec-intern" keep pointing at it.
 #
 # The engine and the page are copied in unchanged: this replaces the shell, not the assistant.
 set -eu
@@ -9,32 +9,32 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 mac=$(dirname "$here")
 repo=$(dirname "$mac")
-dest="${BISU_APP_DIR:-$HOME/Applications}/bisu.app"
+dest="${DEC_INTERN_APP_DIR:-$HOME/Applications}/Dec Intern.app"
 build="$here/.build"
 
 mkdir -p "$build"
-echo "bisu: compiling the shell"
-xcrun swiftc -O -o "$build/bisu" "$here/bisu.swift" \
+echo "dec-intern: compiling the shell"
+xcrun swiftc -O -o "$build/dec-intern" "$here/dec-intern.swift" \
   -framework Cocoa -framework WebKit -framework Carbon -framework UserNotifications
 
-app="$build/bisu.app"
+app="$build/Dec Intern.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 
-cp "$build/bisu" "$app/Contents/MacOS/bisu"
+cp "$build/dec-intern" "$app/Contents/MacOS/dec-intern"
 
 # ---- the app itself: the engine, the page, and the computer-use server ----
 res="$app/Contents/Resources/app"
 mkdir -p "$res/mac/assets" "$res/mac/cu"
 cp -R "$repo/ui" "$res/ui"
-# bisu's own engine (BISU_ENGINE=native), without its benchmarks.
+# Dec Intern's own engine (DEC_INTERN_ENGINE=native), without its benchmarks.
 cp -R "$repo/engine" "$res/engine"
 rm -rf "$res/engine/eval"
 # Except the computer-use benchmark, which Settings runs (and the pretend calendar it does not need).
 mkdir -p "$res/engine/eval" && cp "$repo/engine/eval/cu-bench.mjs" "$res/engine/eval/"
 cp "$repo/launch.zsh" "$repo/agents.json" "$repo/prompt.md" "$repo/prompt-suggest.md" "$repo/prompt-job.md" "$repo/prompt-goal.md" "$res/"
 cp "$mac/assets/trayTemplate.png" "$mac/assets/trayTemplate@2x.png" "$res/mac/assets/"
-cp "$mac/cu/bisu-cu.swift" "$res/mac/cu/" 2>/dev/null || true
+cp "$mac/cu/dec-intern-cu.swift" "$res/mac/cu/" 2>/dev/null || true
 
 if [ -f "$mac/assets/AppIcon.icns" ]; then
   cp "$mac/assets/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
@@ -49,8 +49,8 @@ cat > "$plist" <<XML
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleExecutable</key><string>bisu</string>
-  <key>CFBundleIdentifier</key><string>com.bisu.desktop</string>
+  <key>CFBundleExecutable</key><string>dec-intern</string>
+  <key>CFBundleIdentifier</key><string>local.dec.intern</string>
   <key>CFBundleName</key><string>덱 인턴</string>
   <key>CFBundleDisplayName</key><string>덱 인턴</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -68,55 +68,55 @@ cat > "$plist" <<XML
   <key>NSDocumentsFolderUsageDescription</key>
   <string>덱 인턴 runs Claude Code in the folder you pick, which is often in your Documents.</string>
   <key>NSDownloadsFolderUsageDescription</key>
-  <string>bisu runs Claude Code in the folder you pick, which is often in your Downloads.</string>
+  <string>덱 인턴 runs Claude Code in the folder you pick, which is often in your Downloads.</string>
   <key>NSRemovableVolumesUsageDescription</key>
-  <string>bisu runs Claude Code in the folder you pick, which can be on an external drive.</string>
+  <string>덱 인턴 runs Claude Code in the folder you pick, which can be on an external drive.</string>
   <key>NSCalendarsFullAccessUsageDescription</key>
-  <string>bisu reads your calendar and adds or moves events when you ask it to.</string>
+  <string>덱 인턴 reads your calendar and adds or moves events when you ask it to.</string>
   <key>NSCalendarsUsageDescription</key>
-  <string>bisu reads your calendar and adds or moves events when you ask it to.</string>
+  <string>덱 인턴 reads your calendar and adds or moves events when you ask it to.</string>
   <key>NSRemindersFullAccessUsageDescription</key>
-  <string>bisu reads your reminders and adds or checks them off when you ask it to.</string>
+  <string>덱 인턴 reads your reminders and adds or checks them off when you ask it to.</string>
   <key>NSRemindersUsageDescription</key>
-  <string>bisu reads your reminders and adds or checks them off when you ask it to.</string>
+  <string>덱 인턴 reads your reminders and adds or checks them off when you ask it to.</string>
 </dict>
 </plist>
 XML
 
 # ---- dec-secret bridge ----
 # dec-secret lives under the person's Desktop, which macOS will not let a Finder-launched app read.
-# The three files are self-contained, so a copy in bisu's own support folder is readable anywhere and
+# The three files are self-contained, so a copy in Dec Intern's own support folder is readable anywhere and
 # is what both shells launch.
 dec_root=""
 if [ -f "$HOME/.local/bin/dec-secret" ]; then
   dec_mjs=$(sed -n 's/.*"\(\/[^"]*dec-secret\.mjs\)".*/\1/p' "$HOME/.local/bin/dec-secret" | head -1 || true)
   if [ -n "${dec_mjs:-}" ]; then dec_root=$(dirname "$(dirname "$dec_mjs")"); fi
 fi
-bridge="$HOME/Library/Application Support/bisu/dec"
+bridge="$HOME/Library/Application Support/dec-intern/dec"
 if [ -n "$dec_root" ] && [ -f "$dec_root/sdk/dec-secret.mjs" ]; then
   rm -rf "$bridge"
   mkdir -p "$bridge/sdk" "$bridge/app/chromium"
   cp "$dec_root/sdk/dec-secret.mjs" "$bridge/sdk/"
   cp "$dec_root/app/chromium/secret-env-run.cjs" "$dec_root/app/chromium/key-proxy.cjs" "$bridge/app/chromium/"
-  echo "bisu: dec-secret bridged from $dec_root"
+  echo "dec-intern: dec-secret bridged from $dec_root"
 fi
 
 # ---- computer-use helper ----
 # The MCP server spawns this; keeping it in the support folder means it survives reinstalls and can be
 # rebuilt without touching the signed bundle.
-cu_bin="$HOME/Library/Application Support/bisu/bin"
+cu_bin="$HOME/Library/Application Support/dec-intern/bin"
 mkdir -p "$cu_bin"
-if [ -f "$mac/cu/bisu-cu.swift" ]; then
-  if [ ! -x "$cu_bin/bisu-cu" ] || [ "$mac/cu/bisu-cu.swift" -nt "$cu_bin/bisu-cu" ]; then
-    xcrun swiftc -O -o "$cu_bin/bisu-cu" "$mac/cu/bisu-cu.swift" && echo "bisu: computer-use helper built"
+if [ -f "$mac/cu/dec-intern-cu.swift" ]; then
+  if [ ! -x "$cu_bin/dec-intern-cu" ] || [ "$mac/cu/dec-intern-cu.swift" -nt "$cu_bin/dec-intern-cu" ]; then
+    xcrun swiftc -O -o "$cu_bin/dec-intern-cu" "$mac/cu/dec-intern-cu.swift" && echo "dec-intern: computer-use helper built"
   fi
 fi
-# Calendar and Reminders (engine/calendar.mjs). macOS asks for access on behalf of bisu, whose
+# Calendar and Reminders (engine/calendar.mjs). macOS asks for access on behalf of dec-intern, whose
 # Info.plist above carries the reasons; the helper carries the same ones for a run from a terminal.
-if [ -f "$mac/cal/bisu-cal.swift" ]; then
-  if [ ! -x "$cu_bin/bisu-cal" ] || [ "$mac/cal/bisu-cal.swift" -nt "$cu_bin/bisu-cal" ] || [ "$mac/cal/Info.plist" -nt "$cu_bin/bisu-cal" ]; then
-    xcrun swiftc -O -o "$cu_bin/bisu-cal" "$mac/cal/bisu-cal.swift" -framework EventKit \
-      -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker "$mac/cal/Info.plist" && echo "bisu: calendar helper built"
+if [ -f "$mac/cal/dec-intern-cal.swift" ]; then
+  if [ ! -x "$cu_bin/dec-intern-cal" ] || [ "$mac/cal/dec-intern-cal.swift" -nt "$cu_bin/dec-intern-cal" ] || [ "$mac/cal/Info.plist" -nt "$cu_bin/dec-intern-cal" ]; then
+    xcrun swiftc -O -o "$cu_bin/dec-intern-cal" "$mac/cal/dec-intern-cal.swift" -framework EventKit \
+      -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker "$mac/cal/Info.plist" && echo "dec-intern: calendar helper built"
   fi
 fi
 
@@ -124,7 +124,7 @@ fi
 # A stable identity matters beyond that: macOS ties the Accessibility and Desktop-folder grants to
 # the signature, so signing with the same local certificate every build keeps those grants instead of
 # asking again after each rebuild. Ad-hoc is the fallback when there is no such certificate.
-sign_id="${BISU_SIGN_ID:-}"
+sign_id="${DEC_INTERN_SIGN_ID:-}"
 if [ -z "$sign_id" ]; then
   # The hash, not the name: a name can exist in more than one keychain, and codesign refuses an
   # ambiguous match.
@@ -133,12 +133,12 @@ if [ -z "$sign_id" ]; then
 fi
 if [ -n "$sign_id" ]; then
   if codesign --force --deep --sign "$sign_id" "$app" >/dev/null 2>&1; then
-    echo "bisu: signed as \"$sign_id\""
+    echo "dec-intern: signed as \"$sign_id\""
   else
-    codesign --force --deep --sign - "$app" >/dev/null 2>&1 || echo "bisu: signing failed" >&2
+    codesign --force --deep --sign - "$app" >/dev/null 2>&1 || echo "dec-intern: signing failed" >&2
   fi
 else
-  codesign --force --deep --sign - "$app" >/dev/null 2>&1 || echo "bisu: ad-hoc signing failed" >&2
+  codesign --force --deep --sign - "$app" >/dev/null 2>&1 || echo "dec-intern: ad-hoc signing failed" >&2
 fi
 
 rm -rf "$dest"
@@ -146,5 +146,5 @@ mv "$app" "$dest"
 /usr/bin/touch "$dest"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$dest" >/dev/null 2>&1 || true
 
-echo "bisu: $dest"
+echo "dec-intern: $dest"
 du -sh "$dest" 2>/dev/null | sed 's/^/  size: /'

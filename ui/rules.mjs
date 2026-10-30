@@ -1,6 +1,6 @@
 // What the person wrote for coding agents in a folder, the way Claude Code reads it: CLAUDE.md and
 // CLAUDE.local.md in the folder and in every folder above it, the .claude/rules/ folders next to them,
-// the global ~/.claude/CLAUDE.md and ~/.claude/rules/, and what those files pull in with @path. bisu's
+// the global ~/.claude/CLAUDE.md and ~/.claude/rules/, and what those files pull in with @path. Dec Intern's
 // own engine is given them the same way, outermost first, so a chat, a job or a worker in that folder
 // follows the folder's rules whichever engine runs it. A Claude Code chat gets nothing from here: claude
 // already loads these itself, and twice would be noise.
@@ -10,7 +10,7 @@ import os from 'node:os';
 
 // On every request, so capped. The nearest file matters most: when they do not all fit, the outer ones
 // are cut first.
-export const LIMIT = Number(process.env.BISU_RULES_CHARS) || 12000;
+export const LIMIT = Number(process.env.DEC_INTERN_RULES_CHARS) || 12000;
 const NAMES = ['CLAUDE.md', 'CLAUDE.local.md'];
 const IMPORT_DEPTH = 5;
 

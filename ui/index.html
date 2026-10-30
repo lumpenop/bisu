@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>덱 인턴</title>
 <style>
-/* Warm ivory and deep charcoal around bisu's own glossy jade, with a blush of pink for the cute bits. */
+/* Warm ivory and deep charcoal around Dec Intern's own glossy jade, with a blush of pink for the cute bits. */
 :root{--bg:#f6f3ec;--bg2:#efeadf;--card:#fffdf8;--ink:#1d1b16;--muted:#716b60;--line:#e6dfd1;--accent:#2b8a5f;--accent-ink:#fff;--accent-soft:#e2f1e8;--g1:#5cc496;--g2:#2b8a5f;--blush:#e88aa0;--blush-soft:#fbe5ea;--blush-ink:#b0485f;--warn:#b0611c;--warn-soft:#fbefe1;--bad:#c0362c;--chip:#f0eadf;--me:#e3f1e9;
  --r:12px;--rc:18px;--sh:0 1px 2px rgba(40,32,10,.05),0 12px 30px -18px rgba(40,50,30,.32);--hi:inset 0 1px 0 rgba(255,255,255,.75);--chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%23716b60' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
 @media (prefers-color-scheme:dark){:root{--bg:#121311;--bg2:#161814;--card:#1c1e1b;--ink:#f1eee6;--muted:#a29e93;--line:#2c2f2a;--accent:#6fd3a0;--accent-ink:#06150d;--accent-soft:#1c2c23;--g1:#86e3b3;--g2:#3fa676;--blush:#f2a2b3;--blush-soft:#36222a;--blush-ink:#f6b6c3;--warn:#e8a35f;--warn-soft:#2d2318;--bad:#f2867d;--chip:#242720;--me:#1f2f26;
@@ -131,7 +131,7 @@ th{font-size:12px;color:var(--muted);font-weight:600;border-top:0;white-space:no
 td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 td .p{color:var(--muted);font-size:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:420px}
 .chip{display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:11px;background:var(--chip);border-radius:4px;padding:1px 6px;margin:1px 2px 1px 0;white-space:nowrap}
-/* what bisu brings without being asked */
+/* what Dec Intern brings without being asked */
 #sug{flex:none;padding:0 12px 10px}
 .sugcard,.onboard{border:1px solid var(--line);background:var(--card);border-radius:var(--rc);padding:12px 14px;color:var(--ink)}
 .sugTop{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--accent);font-weight:600}
@@ -232,40 +232,40 @@ body.resizing,body.resizing *{cursor:nwse-resize!important;user-select:none!impo
 @keyframes popIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
 body.panel .view.pop.on{animation:popIn .13s ease-out}
 @media (prefers-reduced-motion:reduce){body.panel .view.pop.on{animation:none}}
-/* ---- bisu, the character: its face is the status (idle, thinking, working, waiting, done, error) ---- */
-:root{--bisu1:#b4e6c9;--bisu2:#5fae86;--eye:#15251c}
-@media (prefers-color-scheme:dark){:root{--bisu1:#9de0ba;--bisu2:#3f9168;--eye:#0d1611}}
+/* ---- Dec Intern, the character: its face is the status (idle, thinking, working, waiting, done, error) ---- */
+:root{--intern1:#b4e6c9;--intern2:#5fae86;--eye:#15251c}
+@media (prefers-color-scheme:dark){:root{--intern1:#9de0ba;--intern2:#3f9168;--eye:#0d1611}}
 body{font-size:14.5px}
-.bisu{display:inline-block;flex:none;width:28px;height:28px;position:relative}
-.bisu svg{width:100%;height:100%;overflow:visible;display:block}
-.bisu .body,.bisu .eyes,.bisu .eye,.bisu .ring{transform-box:fill-box}
-.bisu .body{transform-origin:50% 100%}.bisu .eyes,.bisu .eye,.bisu .ring{transform-origin:center}
-.bisu .eye{fill:var(--eye);animation:blink 5.5s infinite}
-.bisu .happy{display:none;fill:none;stroke:var(--eye);stroke-width:3.2;stroke-linecap:round}
-.bisu .ring{display:none;fill:none;stroke:var(--warn);stroke-width:3}
-.bisu .shine{fill:#fff;opacity:.35}
-.bisu[data-state=thinking] .eyes{animation:look 2.6s ease-in-out infinite}
-.bisu[data-state=working] .body{animation:bob .8s ease-in-out infinite}
-.bisu[data-state=working] .eye{transform:scaleY(.7);animation:none}
-.bisu[data-state=waiting] .ring{display:block;animation:ring 1.6s ease-out infinite}
-.bisu[data-state=waiting] .eye{transform:scale(1.15);animation:none}
-.bisu[data-state=done] .eye{display:none}.bisu[data-state=done] .happy{display:block}
-.bisu[data-state=error] .fill{filter:saturate(.2) brightness(.9)}.bisu[data-state=error] .eye{transform:scaleY(.4);animation:none}
+.intern{display:inline-block;flex:none;width:28px;height:28px;position:relative}
+.intern svg{width:100%;height:100%;overflow:visible;display:block}
+.intern .body,.intern .eyes,.intern .eye,.intern .ring{transform-box:fill-box}
+.intern .body{transform-origin:50% 100%}.intern .eyes,.intern .eye,.intern .ring{transform-origin:center}
+.intern .eye{fill:var(--eye);animation:blink 5.5s infinite}
+.intern .happy{display:none;fill:none;stroke:var(--eye);stroke-width:3.2;stroke-linecap:round}
+.intern .ring{display:none;fill:none;stroke:var(--warn);stroke-width:3}
+.intern .shine{fill:#fff;opacity:.35}
+.intern[data-state=thinking] .eyes{animation:look 2.6s ease-in-out infinite}
+.intern[data-state=working] .body{animation:bob .8s ease-in-out infinite}
+.intern[data-state=working] .eye{transform:scaleY(.7);animation:none}
+.intern[data-state=waiting] .ring{display:block;animation:ring 1.6s ease-out infinite}
+.intern[data-state=waiting] .eye{transform:scale(1.15);animation:none}
+.intern[data-state=done] .eye{display:none}.intern[data-state=done] .happy{display:block}
+.intern[data-state=error] .fill{filter:saturate(.2) brightness(.9)}.intern[data-state=error] .eye{transform:scaleY(.4);animation:none}
 @keyframes blink{0%,95%,100%{transform:scaleY(1)}97%{transform:scaleY(.08)}}
 @keyframes look{0%,100%{transform:translateX(0)}25%{transform:translateX(-2.6px)}60%{transform:translateX(2.6px)}}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px) scaleY(1.03)}}
 @keyframes ring{from{opacity:.75;transform:scale(.86)}to{opacity:0;transform:scale(1.22)}}
-@media (prefers-reduced-motion:reduce){.bisu *{animation:none!important}}
-h1.brand{display:flex;align-items:center;gap:8px}h1.brand .bisu{width:24px;height:24px}
-.chathead .bisu{width:32px;height:32px}
+@media (prefers-reduced-motion:reduce){.intern *{animation:none!important}}
+h1.brand{display:flex;align-items:center;gap:8px}h1.brand .intern{width:24px;height:24px}
+.chathead .intern{width:32px;height:32px}
 .chathead .s{display:flex;gap:0;align-items:center}
 .mood{color:var(--muted);flex:none}.mood.waiting{color:var(--warn);font-weight:600}.mood.error{color:var(--bad)}.mood.working,.mood.thinking{color:var(--accent)}
 #newHere{padding:4px 10px;font-size:16px;line-height:1}
 button{white-space:nowrap}.compose .row button{flex:none}
 .hello{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:13vh;color:var(--muted);text-align:center;font-size:13.5px}
-.hello .bisu{width:84px;height:84px;margin-bottom:6px}
+.hello .intern{width:84px;height:84px;margin-bottom:6px}
 .hello b{color:var(--ink);font-size:17px;font-weight:650}
-#panelStart .startWrap>.bisu{width:72px;height:72px;align-self:center;margin-bottom:4px}
+#panelStart .startWrap>.intern{width:72px;height:72px;align-self:center;margin-bottom:4px}
 .m.user{background:var(--accent-soft);border-radius:18px 18px 5px 18px;padding:8px 14px}
 /* the machinery, one layer down: a turn's tool calls fold into one line */
 .m.actw{align-self:flex-start;max-width:100%}
@@ -280,7 +280,7 @@ body.meta .act .actM{display:inline}body.meta .res{display:block}
 #key{display:none}body.meta #key{display:inline-block}
 #memKey,.mem .chip.key{display:none}body.meta #memKey{display:block}body.meta .mem .chip.key{display:inline-block}
 .sub{margin-left:0}
-.sugTop .bisu{width:18px;height:18px}
+.sugTop .intern{width:18px;height:18px}
 .m.autoallow{font-size:12px;color:var(--muted);padding:2px 10px}
 .tool .raw{display:none}body.meta .tool .raw{display:inline}body.meta .tool .ko{display:none}
 #recent{display:flex;flex-direction:column;gap:2px;margin-top:6px}
@@ -297,7 +297,7 @@ body.meta .act .actM{display:inline}body.meta .res{display:block}
 input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
 .onboard .sugBtns{margin-top:2px}.onboard .sugBtns .note{margin:0}
 .hello .onboard{margin-top:12px}
-/* While the first-run card is up, the panel shows only bisu and the card. */
+/* While the first-run card is up, the panel shows only Dec Intern and the card. */
 #panelStart.onboarding .startTitle,#panelStart.onboarding .note,#panelStart.onboarding .row,#panelStart.onboarding #startNew,#panelStart.onboarding #recent{display:none}
 #panelStart.onboarding .startWrap{margin-top:5vh}
 body.onboarding #sug,body.onboarding #compose{display:none}
@@ -323,7 +323,7 @@ select.native{position:absolute;opacity:0;pointer-events:none;width:1px;height:1
 .mi.on{background:var(--accent-soft)}
 .mi.sel .lb{font-weight:650}
 /* ==== the look: a little kitsch, carefully made ====
-   One set of shapes for everything: pill buttons with bisu's gloss, 12px fields, 18px cards on a soft
+   One set of shapes for everything: pill buttons with Dec Intern's gloss, 12px fields, 18px cards on a soft
    shadow, rounded type for anything that is a name or a label, and a jade glow for focus. */
 :root{--display:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;--glow:0 0 0 3px color-mix(in srgb,var(--accent) 24%,transparent)}
 body.font-dec{--display:"Dec Browser Sans UI",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;font-family:"Dec Browser Sans UI",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;-webkit-font-smoothing:auto}
@@ -362,7 +362,7 @@ section{padding:20px 22px;margin-bottom:18px}
 /* card headers: a sticker, then whatever else */
 .sugTop{display:flex;align-items:center;gap:6px;min-height:22px}
 .tag{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:11.5px;font-weight:700;line-height:1.35;white-space:nowrap}
-.tag .bisu{width:17px;height:17px;margin-left:-5px}
+.tag .intern{width:17px;height:17px;margin-left:-5px}
 .tag.blush{background:var(--blush-soft);color:var(--blush-ink)}
 .tag.bad{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
 .sugTop .more{font-size:11.5px;color:var(--muted);font-weight:600}
@@ -402,13 +402,13 @@ aside{background:var(--bg2)}
 body.panel .compose{padding:6px 10px 16px}
 .ctxbar .c{border:1px solid var(--line);background:var(--card);padding:2px 10px}
 .axbar{margin:0 12px 8px;border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);border-radius:14px}
-/* where a chat starts: bisu with a soft glow and a sparkle */
+/* where a chat starts: Dec Intern with a soft glow and a sparkle */
 #panelStart .startTitle{font-size:18px;font-weight:800;letter-spacing:-.01em}
 #panelStart .note{font-size:12.5px}
 .hello b{font-size:19px;font-weight:800;letter-spacing:-.01em}
-#panelStart .startWrap>.bisu,.hello>.bisu{isolation:isolate}
-#panelStart .startWrap>.bisu::before,.hello>.bisu::before{content:'';position:absolute;inset:-30%;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent) 24%,transparent),transparent 75%);z-index:-1}
-#panelStart .startWrap>.bisu::after,.hello>.bisu::after{content:'✦';position:absolute;right:4%;top:6%;font-size:14px;line-height:1;color:var(--blush);transform:rotate(14deg)}
+#panelStart .startWrap>.intern,.hello>.intern{isolation:isolate}
+#panelStart .startWrap>.intern::before,.hello>.intern::before{content:'';position:absolute;inset:-30%;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent) 24%,transparent),transparent 75%);z-index:-1}
+#panelStart .startWrap>.intern::after,.hello>.intern::after{content:'✦';position:absolute;right:4%;top:6%;font-size:14px;line-height:1;color:var(--blush);transform:rotate(14deg)}
 #recent .ri{border-radius:12px}
 /* ==== the window's shape: a sidebar, then one screen with one purpose ====
    Same look as above; only the arrangement. Each screen opens with one hero card (its number or state and
@@ -428,7 +428,7 @@ nav.side{width:186px;flex:none;display:flex;flex-direction:column;gap:2px;paddin
 body.desktop:not(.panel) nav.side{padding-top:46px}
 .side>*{-webkit-app-region:no-drag}
 .side .brand{display:flex;align-items:center;gap:8px;padding:2px 8px 14px;font-family:var(--display);font-size:17px;font-weight:800;letter-spacing:-.02em}
-.side .brand .bisu{width:24px;height:24px}
+.side .brand .intern{width:24px;height:24px}
 .side button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:none;box-shadow:none;padding:7px 10px;border-radius:12px;font-size:13.5px;font-weight:600;color:var(--muted)}
 .side button svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
 .side button:hover:not(:disabled){transform:none;background:color-mix(in srgb,var(--card) 55%,transparent);color:var(--ink)}
@@ -564,7 +564,7 @@ dialog#routineDlg::backdrop{background:rgba(0,0,0,.28)}
 .handoffLine b{color:var(--ink);font-weight:650}.handoffLine .tk{color:var(--muted);opacity:.8;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .handoffLine.running::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--accent);align-self:center;animation:pulse 1.2s ease-in-out infinite}
 .handoffLine.done{color:var(--accent)}.handoffLine.error{color:var(--bad)}
-/* 보여 주고 가르치기: while it records, a red bar on every bisu page */
+/* 보여 주고 가르치기: while it records, a red bar on every Dec Intern page */
 .teachBar{flex:none;display:flex;align-items:center;gap:8px;padding:7px 14px;background:color-mix(in srgb,var(--bad) 12%,var(--card));border-bottom:1px solid color-mix(in srgb,var(--bad) 30%,var(--line));font-size:13px;color:var(--ink)}
 .teachBar[hidden]{display:none}
 body.desktop:not(.panel) .teachBar{padding-left:84px}
@@ -659,11 +659,11 @@ nav.side{overflow-y:auto}
 /* the start: what needs me, what is running, recent — a face and one line only when there is nothing */
 body.panel #panelStart:not([hidden]){flex-direction:column;align-items:stretch;justify-content:flex-start;padding:0 0 8px}
 #panelStart .startWrap{margin-top:6px!important;gap:8px;max-width:none;width:auto;padding:0 12px}
-#panelStart .startWrap>.bisu,#panelStart .startTitle,#panelStart>.startWrap>.note{order:0}
+#panelStart .startWrap>.intern,#panelStart .startTitle,#panelStart>.startWrap>.note{order:0}
 #panelStart .onboard{order:0;align-self:center}
 #panelStart .nowBox{order:1}#panelStart #sug{order:2}#panelStart #recent{order:3}#panelStart .startWrap>.row{order:4;margin-top:4px}#panelStart #startErr{order:5}
-#panelStart .startWrap>.bisu,#panelStart .startTitle,#panelStart .ccStatus,#panelStart .botPick,#panelStart>.startWrap>.note,#panelStart .ccFoot,#panelStart .cc{display:none!important}
-#panelStart.quiet .startWrap>.bisu{display:block!important;margin-top:8vh}#panelStart.quiet.onboarding .startWrap>.bisu{margin-top:2vh}
+#panelStart .startWrap>.intern,#panelStart .startTitle,#panelStart .ccStatus,#panelStart .botPick,#panelStart>.startWrap>.note,#panelStart .ccFoot,#panelStart .cc{display:none!important}
+#panelStart.quiet .startWrap>.intern{display:block!important;margin-top:8vh}#panelStart.quiet.onboarding .startWrap>.intern{margin-top:2vh}
 #panelStart.onboarding .startTitle,#panelStart.onboarding>.startWrap>.note,#panelStart.onboarding .chips{display:none!important}#panelStart.quiet:not(.onboarding) .startTitle{display:block!important}#panelStart.quiet:not(.onboarding)>.startWrap>.note{display:block!important}
 body.panel:has(#sug:not([hidden])) #panelStart .startWrap{margin-top:6px}
 .nowBox{display:flex;flex-direction:column;gap:6px}.nowBox:empty{display:none}
@@ -753,7 +753,7 @@ body:not(.panel) .chathead:not([hidden])~#msgs{border-top:1px solid color-mix(in
 
 <div class="shell">
 <nav class="side" id="side" aria-label="화면">
- <div class="brand"><span class="bisu live"></span><b><span class="decmark">dec</span> 인턴</b><button type="button" class="kbtn" id="palBtn" title="빠른 전환">⌘K</button></div>
+ <div class="brand"><span class="intern live"></span><b><span class="decmark">dec</span> 인턴</b><button type="button" class="kbtn" id="palBtn" title="빠른 전환">⌘K</button></div>
  <div class="gl">봇</div>
  <div id="botList" class="botList"></div>
  <button type="button" id="botNew" class="botNew"><svg viewBox="0 0 20 20"><path d="M10 4.5v11M4.5 10h11"/></svg>봇 만들기</button>
@@ -785,7 +785,7 @@ body:not(.panel) .chathead:not([hidden])~#msgs{border-top:1px solid color-mix(in
  <div class="chat">
   <div class="chathead" id="chatHead" hidden>
    <button type="button" class="iconbtn back" id="backBtn" title="처음으로">‹</button>
-   <span class="bisu live"></span>
+   <span class="intern live"></span>
    <div class="grow"><div class="t" id="chatTitle"></div><div class="s"><span class="mood" id="mood">듣고 있어요</span><span class="sep">&nbsp;·&nbsp;</span><span id="chatSub"></span></div></div>
    <button id="stop" hidden>멈추기</button><button type="button" class="iconbtn" id="infoBtn" title="봇 정보">ⓘ</button><button type="button" class="iconbtn" id="chatMore" title="더 보기">⋯</button><button id="newHere" hidden>＋</button><button class="danger" id="closeChat" hidden>닫기</button>
   </div>
@@ -795,7 +795,7 @@ body:not(.panel) .chathead:not([hidden])~#msgs{border-top:1px solid color-mix(in
    <button type="button" class="iconbtn" id="appMore" title="메뉴">⋯</button></div>
   <div class="startWrap">
    <div id="nowBox" class="nowBox"></div>
-   <span class="bisu live"></span>
+   <span class="intern live"></span>
    <p class="startTitle">뭐 도와줄까요?</p>
    <p class="ccStatus" id="ccStatus">듣고 있어요</p>
    <div class="botPick" id="botPickRow" hidden><span class="lbl">봇</span><select id="botPick"></select></div>
@@ -910,7 +910,7 @@ body:not(.panel) .chathead:not([hidden])~#msgs{border-top:1px solid color-mix(in
  <section>
   <h2>덱 인턴에게 실제로 전달되는 글</h2>
   <details><summary class="note" style="cursor:pointer;margin:0">시스템 프롬프트에 붙는 그대로 보기</summary><pre id="memDigest" class="mono">…</pre></details>
-  <p class="note">고정한 것부터, 그다음 최근에 바뀐 순서로 <code>BISU_MEMORY_CHARS</code>(기본 3000자)까지 들어가요. 매 요청에 붙으니 짧을수록 좋아요.</p>
+  <p class="note">고정한 것부터, 그다음 최근에 바뀐 순서로 <code>DEC_INTERN_MEMORY_CHARS</code>(기본 3000자)까지 들어가요. 매 요청에 붙으니 짧을수록 좋아요.</p>
  </section>
 </div></div></div>
 
@@ -921,7 +921,7 @@ body:not(.panel) .chathead:not([hidden])~#msgs{border-top:1px solid color-mix(in
   <div id="jobList"><p class="note">loading…</p></div>
   <p class="note err" id="jobNote"></p>
   <p class="note">대화에서 "매일 아침 8시에 어제 커밋 요약해 줘"처럼 말하면 덱 인턴이 예약해 두고, 그 시간에 혼자 해서 결과를 패널 카드로 남겨요. 그때 떠올리기만 하면 되는 일("3시에 알려줘")은 예약 작업이 아니라 미리 알림으로 넣어요.</p>
-  <details class="note"><summary>직접 만들기</summary><p>예약 작업은 <code>~/.config/bisu/jobs/</code>의 파일 하나예요. 맨 위에 <code>schedule: 0 8 * * 1-5</code>(cron, 이 맥의 시간), <code>every: 30m</code> 또는 <code>at: 2026-10-28 09:00</code>, <code>cwd: /폴더</code>, <code>tools: read</code>(기본 · <code>edit</code>는 그 폴더의 파일 수정 · <code>full</code>은 명령 실행까지)를 쓰고, 그 아래에 그때 보낼 요청을 써요.</p></details>
+  <details class="note"><summary>직접 만들기</summary><p>예약 작업은 <code>~/.config/dec-intern/jobs/</code>의 파일 하나예요. 맨 위에 <code>schedule: 0 8 * * 1-5</code>(cron, 이 맥의 시간), <code>every: 30m</code> 또는 <code>at: 2026-10-28 09:00</code>, <code>cwd: /폴더</code>, <code>tools: read</code>(기본 · <code>edit</code>는 그 폴더의 파일 수정 · <code>full</code>은 명령 실행까지)를 쓰고, 그 아래에 그때 보낼 요청을 써요.</p></details>
  </section>
  <section id="briefSec">
   <h2>아침 브리핑</h2>
@@ -1041,12 +1041,12 @@ body:not(.panel) .chathead:not([hidden])~#msgs{border-top:1px solid color-mix(in
   <form id="roles"></form>
   <datalist id="modelList"></datalist>
   <div class="actions"><button class="primary" id="save" disabled>저장</button><span class="note" id="saveNote" style="margin:0"></span></div>
-  <p class="note">저장한 모델은 새 대화와 새 <code>bisu</code> 실행부터 써요. 이미 열린 대화는 시작할 때 모델 그대로예요.</p>
+  <p class="note">저장한 모델은 새 대화와 새 <code>Dec Intern</code> 실행부터 써요. 이미 열린 대화는 시작할 때 모델 그대로예요.</p>
  </section>
  <section id="nativeRoles" hidden>
   <h2>역할별 모델 · 자체 엔진</h2>
   <div class="kv" id="nativeModels"></div>
-  <p class="note">요청마다 판단 모델이 누가 받을지 골라요. 바꾸려면 셸에서 <code>BISU_NATIVE_MODEL</code>, <code>BISU_NATIVE_WORK_MODEL</code>을 정하고 덱 인턴을 다시 여세요.</p>
+  <p class="note">요청마다 판단 모델이 누가 받을지 골라요. 바꾸려면 셸에서 <code>DEC_INTERN_NATIVE_MODEL</code>, <code>DEC_INTERN_NATIVE_WORK_MODEL</code>을 정하고 덱 인턴을 다시 여세요.</p>
  </section>
  <section id="decSec">
   <h2>Dec 연결</h2>
@@ -1131,7 +1131,7 @@ body:not(.panel) .chathead:not([hidden])~#msgs{border-top:1px solid color-mix(in
 <dialog id="permDlg"><form method="dialog"><p class="dt" id="permTitle"></p><p class="note" id="permText"></p><div class="actions"><button value="cancel">취소</button><button class="primary" value="ok" id="permOk">설정 열기</button></div></form></dialog>
 
 <script>
-const TOKEN='__BISU_TOKEN__';
+const TOKEN='__DEC_INTERN_TOKEN__';
 // Panel mode and the chat to open are read from the URL below, so they are captured before the
 // token is stripped from the address bar.
 const Q=new URLSearchParams(location.search);
@@ -1142,14 +1142,14 @@ try{if(Q.has('token'))history.replaceState(null,'',location.pathname+(location.h
 // Set by the desktop shell: it opens this page in a popover (?panel=1) and hands over what the
 // person was looking at. In a browser none of this exists and nothing changes.
 const PANEL=Q.get('panel')==='1';
-const HOST=window.bisuHost||null;
-const CTX_OPEN='<bisu-context>',CTX_CLOSE='</bisu-context>';
+const HOST=window.decInternHost||null;
+const CTX_OPEN='<dec-intern-context>',CTX_CLOSE='</dec-intern-context>';
 if(PANEL)document.body.classList.add('panel');
 if(HOST)document.body.classList.add('desktop');
 const ROLE_INFO={
- BISU_MODEL:['비서','나와 대화하고, 판단하고, 아래 담당에게 일을 맡기고 결과를 확인해요. 코드는 직접 쓰지 않아요.'],
- BISU_DEV_MODEL:['개발 담당','코드 작성·수정·디버깅, 테스트, 스크립트 같은 손 가는 일 대부분. Claude Code의 백그라운드 호출도 이 모델을 써요.'],
- BISU_CODE_MODEL:['대형 퍼블리싱·리팩토링 담당','페이지 전체나 컴포넌트 여러 개, 여러 파일에 걸친 리팩토링.']};
+ DEC_INTERN_MODEL:['비서','나와 대화하고, 판단하고, 아래 담당에게 일을 맡기고 결과를 확인해요. 코드는 직접 쓰지 않아요.'],
+ DEC_INTERN_DEV_MODEL:['개발 담당','코드 작성·수정·디버깅, 테스트, 스크립트 같은 손 가는 일 대부분. Claude Code의 백그라운드 호출도 이 모델을 써요.'],
+ DEC_INTERN_CODE_MODEL:['대형 퍼블리싱·리팩토링 담당','페이지 전체나 컴포넌트 여러 개, 여러 파일에 걸친 리팩토링.']};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // ---- dropdowns ----
@@ -1223,32 +1223,32 @@ const ctitle=c=>String(c.title||'').replace(HANDED,'')||'새 대화';
 const ctag=c=>c.from||HANDED.test(c.title||'')?'<span class="htag">받은 일</span>':'';
 // A folder as a line has room for: a long path keeps its last two names.
 const place=p=>{const s=short(p),parts=s.split('/');return s.length>34&&parts.length>3?'…/'+parts.slice(-2).join('/'):s};
-const api=async(p,o={})=>{const r=await fetch(p,{...o,headers:{'X-Bisu-Token':TOKEN,...(o.body?{'Content-Type':'application/json'}:{}),...o.headers}});const j=await r.json().catch(()=>({}));if(!r.ok){const e=Error(j.error||r.status);if(j.holder)e.holder=j.holder;throw e}return j};
+const api=async(p,o={})=>{const r=await fetch(p,{...o,headers:{'X-Dec-Intern-Token':TOKEN,...(o.body?{'Content-Type':'application/json'}:{}),...o.headers}});const j=await r.json().catch(()=>({}));if(!r.ok){const e=Error(j.error||r.status);if(j.holder)e.holder=j.holder;throw e}return j};
 const post=(p,b)=>api(p,{method:'POST',body:JSON.stringify(b||{})});
 
-// ---- bisu's face ----
+// ---- Dec Intern's face ----
 // One small character stands for the assistant everywhere; its state is the status line's picture.
-let bisuN=0,mood={state:'idle',text:''},moodTimer=0;
-function bisuSVG(){const g='bg'+(++bisuN);
- return `<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="${g}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--bisu1)"/><stop offset="1" style="stop-color:var(--bisu2)"/></linearGradient></defs>
+let internN=0,mood={state:'idle',text:''},moodTimer=0;
+function internSVG(){const g='bg'+(++internN);
+ return `<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="${g}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--intern1)"/><stop offset="1" style="stop-color:var(--intern2)"/></linearGradient></defs>
   <circle class="ring" cx="32" cy="34" r="29"/>
   <g class="body"><path class="fill" d="M32 7c15.5 0 26 10.5 26 25v5c0 12.5-9.5 21-26 21S6 49.5 6 37v-5C6 17.5 16.5 7 32 7z" fill="url(#${g})"/>
    <ellipse class="shine" cx="21" cy="17" rx="7" ry="3.6" transform="rotate(-18 21 17)"/>
    <g class="eyes"><rect class="eye" x="20" y="26" width="7" height="11" rx="3.5"/><rect class="eye" x="37" y="26" width="7" height="11" rx="3.5"/></g>
    <g class="happy"><path d="M19 33q4.5-6.5 9 0"/><path d="M36 33q4.5-6.5 9 0"/></g></g></svg>`}
-function mountBisu(root=document){for(const el of root.querySelectorAll('.bisu:not([data-m])')){el.dataset.m='1';el.innerHTML=bisuSVG();if(!el.dataset.state)el.dataset.state=mood.state}}
+function mountIntern(root=document){for(const el of root.querySelectorAll('.intern:not([data-m])')){el.dataset.m='1';el.innerHTML=internSVG();if(!el.dataset.state)el.dataset.state=mood.state}}
 // state: idle · thinking · working · waiting (needs the person) · done · error
 function setMood(state,text){clearTimeout(moodTimer);mood={state,text};
- for(const el of document.querySelectorAll('.bisu.live'))el.dataset.state=state;
+ for(const el of document.querySelectorAll('.intern.live'))el.dataset.state=state;
  const m=$('mood');if(m){m.textContent=text;m.className='mood '+state}
  // "Done" is a moment, not a state to stay in.
  if(state==='done')moodTimer=setTimeout(()=>setMood('idle','듣고 있어요'),2600)}
-// What is promised about asking first, as the chosen engine and mode really behave: bisu's own engine,
+// What is promised about asking first, as the chosen engine and mode really behave: Dec Intern's own engine,
 // by default, runs what its judge clears and asks for the rest.
 const askPromise=()=>prefs.engine==='native'&&prefs.approve!=='always'?'지우기·보내기·설치처럼 되돌리기 어려운 일은 하기 전에 꼭 물어볼게요.':'파일을 고치거나 명령을 실행하기 전엔 꼭 물어볼게요.';
 // The empty chat greets as the bot it belongs to, with its job when it has one of its own.
 const iyeyo=n=>{const k=String(n).charCodeAt(String(n).length-1)-0xAC00;return n+(k>=0&&k<11172&&k%28===0?'예요':'이에요')};
-const helloHTML=()=>{const b=(()=>{try{return curBotInfo()}catch{}})(),nm=b?.name||'덱 인턴';return `<div class="hello"><span class="bisu live"></span><b>안녕하세요, ${esc(iyeyo(nm))}</b><span>${b&&!b.default&&b.job?esc(b.job)+'<br>':''}아래에 바로 말하면 돼요. 파일 일은 아래에 적힌 폴더에서 해요.<br><span class="promise">${askPromise()}</span></span></div>`};
+const helloHTML=()=>{const b=(()=>{try{return curBotInfo()}catch{}})(),nm=b?.name||'덱 인턴';return `<div class="hello"><span class="intern live"></span><b>안녕하세요, ${esc(iyeyo(nm))}</b><span>${b&&!b.default&&b.job?esc(b.job)+'<br>':''}아래에 바로 말하면 돼요. 파일 일은 아래에 적힌 폴더에서 해요.<br><span class="promise">${askPromise()}</span></span></div>`};
 // Developer detail (tool calls, steps, cost, model names): off by default, one switch in Settings.
 // Kept by the engine (/api/prefs), not in this page's storage: the menu bar app gets a new port, and
 // so a new, empty origin, on every launch.
@@ -1264,7 +1264,7 @@ function show(v){if(!$(v+'View'))v='chat';curView=v;for(const b of document.quer
  if(v==='routines')loadRoutines();
  if(v==='connect'){loadTg();loadAlerts();loadCalendar()}
  if(v==='settings'){loadAccount();loadRoles();loadRoutes();loadDec();if(prefs.engine==='native')loadNative();loadCu();loadPanelPlace();loadKeys()}
- heroes();try{localStorage.setItem('bisu.view',v)}catch{}}
+ heroes();try{localStorage.setItem('dec-intern.view',v)}catch{}}
 for(const b of document.querySelectorAll('.side button[data-view]'))b.onclick=()=>show(b.dataset.view);
 
 // ---- light markdown: fenced code, inline code, paragraphs ----
@@ -1318,7 +1318,7 @@ function withContext(t){
  return t+'\n\n'+p.join('\n');
 }
 
-// ---- desktop shell: the resize grip, and the one permission bisu asks for ----
+// ---- desktop shell: the resize grip, and the one permission Dec Intern asks for ----
 if(PANEL){
  // Dragging the window's own border would move it, so the panel carries a grip in its corner.
  // Sizes are sent in screen coordinates, which do not change while the window is growing.
@@ -1367,7 +1367,7 @@ if(PANEL&&HOST?.onShown)HOST.onShown(()=>{
  loadSuggestions();
 });
 if(PANEL&&HOST?.onHidden)HOST.onHidden(()=>{panelOpen=false;detach()});
-// What a tool is called on the page: bisu's own tools by what they do, Claude Code's as they are.
+// What a tool is called on the page: Dec Intern's own tools by what they do, Claude Code's as they are.
 const TOOL_NAMES={session_search:'지난 대화 검색',session_show:'지난 대화 읽기',cu_look:'화면 읽기',cu_decide:'누를 곳 고르기',cu_click:'클릭',cu_type:'입력',cu_key:'키 누르기',cu_scroll:'스크롤',cu_wait:'기다리기',cu_screenshot:'화면 캡처',cu_ground:'화면에서 찾기',cu_approve:'승인한 동작 실행',cu_state:'권한 확인',calendar_list:'캘린더 보기',calendar_add:'일정 넣기',calendar_change:'일정 고치기',calendar_delete:'일정·할 일 지우기',reminders_list:'미리 알림 보기',reminder_add:'미리 알림 넣기',reminder_change:'미리 알림 고치기',browser_task:'웹에서 하기',browser_approve:'웹에서 누르기',browser_check:'웹 작업 확인',browser_read:'웹 페이지 읽기'};
 const STEP={read_file:'파일 읽는 중',write_file:'파일 만드는 중',edit_file:'파일 고치는 중',run_command:'명령 실행하는 중',list_files:'파일 찾는 중',search_files:'내용 찾는 중',web_fetch:'웹 페이지 읽는 중',web_search:'웹에서 찾는 중',delegate:'담당에게 맡기는 중',remember:'기억하는 중',schedule_job:'예약하는 중',Read:'파일 읽는 중',Write:'파일 만드는 중',Edit:'파일 고치는 중',MultiEdit:'파일 고치는 중',NotebookEdit:'노트 고치는 중',Bash:'명령 실행하는 중',Glob:'파일 찾는 중',Grep:'내용 찾는 중',WebFetch:'웹 페이지 읽는 중',WebSearch:'웹에서 찾는 중',Task:'담당에게 맡기는 중',Agent:'담당에게 맡기는 중',TodoWrite:'할 일 정리하는 중',session_search:'지난 대화 찾는 중',session_show:'지난 대화 읽는 중',calendar_list:'캘린더 보는 중',calendar_add:'일정 넣는 중',calendar_change:'일정 고치는 중',calendar_delete:'지우는 중',reminders_list:'미리 알림 보는 중',reminder_add:'미리 알림 넣는 중',reminder_change:'미리 알림 고치는 중',browser_task:'웹에서 하는 중',browser_approve:'누르는 중',browser_check:'웹 작업 확인하는 중',browser_read:'페이지 읽는 중',browser_tabs:'탭 보는 중',browser_routine:'루틴 돌리는 중',browser_show:'브라우저 여는 중',secret_list:'키 목록 보는 중'};
 const stepLabel=n=>{const b=String(n||'').replace(/^mcp__.+?__/,'');return STEP[b]||(b.startsWith('cu_')?'화면 다루는 중':toolName(n)+' 하는 중')};
@@ -1376,7 +1376,7 @@ const askQ=t=>ASK[t]||`${toolName(t)} — 해도 될까요?`;
 const CORE={read_file:'읽기',write_file:'만들기',edit_file:'고치기',run_command:'명령 실행',list_files:'파일 찾기',search_files:'내용 찾기',web_fetch:'웹 읽기',web_search:'웹 검색',delegate:'맡기기',Read:'읽기',Write:'만들기',Edit:'고치기',MultiEdit:'고치기',NotebookEdit:'노트 고치기',Bash:'명령 실행',Glob:'파일 찾기',Grep:'내용 찾기',WebFetch:'웹 읽기',WebSearch:'웹 검색',Task:'맡기기',Agent:'맡기기',TodoWrite:'할 일 정리'};
 const stepName=n=>CORE[n]||toolName(n);
 const ROUTE_KO={chat:'대화',work:'폴더 작업',build:'큰 작업',past:'지난 대화',mac:'맥 조작',schedule:'예약',calendar:'캘린더',remember:'기억',web:'웹'};
-const toolName=n=>{const m=/^mcp__([^_]+(?:_[^_]+)*)__(.+)$/.exec(String(n||''));return m?(m[1]==='bisu'&&TOOL_NAMES[m[2]])||m[2].replace(/_/g,' '):TOOL_NAMES[n]||String(n||'')};
+const toolName=n=>{const m=/^mcp__([^_]+(?:_[^_]+)*)__(.+)$/.exec(String(n||''));return m?(m[1]==='dec-intern'&&TOOL_NAMES[m[2]])||m[2].replace(/_/g,' '):TOOL_NAMES[n]||String(n||'')};
 // The calendar tools in words: what range, which event, what time.
 const CAL_SUMMARY={calendar_list:i=>[i.from,i.to].filter(Boolean).join(' – ')+(i.query?` "${i.query}"`:'')||'오늘부터 일주일',calendar_add:i=>[i.title,i.start].filter(Boolean).join(' · '),
  calendar_change:i=>[i.title,i.start].filter(Boolean).join(' · ')||i.id,calendar_delete:i=>i.title||i.id,reminders_list:i=>i.list||'전체',reminder_add:i=>[i.title,i.due].filter(Boolean).join(' · '),
@@ -1395,10 +1395,10 @@ function botPreview(tool,input={}){
   return `<div class="botPrev memPrev">${merges.map(m=>`<span class="k">합쳐서</span><span><b>${esc(m.into?.title||'')}</b>${m.into?.key?` <span class="chip key">key ${esc(m.into.key)}</span>`:''}</span><pre>${esc(m.into?.text||'')}</pre><span class="k">대신</span><span class="note" style="margin:0">${esc((m.from||[]).join(' · '))}</span>`).join('')}${drops.length?`<span class="k">지움</span><span class="note" style="margin:0">${esc(drops.join(' · '))}</span>`:''}<span class="k"></span><span class="note" style="margin:0">지우는 파일은 기억 폴더의 .compacted에 남아요. 고정한 기억은 건드리지 않아요.</span></div>`}
  if(/routine_save$/.test(tool))return `<div class="botPrev"><span class="k">이름</span><span>${esc(input.name||'')}</span>${input.inputs?.length?`<span class="k">입력</span><span>${esc(input.inputs.join(', '))}</span>`:''}<span class="k">할 수 있는 일</span><span>${esc(TOOLS_KO[input.tools||'read']||input.tools)}</span><span class="k">단계</span><span></span><pre>${esc((input.steps||[]).map((x,i)=>`${i+1}. ${x}`).join('\n'))}</pre></div>`;const rows=[['이름',input.name],['맡은 일',input.job],['폴더',input.cwd||'~'],['말투',input.tone]].filter(([,v])=>v);
  return `<div class="botPrev">${rows.map(([k,v])=>`<span class="k">${k}</span><span>${esc(v)}</span>`).join('')}${input.instructions?`<span class="k">일하는 방식</span><span></span><pre>${esc(input.instructions)}</pre>`:''}</div>`}
-// Paths in what bisu wants to run, as the person thinks of them: ./ for the chat's folder, ~ for home.
+// Paths in what Dec Intern wants to run, as the person thinks of them: ./ for the chat's folder, ~ for home.
 const relPaths=t=>{t=String(t??'');if(cur?.cwd)t=t.split(cur.cwd+'/').join('./').split(cur.cwd).join('.');return t.replace(/\/Users\/[^/\s'"]+/g,'~')};
 function askBody(tool,input={}){if(isBotTool(tool))return botPreview(tool,input);
- // bisu's own engine names its tools differently and says path instead of file_path.
+ // Dec Intern's own engine names its tools differently and says path instead of file_path.
  if(tool==='run_command')tool='Bash';
  if(tool==='edit_file'){tool='Edit';input={...input,file_path:input.path}}
  if(tool==='write_file'){tool='Write';input={...input,file_path:input.path}}
@@ -1410,9 +1410,9 @@ function askBody(tool,input={}){if(isBotTool(tool))return botPreview(tool,input)
  return `<pre>${esc(JSON.stringify(input,null,2).slice(0,3000))}</pre>`}
 function wrap(){return $('msgs').firstElementChild}
 function add(html,parent,cls=''){const el=document.createElement('div');el.className='m '+cls;el.innerHTML=html;
- // A subagent's work is part of what bisu is doing, so it goes in the same folded line.
+ // A subagent's work is part of what Dec Intern is doing, so it goes in the same folded line.
  if(parent){const s=document.createElement('div');s.className='sub';s.innerHTML=`<div class="lbl">↳ 담당</div>`;s.appendChild(el);actBlock().querySelector('.actL').appendChild(s)}else wrap().appendChild(el);return el}
-// One folded line per turn for everything bisu did on the way to its answer.
+// One folded line per turn for everything Dec Intern did on the way to its answer.
 let act=null;
 function actBlock(){if(act)return act;
  act=add(`<details class="act live"${META?' open':''}><summary><span class="actS">하는 중…</span><span class="actM"></span></summary><div class="actL"></div></details>`,null,'actw');act.n=0;return act}
@@ -1478,17 +1478,17 @@ const AGENTS={developer:'개발 담당',publisher:'퍼블리싱 담당',refactor
 const agentName=a=>AGENTS[a]||(a?a+' 담당':'담당');
 const elapsed=t=>{const s=Math.max(0,Math.round((Date.now()-t)/1000));return s<60?s+'s':Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s'};
 function renderTasks(){const box=$('tasks');if(!box)return;
- // Work handed off keeps going after bisu's turn: say so, and that talking is fine meanwhile.
+ // Work handed off keeps going after Dec Intern's turn: say so, and that talking is fine meanwhile.
  if(tasks.length&&cur&&!cur.busy&&mood.state!=='waiting')setMood('working',`${agentName(tasks[0].agent)}이 일하는 중 · 말 걸어도 돼요`);
  else if(!tasks.length&&mood.text.includes('말 걸어도 돼요'))setMood('idle','듣고 있어요');
- // A worker that stopped to ask shows as asking; bisu answers it, or asks the person first.
+ // A worker that stopped to ask shows as asking; Dec Intern answers it, or asks the person first.
  box.innerHTML=tasks.map(t=>{const asking=/^질문: /.test(t.step||'');
   return `<div class="task${asking?' ask':''}"><span class="spin"></span><b>${esc(t.type==='local_agent'?agentName(t.agent):'명령')}</b><span class="d">${esc(t.description)}${t.step?' · '+esc(t.step):''}</span><span class="e" data-t="${t.started}">${elapsed(t.started)}</span>${t.stoppable?`<button class="tx" data-stop="${esc(t.id)}" title="이 담당만 멈추기">✕</button>`:''}</div>`}).join('')}
 $('tasks')?.addEventListener('click',e=>{const b=e.target.closest('[data-stop]');if(!b||!cur)return;b.disabled=true;post(`/api/chats/${cur.id}/stoptask`,{task_id:b.dataset.stop}).catch(()=>{b.disabled=false})});
 setInterval(()=>{for(const el of document.querySelectorAll('.task .e'))el.textContent=elapsed(Number(el.dataset.t))},1000);
 function chatUI(){const c=cur,who=`${(()=>{try{return curBotInfo()?.name}catch{}})()||'덱 인턴'}에게 말하기`;$('stop').hidden=!c?.busy;$('input').placeholder=c?.busy?(PANEL?'답하는 중 — 보내도 돼요':'답하는 중이에요 — 지금 보내도 이어서 읽어요'):(PANEL?who:who+'  (Enter 보내기 · Shift+Enter 줄바꿈)');$('chatHead').hidden=!c;if(c||!PANEL)$('chips').hidden=true;$('folderLine').hidden=!!c||PANEL;if(!c&&!PANEL){const d=short($('cwd').value||curBotInfo()?.cwd||'~');$('folderChip').textContent=place(d);$('folderChip').title=d}$('compose').hidden=false;if(c)document.body.classList.remove('onboarding');
  if(PANEL){$('panelStart').hidden=!!c;$('msgs').hidden=!c;if(!c)fillStartCwd()}
- if(!c){if(!wrap().children.length){wrap().innerHTML=helloHTML();mountBisu(wrap())}mountBisu();renderRecent();renderOnboard();return}
+ if(!c){if(!wrap().children.length){wrap().innerHTML=helloHTML();mountIntern(wrap())}mountIntern();renderRecent();renderOnboard();return}
  $('chatTitle').textContent=ctitle(c);$('chatSub').textContent=place(c.cwd);$('chatSub').title=short(c.cwd);
  renderList()}
 function renderList(){const q=($('chatFilter')?.value||'').trim().toLowerCase(),list=myChats().filter(c=>!q||(c.title||'').toLowerCase().includes(q)).sort((a,b)=>(b.pending>0)-(a.pending>0));
@@ -1506,8 +1506,8 @@ function listen(id){
  es.onerror=()=>{if(es&&es.readyState===2)refreshChats()};
  es.onmessage=e=>{const ev=JSON.parse(e.data);wrap().querySelector('.loadNote')?.remove();const stick=atBottom();if(ev.kind==='hello'){cur={...cur,...ev.chat}}render(ev);if(ev.kind==='hello'||stick)$('msgs').scrollTop=$('msgs').scrollHeight;if(['status','approval','approval_done','user','tasks'].includes(ev.kind))refreshChats()};
 }
-function open(id){const c=chats.find(x=>x.id===id);if(!c)return;if(!c.maker&&(c.bot||'bisu')!==curBot){curBot=c.bot||'bisu';try{localStorage.setItem('bisu.bot',curBot)}catch{};renderBots()}cur=c;wrap().innerHTML='<p class="note loadNote">불러오는 중…</p>';chatUI();listen(id);
- try{localStorage.setItem('bisu.chat',id)}catch{};$('input').focus()}
+function open(id){const c=chats.find(x=>x.id===id);if(!c)return;if(!c.maker&&(c.bot||'dec-intern')!==curBot){curBot=c.bot||'dec-intern';try{localStorage.setItem('dec-intern.bot',curBot)}catch{};renderBots()}cur=c;wrap().innerHTML='<p class="note loadNote">불러오는 중…</p>';chatUI();listen(id);
+ try{localStorage.setItem('dec-intern.chat',id)}catch{};$('input').focus()}
 // The stream is what keeps Claude Code running, so it is dropped when the panel goes away: a hidden
 // panel should not hold a few hundred megabytes of idle process. Reopening replays from the chat's
 // events, so nothing is lost.
@@ -1516,14 +1516,14 @@ async function answer(request_id,a,el){for(const b of el.querySelectorAll('butto
  try{await post(`/api/chats/${cur.id}/approve`,{request_id,allow:a!=='deny',always:a==='always'})}catch(e){alert(e.message);for(const b of el.querySelectorAll('button'))b.disabled=false}}
 async function sendMsg(){const raw=$('input').value.trim();if(!raw)return;
  // No chat yet: this message starts one, in the folder chosen on the start card or in the sidebar.
- if(!cur){const box=PANEL?$('startCwd'):$('cwd'),cwd=box.value.trim();try{localStorage.setItem('bisu.cwd',cwd)}catch{}
+ if(!cur){const box=PANEL?$('startCwd'):$('cwd'),cwd=box.value.trim();try{localStorage.setItem('dec-intern.cwd',cwd)}catch{}
   const b=$('sendBtn');b.disabled=true;try{const {chat}=await post('/api/chats',{cwd,bot:curBot});chats.unshift(chat);show('chat');open(chat.id)}
   catch(e){const er=$('startErr');if(PANEL&&er){er.textContent=e.message;er.hidden=false}else alert(e.message);return}finally{b.disabled=false}}
  const t=withContext(raw);$('input').value='';grow();
  try{await post(`/api/chats/${cur.id}/send`,{text:t})}catch(e){$('input').value=raw;add(`<span class="err">${esc(e.message)}</span>`,null,'sys')}}
 async function startChat(body,errEl){if(errEl){errEl.hidden=true;errEl.textContent=''}try{const {chat}=await post('/api/chats',{bot:curBot,...body});chats.unshift(chat);show('chat');open(chat.id)}
  catch(e){if(errEl){errEl.textContent=e.message;errEl.hidden=false}else alert(e.message)}}
-$('newChat').onclick=()=>{const cwd=$('cwd').value.trim();try{localStorage.setItem('bisu.cwd',cwd)}catch{};startChat({cwd})};
+$('newChat').onclick=()=>{const cwd=$('cwd').value.trim();try{localStorage.setItem('dec-intern.cwd',cwd)}catch{};startChat({cwd})};
 $('cwd').onkeydown=e=>{if(e.key==='Enter')$('newChat').click()};
 
 // A conversation counts as current for a few hours after its last message.
@@ -1550,8 +1550,8 @@ function renderOnboard(){
    <label><input type="radio" name="obTone" value="follow" checked>내 말투 따라</label><label><input type="radio" name="obTone" value="casual">반말</label><label><input type="radio" name="obTone" value="polite">존댓말</label></div></div>
   <label class="f">먼저 찾아오기<select id="obEvery"><option value="24" selected>하루 한 번</option><option value="8">하루 세 번</option><option value="off">찾아오지 않기</option></select></label>
   <div class="sugBtns"><button class="primary" id="obGo">좋아요</button><button id="obSkip">나중에</button><span class="note err" id="obErr"></span></div>`;
- if(PANEL)host.querySelector('.bisu').after(card);else host.appendChild(card);
- mountBisu(card);
+ if(PANEL)host.querySelector('.intern').after(card);else host.appendChild(card);
+ mountIntern(card);
  const done=async()=>{prefs=await post('/api/prefs',{onboarded:true}).catch(()=>({...prefs,onboarded:true}));card.remove();$('panelStart').classList.remove('onboarding');document.body.classList.remove('onboarding');fillStartCwd();renderRecent()};
  card.querySelector('#obSkip').onclick=done;
  card.querySelector('#obGo').onclick=async()=>{const b=card.querySelector('#obGo');b.disabled=true;
@@ -1565,9 +1565,9 @@ function renderOnboard(){
 // The panel has no sidebar, so the start card is its whole "new chat" flow. It appears whenever no
 // chat is open — including right after the engine restarts, which is when it matters most.
 function fillStartCwd(){const i=$('startCwd');if(!i||i.value)return;
- let last='';try{last=localStorage.getItem('bisu.cwd')||''}catch{}
+ let last='';try{last=localStorage.getItem('dec-intern.cwd')||''}catch{}
  i.value=last||short(myChats()[0]?.cwd||curBotInfo()?.cwd||$('cwd').value||'');requestAnimationFrame(()=>{i.scrollLeft=i.scrollWidth})}
-function startFromPanel(){const cwd=$('startCwd').value.trim();try{localStorage.setItem('bisu.cwd',cwd)}catch{}
+function startFromPanel(){const cwd=$('startCwd').value.trim();try{localStorage.setItem('dec-intern.cwd',cwd)}catch{}
  startChat({cwd},$('startErr'))}
 $('startNew').onclick=startFromPanel;
 $('startCwd').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('input').focus()}};
@@ -1584,7 +1584,7 @@ $('closeChat').onclick=async()=>{if(!cur||!await ask('이 대화를 닫을까요
  try{await api(`/api/chats/${cur.id}`,{method:'DELETE'})}catch(e){if(!/not found/.test(e.message)){alert(e.message);return}}es?.close();cur=null;
  wrap().innerHTML='';setMood('idle','듣고 있어요');await refreshChats();chatUI()};
 // A new conversation without throwing this one away: the panel has no sidebar to do it from.
-$('newHere').onclick=()=>{detach();cur=null;wrap().innerHTML='';try{localStorage.removeItem('bisu.chat')}catch{};setMood('idle','듣고 있어요');chatUI();renderList();(PANEL?$('startCwd'):$('cwd'))?.focus()};
+$('newHere').onclick=()=>{detach();cur=null;wrap().innerHTML='';try{localStorage.removeItem('dec-intern.chat')}catch{};setMood('idle','듣고 있어요');chatUI();renderList();(PANEL?$('startCwd'):$('cwd'))?.focus()};
 
 // ---- settings ----
 let models=new Map(),roles={};
@@ -1619,7 +1619,7 @@ $('save').onclick=async e=>{e.preventDefault();const body={};for(const i of $('r
  catch(err){$('save').disabled=false;$('saveNote').innerHTML=`<span class="err">${esc(err.message)}</span>`}};
 
 // ---- memory ----
-// The files in ~/.config/bisu/memory, which launch.zsh folds into every new run's system prompt.
+// The files in ~/.config/dec-intern/memory, which launch.zsh folds into every new run's system prompt.
 // Editing here is the same thing as editing the markdown, so the two never disagree.
 let mem=null,memEdit=null,prof=null;
 async function loadMemory(){try{mem=await api('/api/memory'+mb());renderMemory()}catch(e){$('memList').innerHTML=`<p class="note err">${esc(e.message)}</p>`}
@@ -1721,7 +1721,7 @@ $('memCancel').onclick=()=>{memForm(null);$('memFormSec').hidden=true};
 $('memNew').onclick=()=>{memForm(null);$('memFormSec').scrollIntoView({block:'nearest'})};
 $('memTidy').onclick=async()=>{await startChat({});if(!cur)return;$('input').value='기억을 정리해 줘. 같은 주제는 하나로 합치고, 이제 안 맞는 건 지워 줘.';sendMsg()};
 
-// ---- what bisu brings without being asked ----
+// ---- what Dec Intern brings without being asked ----
 // The engine runs the suggestion on its own schedule; this only shows whatever is waiting, and asking
 // for one now. Saying yes opens an ordinary chat in the folder the suggestion is about and sends what
 // it said it would do — the approval for every edit still comes from the chat, as always.
@@ -1736,7 +1736,7 @@ function renderSug(){
  if(!list.length){
   // Between asking for one and it arriving there is nothing to show yet, and an empty panel looks
   // like nothing happened.
-  if(sug?.running){el.hidden=false;el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag"><span class="bisu" data-state="thinking"></span>덱 인턴</span></div><div class="sugBody" style="margin-top:4px">뭐가 있을지 보고 있어요…</div></div>`;mountBisu(el)}
+  if(sug?.running){el.hidden=false;el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag"><span class="intern" data-state="thinking"></span>덱 인턴</span></div><div class="sugBody" style="margin-top:4px">뭐가 있을지 보고 있어요…</div></div>`;mountIntern(el)}
   else{el.hidden=true;el.innerHTML=''}
   HOST?.suggest?.(0);return}
  const it=list[0],extra=list.length>1?`<span class="more">+${list.length-1}</span>`:'';
@@ -1750,17 +1750,17 @@ function renderSug(){
   return}
  // A scheduled job's answer is the same card with other words: nothing to agree to, only to read,
  // and "이어서 대화" picks up the run that wrote it.
- if(it.kind==='job')el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag${it.error?' bad':''}"><span class="bisu" data-state="${it.error?'error':it.ask?'waiting':'done'}"></span>${it.job==='briefing'?'아침 브리핑':it.job==='goal'?'목표':'예약 작업'}</span>${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
+ if(it.kind==='job')el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag${it.error?' bad':''}"><span class="intern" data-state="${it.error?'error':it.ask?'waiting':'done'}"></span>${it.job==='briefing'?'아침 브리핑':it.job==='goal'?'목표':'예약 작업'}</span>${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
   <div class="sugTitle">${esc(it.title)}</div>
   ${it.body?`<div class="sugBody job${it.error?' err':''}">${esc(it.body)}</div>`:''}
   ${it.goal&&it.ask?`<div class="sugAsk"><input type="text" data-a="answer" placeholder="여기에 답하면 이어서 해요" autocomplete="off"><button class="primary" data-a="send">보내기</button></div>`:''}
   <div class="sugBtns">${it.sessionId?`<button class="primary" data-a="do">이어서 대화</button>`:''}<button data-a="later">${it.goal&&it.ask?'나중에':'확인'}</button><button class="linkish" data-a="fold">접기</button><span class="sugWhere" title="${esc(short(it.cwd||''))}">${ago(it.at)}${it.cwd?' · '+esc(place(it.cwd)):''}</span></div></div>`;
- else el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag"><span class="bisu" data-state="waiting"></span>덱 인턴이 하나 찾았어요</span>${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
+ else el.innerHTML=`<div class="sugcard"><div class="sugTop"><span class="tag"><span class="intern" data-state="waiting"></span>덱 인턴이 하나 찾았어요</span>${extra}<button class="x" data-a="no" title="모두 접기">✕</button></div>
   <div class="sugTitle">${esc(it.title)}</div>
   ${it.body?`<div class="sugBody">${esc(it.body)}</div>`:''}
   ${it.action?`<div class="sugAct"><b>해볼게</b>를 누르면 이렇게 부탁해요 · ${esc(it.action)}</div>`:''}
   <div class="sugBtns"><button class="primary" data-a="do">해볼게</button><button data-a="later">나중에</button><button class="linkish" data-a="fold">접기</button>${it.cwd?`<span class="sugWhere" title="${esc(short(it.cwd))}">${esc(place(it.cwd))}</span>`:''}</div></div>`;
- mountBisu(el);
+ mountIntern(el);
  const go=el.querySelector('[data-a=do]');if(go)go.onclick=()=>suggestAnswer(it.id,'accept');
  // A goal's question, answered right on the card.
  const sendA=el.querySelector('[data-a=send]'),inA=el.querySelector('input[data-a=answer]');
@@ -1790,7 +1790,7 @@ async function suggestAnswer(id,action){
 function renderSugSettings(){
  const s=sug;if(!s)return;
  $('sugOn').checked=!!s.enabled;
- // A value set from the shell (BISU_*) or an older file may not be one of the choices; showing the
+ // A value set from the shell (DEC_INTERN_*) or an older file may not be one of the choices; showing the
  // first option instead would quietly misreport the cadence.
  const every=String(s.intervalHours);
  if(![...$('sugEvery').options].some(o=>o.value===every))$('sugEvery').add(new Option(`직접 설정한 ${every}시간`,every),0);
@@ -1856,7 +1856,7 @@ $('tgTest').onclick=async()=>{await tgDo('/api/telegram/test');if(!$('tgErr').te
 $('tgUnpair').onclick=async()=>{if(await ask('텔레그램 연결을 끊을까요? 다시 쓰려면 연결을 새로 해야 해요.'))tgDo('/api/telegram/unpair')};
 for(const [id,k] of [['tgNApprovals','approvals'],['tgNSuggestions','suggestions'],['tgNJobs','jobs'],['tgNEvents','events']])$(id).addEventListener('change',()=>tgDo('/api/telegram',{notify:{[k]:$(id).checked}}));
 $('tgCwd').addEventListener('change',()=>tgDo('/api/telegram',{cwd:$('tgCwd').value}));
-// ---- goals (ui/goals.mjs): what bisu works on by itself over days or weeks ----
+// ---- goals (ui/goals.mjs): what Dec Intern works on by itself over days or weeks ----
 let goalsSnap=null,goalPoll=null;
 const G_STATUS={active:['진행 중',''],waiting:['답을 기다려요','blush'],paused:['멈춤','blush'],done:['달성','']};
 async function loadGoals(){try{goalsSnap=await api('/api/goals');renderGoals()}catch(e){$('goalNote').textContent=e.message}}
@@ -1908,7 +1908,7 @@ function renderAlerts(){const a=alSnap;if(!a)return;
  $('alBefore').value=String(a.before);
  $('alAccess').textContent=a.before&&a.access===false?'캘린더 접근을 허용해야 알려 줄 수 있어요':'';
  for(const [id,k] of Object.entries(AL_B))$(id).checked=a.banners[k]}
-// Whether macOS lets bisu show banners is the shell's to know; a page outside the app can only say so.
+// Whether macOS lets Dec Intern show banners is the shell's to know; a page outside the app can only say so.
 async function renderPerm(){const box=$('alPerm'),btn=$('alPermBtn');
  if(!HOST?.notifications){box.innerHTML='<span class="note" style="margin:0">맥 알림은 덱 인턴 앱에서만 떠요.</span>';btn.hidden=true;return}
  let st='unknown';try{st=(await HOST.notifications()).status}catch{}
@@ -1971,7 +1971,7 @@ $('cuStop').onclick=async()=>{try{cuSnap=await post('/api/cubench/stop');renderC
 let jobsSnap=null;
 const whenShort=ts=>ts?new Date(ts).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
 async function loadJobs(){try{jobsSnap=await api('/api/jobs');renderJobs()}catch(e){$('jobList').innerHTML=`<p class="note err">${esc(e.message)}</p>`}}
-function renderJobs(){const s0=jobsSnap;if(!s0)return;const s={...s0,jobs:s0.jobs.filter(j=>(j.bot||'bisu')===curBot)};const el=$('jobList');
+function renderJobs(){const s0=jobsSnap;if(!s0)return;const s={...s0,jobs:s0.jobs.filter(j=>(j.bot||'dec-intern')===curBot)};const el=$('jobList');
  if(!s.jobs.length){el.innerHTML='<p class="note">아직 예약한 작업이 없어요.</p>';return}
  el.innerHTML=s.jobs.map(j=>`<div class="mem" data-slug="${esc(j.slug)}"><div class="h"><b>${esc(j.name)}</b><span class="chip">${esc(j.schedule)}${j.once?' · 한 번':''}</span><span class="chip">${j.tools}</span>${j.enabled?'':'<span class="chip">꺼짐</span>'}
    <span class="sp"></span>${j.needsApproval?`<button class="primary" data-a="approve">승인</button>`:`<button data-a="run" ${j.error||s.running?'disabled':''}>${j.running?'실행 중…':'지금 실행'}</button>`}<button data-a="${j.enabled?'disable':'enable'}">${j.enabled?'끄기':'켜기'}</button><button class="danger" data-a="delete">삭제</button></div>
@@ -2025,7 +2025,7 @@ function groupRuns(runs){const body=$('runs');if(!runs.length)return;const rows=
  body.hidden=true}
 function renderRuns(){$('runs').hidden=false;const all=runCache,runs=$('showAuto').checked?all:all.filter(r=>!r.kind||r.kind==='chat');{
  const dirs=[...new Set(runs.map(r=>r.cwd).filter(d=>d&&!/^\/(private\/)?(tmp|var)\//.test(d)))].slice(0,20);$('cwdList').innerHTML=dirs.map(d=>`<option value="${esc(short(d))}">`).join('');
- if(!$('cwd').value){let last='';try{last=localStorage.getItem('bisu.cwd')||''}catch{};$('cwd').value=last||short(dirs[0]||'')}
+ if(!$('cwd').value){let last='';try{last=localStorage.getItem('dec-intern.cwd')||''}catch{};$('cwd').value=last||short(dirs[0]||'')}
  fillStartCwd()
  $('runs').innerHTML=runs.length?runs.map(r=>{const u=Object.values(r.usage),inp=u.reduce((a,x)=>a+x.input+x.cacheRead,0),out=u.reduce((a,x)=>a+x.output,0);
   const mins=r.end&&r.start?Math.max(0,(r.end-r.start)/60e3):0;
@@ -2045,7 +2045,7 @@ const HOURS={8:'하루 세 번',12:'하루 두 번',24:'하루 한 번',72:'3일
 function heroes(){renderCC();const set=(id,h)=>{const el=$(id);if(el&&h!=null)el.innerHTML=h};
  if(goalsSnap){const g=goalsSnap.goals,act=g.filter(x=>x.status==='active').length,wait=g.filter(x=>x.status==='waiting').length;
   set('goalsSum',g.length?`진행 중 <b>${act}</b>개${wait?` · <b>${wait}</b>개는 내 답을 기다려요`:''}${g.length-act-wait?` · 끝났거나 멈춘 것 ${g.length-act-wait}개`:''}`:'며칠 걸리는 일을 맡기면 덱 인턴이 조금씩 진행해요')}
- if(jobsSnap||briefSnap||sug){const mine=jobsSnap?.jobs?.filter(j=>(j.bot||'bisu')===curBot),n=mine?.length,wait=mine?.filter(j=>j.needsApproval).length;
+ if(jobsSnap||briefSnap||sug){const mine=jobsSnap?.jobs?.filter(j=>(j.bot||'dec-intern')===curBot),n=mine?.length,wait=mine?.filter(j=>j.needsApproval).length;
   set('jobsSum',[n==null?null:n?`예약 <b>${n}</b>개${wait?` · 승인 기다림 ${wait}개`:''}`:'예약한 작업 없음',
    briefSnap?(briefSnap.enabled?`아침 브리핑 오전 ${briefSnap.hour}시`:'아침 브리핑 꺼짐'):null,
    sug?(sug.enabled?`먼저 찾아오기 ${HOURS[sug.intervalHours]||sug.intervalHours+'시간마다'}`:'먼저 찾아오기 꺼짐'):null].filter(Boolean).join(' · '))}
@@ -2127,15 +2127,17 @@ function drawKeys(r){const list=$('keysList');list.textContent='';
 $('keysReset').onclick=async()=>{try{drawKeys(await HOST.shortcutReset('all'))}catch{}};
 $('panelReset').onclick=async()=>{try{const r=await HOST.panelPlace('',true);$('panelPlace').value=r.place;$('panelReset').textContent='초기화했어요 ✓';setTimeout(()=>{$('panelReset').textContent='위치 초기화'},1600)}catch{}};
 // ---- bots (ui/bots.mjs): the list, the current one, its details, and making one ----
-let bots=[],curBot='bisu';try{curBot=localStorage.getItem('bisu.bot')||'bisu'}catch{}
+// What this browser kept under the old name (bisu.*) carries over once.
+try{for(const k of ['cwd','view','chat','bot','font']){const o=localStorage.getItem('bisu.'+k);if(o!=null&&localStorage.getItem('dec-intern.'+k)==null)localStorage.setItem('dec-intern.'+k,k==='bot'&&o==='bisu'?'dec-intern':o);localStorage.removeItem('bisu.'+k)}}catch{}
+let bots=[],curBot='dec-intern';try{curBot=localStorage.getItem('dec-intern.bot')||'dec-intern';if(curBot==='bisu')curBot='dec-intern'}catch{}
 const curBotInfo=()=>bots.find(b=>b.id===curBot);
 // A bot's conversations; the bot-making chat shows only while it is the open one.
-const myChats=()=>chats.filter(c=>c.maker?cur?.id===c.id:(c.bot||'bisu')===curBot);
+const myChats=()=>chats.filter(c=>c.maker?cur?.id===c.id:(c.bot||'dec-intern')===curBot);
 const mb=()=>'?bot='+encodeURIComponent(curBot);
 const initial=n=>{const s=String(n||'').trim();return !s||/^덱\s*인턴$/.test(s)?'d':s.slice(0,1).toUpperCase()};
 // 덱 인턴 is written the way the brand writes it: dec's own mark, then 인턴.
 const nameHTML=n=>{const s=String(n||'');return /^덱\s/.test(s)?'<span class="decmark">dec</span>'+esc(s.slice(1)):esc(s)};
-async function loadBots(){try{const r=await api('/api/bots');bots=r.bots;if(!curBotInfo())curBot='bisu';renderBots()}catch{}}
+async function loadBots(){try{const r=await api('/api/bots');bots=r.bots;if(!curBotInfo())curBot='dec-intern';renderBots()}catch{}}
 function renderBots(){const el=$('botList');
  el.innerHTML=bots.map(b=>botRow(b)).join('');
  for(const v of el.querySelectorAll('[data-view]')){v.classList.toggle('on',v.dataset.view===curView);v.onclick=()=>show(v.dataset.view)}
@@ -2146,9 +2148,9 @@ function renderBots(){const el=$('botList');
  for(const [hero,name] of [['memoryHero','기억'],['jobsHero','예약 작업']]){const h=$(hero)?.querySelector('.ht');if(h)h.textContent=name+(bots.length>1?` · ${me.name}`:'')}
  if(typeof detailOpen==='function'&&detailOpen()&&detailBot!==curBot)openBot();
  renderCC()}
-function setBot(id){if(id===curBot)return;curBot=id;try{localStorage.setItem('bisu.bot',id)}catch{}
+function setBot(id){if(id===curBot)return;curBot=id;try{localStorage.setItem('dec-intern.bot',id)}catch{}
  // A conversation belongs to one bot: switching leaves it, and the list shows the new bot's.
- if(cur&&!cur.maker&&(cur.bot||'bisu')!==id){detach();cur=null;wrap().innerHTML='';chatUI()}
+ if(cur&&!cur.maker&&(cur.bot||'dec-intern')!==id){detach();cur=null;wrap().innerHTML='';chatUI()}
  else if(!cur){wrap().innerHTML='';chatUI()}
  renderBots();renderList();renderRecent();fillStartCwdFor();
  if(viewOn('memory'))loadMemory();if(viewOn('jobs'))renderJobs();heroes()}
@@ -2164,8 +2166,8 @@ $('bSave').onclick=async()=>{$('bErr').textContent='';
  try{const r=await post('/api/bots/'+encodeURIComponent(curBot),{name:$('bName').value,job:$('bJob').value,cwd:$('bCwd').value||'~',tone:$('bTone').value,instructions:$('bIns').value});bots=r.bots;renderBots();closeDetail()}
  catch(e){$('bErr').textContent=e.message}};
 $('bDel').onclick=async()=>{const b=curBotInfo();if(!b||b.default||!await ask(`“${b.name}” 봇을 지울까요? 대화와 예약 작업은 기본 봇으로 옮겨지고, 기억 폴더는 남겨 둬요.`))return;
- try{const r=await post('/api/bots/'+encodeURIComponent(b.id),{action:'delete'});bots=r.bots;closeDetail();setBot('bisu')}catch(e){$('bErr').textContent=e.message}};
-// Making a bot is a conversation: bisu asks up to four things, then shows the preview card. The quick form
+ try{const r=await post('/api/bots/'+encodeURIComponent(b.id),{action:'delete'});bots=r.bots;closeDetail();setBot('dec-intern')}catch(e){$('bErr').textContent=e.message}};
+// Making a bot is a conversation: Dec Intern asks up to four things, then shows the preview card. The quick form
 // on top of that conversation makes one from a name and a job right away.
 $('botNew').onclick=async()=>{try{const {chat}=await post('/api/chats',{maker:true});chats.unshift(chat);show('chat');open(chat.id);
  setTimeout(()=>post(`/api/chats/${chat.id}/send`,{text:'새 봇을 만들고 싶어요.'}).catch(()=>{}),400)}catch(e){alert(e.message)}};
@@ -2240,17 +2242,17 @@ function renderStatus(){const g=gstat();renderOther(g);
  for(const el of document.querySelectorAll('[data-gstatus]')){el.dataset.k=g.k;el.querySelector('.t').textContent=g.t;
   const more=el.querySelector('.more');if(more)more.textContent=[g.today!=null?`오늘 ${usd(g.today)}`:null,g.awake].filter(Boolean).join(' · ')}}
 // The status pill answers "what needs me": the first approval, else the first thing working.
-function gotoStatus(){const g=gstat(),c=g.pend[0]||g.busy[0];if(!c)return false;if((c.bot||'bisu')!==curBot&&!c.maker)setBot(c.bot||'bisu');show('chat');open(c.id);return true}
+function gotoStatus(){const g=gstat(),c=g.pend[0]||g.busy[0];if(!c)return false;if((c.bot||'dec-intern')!==curBot&&!c.maker)setBot(c.bot||'dec-intern');show('chat');open(c.id);return true}
 
 // ---- ⌘K: bots, conversations, screens and actions in one field ----
 const SCREENS={chat:'대화',routines:'루틴',memory:'기억',jobs:'예약 작업',goals:'목표',history:'기록',connect:'연결',settings:'설정'};
 let palItems=[],palAt=0;
 function palette(open){const p=$('palette');if(open===false||!p.hidden&&open!==true){p.hidden=true;return}p.hidden=false;$('palQ').value='';palFill();$('palQ').focus()}
-function palFill(){const q=$('palQ').value.trim().toLowerCase(),hit=t=>!q||String(t).toLowerCase().includes(q),botName=id=>bots.find(b=>b.id===(id||'bisu'))?.name||'덱 인턴';
+function palFill(){const q=$('palQ').value.trim().toLowerCase(),hit=t=>!q||String(t).toLowerCase().includes(q),botName=id=>bots.find(b=>b.id===(id||'dec-intern'))?.name||'덱 인턴';
  palItems=[
   ...[['새 대화','⌘N',()=>newChatHere()],['봇 만들기','',()=>$('botNew').click()],['설정','⌘,',()=>openSettings()]].filter(([t])=>hit(t)).map(([t,h,go])=>({k:'할 일',t,h,go})),
   ...bots.filter(b=>hit(b.name)||hit(b.job)).map(b=>({k:'봇',t:b.name,h:b.job||'',go:()=>{setBot(b.id);show('chat')}})),
-  ...chats.filter(c=>!c.maker&&hit(c.title||'')).slice(0,30).map(c=>({k:'대화',t:ctitle(c),h:botName(c.bot),go:()=>{if((c.bot||'bisu')!==curBot)setBot(c.bot||'bisu');show('chat');open(c.id)}})),
+  ...chats.filter(c=>!c.maker&&hit(c.title||'')).slice(0,30).map(c=>({k:'대화',t:ctitle(c),h:botName(c.bot),go:()=>{if((c.bot||'dec-intern')!==curBot)setBot(c.bot||'dec-intern');show('chat');open(c.id)}})),
   ...(PANEL?[]:Object.entries(SCREENS).filter(([,t])=>hit(t)).map(([v,t])=>({k:'화면',t,h:'',go:()=>show(v)})))].slice(0,60);
  palAt=0;$('palList').innerHTML=palItems.map((it,i)=>`<div class="pi${i?'':' on'}" data-i="${i}" role="option"><span class="k">${esc(it.k)}</span><span>${esc(it.t)}</span><span class="h">${esc(it.h)}</span></div>`).join('')||'<p class="note" style="margin:8px">찾는 게 없어요.</p>';
  for(const el of $('palList').querySelectorAll('.pi')){el.onmousemove=()=>palMark(+el.dataset.i);el.onclick=()=>palGo(+el.dataset.i)}}
@@ -2276,7 +2278,7 @@ setInterval(renderStatus,3000);
 // ---- the window's flow: a bot and, under it, its conversations, routines, memory and jobs ----
 const BOT_SCREENS=[['chat','대화'],['routines','루틴'],['memory','기억'],['jobs','예약']];
 const BOT_ICONS={"chat": "<svg viewBox=\"0 0 20 20\"><path d=\"M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14h-6.5L6 16.8V14H4a1.5 1.5 0 0 1-1.5-1.5V6A1.5 1.5 0 0 1 4 4.5z\"/></svg>", "routines": "<svg viewBox=\"0 0 20 20\"><path d=\"M4 6h9M4 10h7M4 14h5\"/><path d=\"M14 12.5l2.5 2-2.5 2\"/></svg>", "memory": "<svg viewBox=\"0 0 20 20\"><path d=\"M6 3.5h8A1.5 1.5 0 0 1 15.5 5v12L10 13.8 4.5 17V5A1.5 1.5 0 0 1 6 3.5z\"/></svg>", "jobs": "<svg viewBox=\"0 0 20 20\"><circle cx=\"10\" cy=\"10.5\" r=\"6.5\"/><path d=\"M10 7v3.7l2.4 1.6M7.5 2.8h5\"/></svg>"};
-function botRow(b){const mine=chats.filter(c=>(c.bot||'bisu')===b.id&&!c.maker),dot=mine.some(c=>c.pending>0)?'wait':mine.some(c=>c.busy||c.tasks>0)?'busy':'';
+function botRow(b){const mine=chats.filter(c=>(c.bot||'dec-intern')===b.id&&!c.maker),dot=mine.some(c=>c.pending>0)?'wait':mine.some(c=>c.busy||c.tasks>0)?'busy':'';
  return `<button type="button" data-bot="${esc(b.id)}" class="${b.id===curBot?'on':''}" title="${esc(b.job||'')}"><span class="av">${esc(initial(b.name))}</span><span class="nm">${nameHTML(b.name)}</span>${dot?`<span class="bdot ${dot}"></span>`:''}</button>`+
   (b.id===curBot&&!PANEL?`<div class="bsub">${BOT_SCREENS.map(([v,t])=>`<button type="button" data-view="${v}">${BOT_ICONS[v]}${t}</button>`).join('')}</div>`:'')}
 // The bot's details sit beside the conversation (ⓘ), not over it.
@@ -2294,11 +2296,11 @@ addEventListener('mousedown',e=>{const p=$('statusPop');if(!p.hidden&&!p.contain
 $('chatMore').onclick=()=>{const items=[{label:'새 대화',hint:'⌘N',go:newChatHere},...(PANEL&&HOST?.openFull?[{label:'전체 창에서 보기',hint:'',go:()=>HOST.openFull('chat')}]:[]),
   ...(!PANEL?[{label:'봇 정보',hint:'',go:toggleDetail}]:[]),{label:'목록에서 빼기',hint:'기록엔 남아요',go:()=>$('closeChat').click()}];
  menu.open($('chatMore'),items,{pick:it=>it.go()})};
-$('backBtn').onclick=()=>{detach();cur=null;wrap().innerHTML='';try{localStorage.removeItem('bisu.chat')}catch{};setMood('idle','듣고 있어요');chatUI();renderStatus()};
+$('backBtn').onclick=()=>{detach();cur=null;wrap().innerHTML='';try{localStorage.removeItem('dec-intern.chat')}catch{};setMood('idle','듣고 있어요');chatUI();renderStatus()};
 // A new conversation's folder: the bot's, unless changed here.
 $('folderChip').onclick=async()=>{if(HOST?.pickFolder){try{const d=await HOST.pickFolder();if(d){$('cwd').value=short(d);chatUI()}}catch{}return}
  const chip=$('folderChip'),inp=document.createElement('input');inp.type='text';inp.className='mono';inp.value=$('cwd').value||short(curBotInfo()?.cwd||'~');chip.hidden=true;chip.after(inp);inp.focus();inp.select();
- const done=ok=>{if(ok){$('cwd').value=inp.value.trim();try{localStorage.setItem('bisu.cwd',$('cwd').value)}catch{}}inp.remove();chip.hidden=false;chatUI()};
+ const done=ok=>{if(ok){$('cwd').value=inp.value.trim();try{localStorage.setItem('dec-intern.cwd',$('cwd').value)}catch{}}inp.remove();chip.hidden=false;chatUI()};
  inp.onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();done(true)}else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();done(false)}};inp.onblur=()=>done(true)};
 // Suggestions live in one place per window (the panel's start, the window's list column) and stay folded.
 let sugOpen=false;
@@ -2306,11 +2308,11 @@ if(!PANEL){const a=$('chatView').querySelector('aside');a.insertBefore($('sug'),
 // ---- the panel's start: what needs me, what is running, the latest few, things to ask ----
 let routineChips=[],routineChipsBot='';
 function renderHome(){if(!PANEL)return;const g=gstat(),box=$('nowBox');
- const row=(c,kind)=>`<button type="button" class="nowRow ${kind}" data-id="${esc(c.id)}"><span class="sd"></span><span class="rt">${ctag(c)}${esc(ctitle(c))}</span><span class="rs">${kind==='wait'?'확인 필요':c.tasks?`일하는 중 · ${c.tasks}`:'답하는 중'}${(c.bot||'bisu')!==curBot?' · '+esc(bots.find(b=>b.id===c.bot)?.name||''):''}</span></button>`;
+ const row=(c,kind)=>`<button type="button" class="nowRow ${kind}" data-id="${esc(c.id)}"><span class="sd"></span><span class="rt">${ctag(c)}${esc(ctitle(c))}</span><span class="rs">${kind==='wait'?'확인 필요':c.tasks?`일하는 중 · ${c.tasks}`:'답하는 중'}${(c.bot||'dec-intern')!==curBot?' · '+esc(bots.find(b=>b.id===c.bot)?.name||''):''}</span></button>`;
  const busy=g.busy.filter(c=>!g.pend.includes(c));
  box.innerHTML=(g.pend.length?`<div class="nh">확인이 필요해요</div>`+g.pend.slice(0,3).map(c=>row(c,'wait')).join(''):'')+(busy.length?`<div class="nh">진행 중</div>`+busy.slice(0,3).map(c=>row(c,'busy')).join(''):'');
  for(const b of box.querySelectorAll('.nowRow'))b.onclick=()=>open(b.dataset.id);
- // Nothing to show: bisu's face and one line, so the start never looks empty or broken.
+ // Nothing to show: Dec Intern's face and one line, so the start never looks empty or broken.
  $('panelStart').classList.toggle('quiet',!g.pend.length&&!busy.length&&!myChats().length);
  const me=curBotInfo()||{name:'덱 인턴'};$('botPillName').innerHTML=nameHTML(me.name);$('botPillAv').textContent=initial(me.name);
  renderChips()}
@@ -2342,7 +2344,7 @@ $('appMore').onclick=async()=>{let sel=true;try{sel=HOST?await HOST.selectionEna
 // The awake menu opens from the ⋯ menu's row too, anchored where the switch was.
 if(PANEL){$('panelStart').querySelector('.startWrap').insertBefore($('sug'),$('recent'))}
 // ---- boot ----
-mountBisu();setMood('idle','듣고 있어요');helpify();
+mountIntern();setMood('idle','듣고 있어요');helpify();
 $('metaOn').checked=META;
 $('metaOn').onchange=()=>{META=$('metaOn').checked;document.body.classList.toggle('meta',META);post('/api/prefs',{meta:META}).then(p=>{prefs=p}).catch(()=>{});
  for(const d of document.querySelectorAll('details.act'))d.open=META};
@@ -2356,23 +2358,23 @@ function renderEngine(){for(const r of document.querySelectorAll('input[name=eng
  if(native&&viewOn('settings'))loadNative();
  for(const el of document.querySelectorAll('.promise'))el.textContent=askPromise();
  if(native){const k=$('key');k.textContent=prefs.glm?'key · Z.ai':'no Z.ai key';k.className='badge '+(prefs.glm?'ok':'bad')}else loadAccount();
- $('engineNote').textContent=prefs.engineForced?'셸에서 BISU_ENGINE으로 정해서 이번 실행은 이 엔진이에요. 여기서 고르려면 BISU_ENGINE 없이 다시 여세요.'
+ $('engineNote').textContent=prefs.engineForced?'셸에서 DEC_INTERN_ENGINE으로 정해서 이번 실행은 이 엔진이에요. 여기서 고르려면 DEC_INTERN_ENGINE 없이 다시 여세요.'
   :native&&!prefs.glm?'Z.ai 키가 없어요. Dec Browser → 설정 → 자격 증명에 사이트 https://api.z.ai로 저장하고 덱 인턴을 다시 여세요.':'새 대화부터 적용돼요. 이미 열린 대화는 시작할 때 엔진 그대로예요.'}
 const KEY_KO={'use-only':'Dec으로 연결됨 (사용 전용: 덱 인턴은 일회용 토큰만 받고 키는 못 봐요)',plain:'셸의 키 (평문)',none:'<span class="err">키가 없어요</span>'};
 let calSnap=null;
 const CAL_KO={full:'허용됨',not_asked:'<span class="w">아직 안 물어봤어요</span>',denied:'<span class="err">거부됨</span>',restricted:'<span class="err">제한됨</span>',write_only:'<span class="w">추가만 허용 — 보려면 전체 접근이 필요해요</span>'};
-// Dec 연결 (/api/dec): the browser, its agent connection and switches, bisu's pairing, and the keys it holds (names only).
+// Dec 연결 (/api/dec): the browser, its agent connection and switches, Dec Intern's pairing, and the keys it holds (names only).
 async function loadDec(){try{renderDec(await api('/api/dec'))}catch(e){$('decInfo').innerHTML=`<div class="k">브라우저</div><div class="err">${esc(e.message)}</div>`}}
 function renderDec(d){
  const rows=[];
  const br=!d.installed?'<span class="err">설치 안 됨</span> — Dec Browser를 설치해야 웹 작업과 키를 쓸 수 있어요'
   :d.endpoint==='on'?'연결됨 (Dec이 열려 있고 외부 에이전트 연결이 켜져 있어요)'
   :d.endpoint==='off'?'<span class="w">열려 있지만 외부 에이전트 연결이 꺼져 있어요</span> — Dec → 설정 → AI 연결 → 외부 에이전트 연결을 켜 주세요'
-  :d.endpoint==='blocked'?`<span class="err">Dec이 덱 인턴을 받지 않아요 (${esc(d.error||'')})</span> — Dec → 설정 → AI 연결에서 bisu를 허용해 주세요`
-  :d.endpoint==='disabled'?'끔 (BISU_DEC=0)'
+  :d.endpoint==='blocked'?`<span class="err">Dec이 덱 인턴을 받지 않아요 (${esc(d.error||'')})</span> — Dec → 설정 → AI 연결에서 덱 인턴을 허용해 주세요`
+  :d.endpoint==='disabled'?'끔 (DEC_INTERN_DEC=0)'
   :'닫혀 있어요 — 웹 작업을 시키면 뒤에서 조용히 열어요';
  rows.push(['브라우저',br]);
- if(d.installed)rows.push(['등록',d.paired?'Dec에 <b>bisu</b>로 등록돼 있어요':'첫 웹 작업 때 <b>bisu</b>로 등록해요']);
+ if(d.installed)rows.push(['등록',d.paired?'Dec에 <b>dec-intern</b>으로 등록돼 있어요':'첫 웹 작업 때 <b>dec-intern</b>으로 등록해요']);
  if(d.endpoint==='on'){
   rows.push(['빠른 모드',d.fastMode?'켜짐 — 웹 작업을 Dec이 통째로 맡아요':'꺼짐 — 덱 인턴이 한 단계씩 직접 조작해요 (Dec의 유료 기능)']);
   rows.push(['탭',d.tabs==null?'알 수 없음':`${d.tabs}개 사용 가능${d.hidden?` (${d.hidden}개는 비공개이거나 AI 제어 꺼짐)`:''}`]);
@@ -2420,8 +2422,8 @@ $('calAsk').onclick=async()=>{if($('calAsk').dataset.blocked){askSettings('캘�
 for(const r of document.querySelectorAll('input[name=approve]'))r.onchange=()=>post('/api/prefs',{approve:r.value}).then(p=>{prefs=p;renderEngine()}).catch(()=>{});
 // 글꼴: 덱 브라우저체 or the system face, saved with the other prefs; the last choice is also kept on this device so
 // the page opens in it before prefs arrive.
-function applyFont(v){v=v==='dec'?'dec':'system';document.body.classList.toggle('font-dec',v==='dec');for(const r of document.querySelectorAll('input[name=font]'))r.checked=r.value===v;try{localStorage.setItem('bisu.font',v)}catch{}}
-try{applyFont(localStorage.getItem('bisu.font'))}catch{}
+function applyFont(v){v=v==='dec'?'dec':'system';document.body.classList.toggle('font-dec',v==='dec');for(const r of document.querySelectorAll('input[name=font]'))r.checked=r.value===v;try{localStorage.setItem('dec-intern.font',v)}catch{}}
+try{applyFont(localStorage.getItem('dec-intern.font'))}catch{}
 for(const r of document.querySelectorAll('input[name=font]'))r.onchange=()=>{applyFont(r.value);post('/api/prefs',{font:r.value}).then(p=>{prefs=p}).catch(()=>{})};
 for(const r of document.querySelectorAll('input[name=engine]'))r.onchange=()=>post('/api/prefs',{engine:r.value}).then(p=>{prefs=p;renderEngine()}).catch(e=>{$('engineNote').textContent=e.message});
 const prefsReady=api('/api/prefs').then(p=>{prefs=p;META=!!p.meta;applyFont(p.font);document.body.classList.toggle('meta',META);$('metaOn').checked=META;renderEngine();if(!cur)chatUI()}).catch(()=>{});
@@ -2429,9 +2431,9 @@ if(PANEL){ensureCtxBar();HOST?.onContext?.(c=>{if(!sent)setCtx(c)});HOST?.contex
 loadAccount();loadRuns();loadSuggestions();loadBots();
 // Which conversation to show on opening. A chat the shell asked for opens as asked. Otherwise the
 // last one is picked up only if it is recent: a panel that opens on a conversation from days ago
-// (whatever bisu believed back then included) is not "what can I do for you". The first run always
+// (whatever Dec Intern believed back then included) is not "what can I do for you". The first run always
 // starts on the start card, because that is where the three first-run questions are.
-Promise.all([refreshChats(),prefsReady]).then(()=>{let id=null,v='chat';try{id=localStorage.getItem('bisu.chat');v=localStorage.getItem('bisu.view')||'chat'}catch{}
+Promise.all([refreshChats(),prefsReady]).then(()=>{let id=null,v='chat';try{id=localStorage.getItem('dec-intern.chat');v=localStorage.getItem('dec-intern.view')||'chat'}catch{}
  const forced=Q.get('chat');
  const recentOne=c=>c&&(c.busy||c.pending||c.tasks||(!PANEL&&fresh(c)));
  if(forced&&chats.some(c=>c.id===forced))open(forced);

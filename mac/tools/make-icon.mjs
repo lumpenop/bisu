@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Draws bisu's two icons from one shape, so both stay in step:
+// Draws Dec Intern's two icons from one shape, so both stay in step:
 //   assets/trayTemplate.png|@2x   the menu bar glyph (template: black strokes, masked by macOS)
 //   assets/AppIcon.iconset/*      the Finder/Dock icon (glyph on a rounded square)
 // Run: node tools/make-icon.mjs     then: iconutil -c icns assets/AppIcon.iconset -o assets/AppIcon.icns
@@ -96,7 +96,7 @@ for (const [name, size] of [['trayTemplate.png', 18], ['trayTemplate@2x.png', 36
   fs.writeFileSync(path.join(ASSETS, name), png(size, rgba));
 }
 
-// app icon: bisu's glossy jade on a rounded square, a solid ivory bubble with jade dots, per Apple's
+// app icon: Dec Intern's glossy jade on a rounded square, a solid ivory bubble with jade dots, per Apple's
 // 1024 grid with margins. The same colours as the page (ui/index.html): --g1/--g2, --card, --accent.
 const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 const JADE_TOP = [108, 204, 154], JADE_BOTTOM = [36, 122, 84], IVORY = [255, 253, 248], IVORY_LOW = [234, 245, 238], DOT = [43, 138, 95];

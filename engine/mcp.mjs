@@ -1,4 +1,4 @@
-// A minimal MCP client over stdio, enough for bisu's own server (ui/cu/server.mjs): computer use
+// A minimal MCP client over stdio, enough for Dec Intern's own server (ui/cu/server.mjs): computer use
 // and past-session search. The server is started once per engine process from the same
 // --mcp-config file launch.zsh already writes, and its tools are offered to the model under their
 // own names (cu_look, session_search, …).
@@ -32,7 +32,7 @@ export async function connect(configPath, {timeoutMs = 15000} = {}) {
       child.stdin.write(JSON.stringify({jsonrpc: '2.0', id, method, params}) + '\n');
     });
     try {
-      await call('initialize', {protocolVersion: '2024-11-05', capabilities: {}, clientInfo: {name: 'bisu-engine', version: '1'}});
+      await call('initialize', {protocolVersion: '2024-11-05', capabilities: {}, clientInfo: {name: 'dec-intern-engine', version: '1'}});
       child.stdin.write(JSON.stringify({jsonrpc: '2.0', method: 'notifications/initialized'}) + '\n');
       const {tools: list = []} = await call('tools/list', {});
       for (const t of list) {

@@ -1,7 +1,7 @@
 'use strict';
-// bisu in the menu bar.
+// dec-intern in the menu bar.
 //
-// One engine (ui/server.mjs, the same one `bisu ui` runs), started as a child process with the
+// One engine (ui/server.mjs, the same one `dec-intern ui` runs), started as a child process with the
 // same key and models, and two windows onto it: a popover under the menu bar icon (⌥Space) and a
 // full window for history and settings. The shell owns four things the browser page cannot:
 // the frontmost app and selection as context, a tray icon, notifications when an approval is
@@ -14,14 +14,14 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const ctx = require('./context.cjs');
 
-app.setName('bisu');
+app.setName('dec-intern');
 
 const ROOT = path.join(__dirname, '..');
 const SERVER = path.join(ROOT, 'ui', 'server.mjs');
 const ICON = path.join(__dirname, 'assets', 'trayTemplate.png');
 // A port nobody can guess, so another local process cannot even find the engine by scanning the
 // usual one. It is still loopback-only; this is defence in depth, not the main lock.
-let PORT = Number(process.env.BISU_APP_PORT || 0);
+let PORT = Number(process.env.DEC_INTERN_APP_PORT || 0);
 let BASE = '';
 const TOKEN = crypto.randomBytes(24).toString('hex');
 
@@ -36,7 +36,7 @@ function freePort() {
     });
   });
 }
-const SELF = 'bisu';
+const SELF = 'dec-intern';
 const SHORTCUT = 'Alt+Space';
 // A frameless window cannot be resized by its edges — macOS only gives frameless windows a drag
 // area, and dragging the border moves the window instead. The panel therefore resizes from a grip
@@ -66,13 +66,13 @@ let logFile = null;
 function log(...parts) {
   const line = `${new Date().toISOString()} ${parts.join(' ')}`;
   try {
-    if (!logFile) logFile = path.join(app.getPath('logs'), 'bisu.log');
+    if (!logFile) logFile = path.join(app.getPath('logs'), 'dec-intern.log');
     fs.mkdirSync(path.dirname(logFile), {recursive: true});
     const st = fs.statSync(logFile, {throwIfNoEntry: false});
     if (st && st.size > 512 * 1024) fs.renameSync(logFile, logFile + '.1');
     fs.appendFileSync(logFile, line + '\n');
   } catch {}
-  if (!app.isPackaged || process.env.BISU_DEBUG) console.error(line);
+  if (!app.isPackaged || process.env.DEC_INTERN_DEBUG) console.error(line);
 }
 
 // ---- state ----
@@ -85,7 +85,7 @@ function saveState(patch) {
   } catch {}
 }
 function defaultCwd() {
-  const dir = path.join(os.homedir(), 'bisu');
+  const dir = path.join(os.homedir(), 'dec-intern');
   try { fs.mkdirSync(dir, {recursive: true}) } catch {}
   return dir;
 }
@@ -211,11 +211,11 @@ async function startEngine() {
   // tools; they are meant to go through dec like everything else.
   delete env.OPENAI_API_KEY;
   delete env.OPENAI_BASE_URL;
-  Object.assign(env, {BISU_UI_NO_OPEN: '1', BISU_UI_PORT: String(PORT), BISU_UI_TOKEN: TOKEN});
+  Object.assign(env, {DEC_INTERN_UI_NO_OPEN: '1', DEC_INTERN_UI_PORT: String(PORT), DEC_INTERN_UI_TOKEN: TOKEN});
 
   let cmd = node, args = [SERVER];
   // Through dec-secret when it is installed: the app only ever holds a one-time token, never the
-  // key. The reference is what bisu.zsh exports too, so both paths use the same stored credential.
+  // key. The reference is what dec-intern.zsh exports too, so both paths use the same stored credential.
   const dec = decPrefix(node);
   if (dec) {
     if (!/^dec:\/\//.test(env.OPENROUTER_API_KEY || '')) env.OPENROUTER_API_KEY = 'dec://OPENROUTER_API_KEY';
@@ -225,7 +225,7 @@ async function startEngine() {
     cmd = dec.cmd;
     args = dec.args;
   } else if (!env.OPENROUTER_API_KEY) {
-    throw Error('Dec Intern could not reach dec-secret: macOS blocks the copy in ~/Desktop from a Finder-launched app. Run `bisu app install` in Terminal once to give it a readable copy.');
+    throw Error('Dec Intern could not reach dec-secret: macOS blocks the copy in ~/Desktop from a Finder-launched app. Run `dec-intern app install` in Terminal once to give it a readable copy.');
   }
 
   engineLog = '';
@@ -467,8 +467,8 @@ async function showPanel({capture = true} = {}) {
   panel.focus();
   panel.webContents.focus();
   fadePanelIn();
-  panel.webContents.send('bisu:shown');
-  if (pendingContext) panel.webContents.send('bisu:context', pendingContext);
+  panel.webContents.send('dec-intern:shown');
+  if (pendingContext) panel.webContents.send('dec-intern:context', pendingContext);
 }
 
 // A short fade, because the window is opaque and would otherwise appear as a finished rectangle
@@ -477,7 +477,7 @@ async function showPanel({capture = true} = {}) {
 let fadeTimer = null;
 function fadePanelIn() {
   clearInterval(fadeTimer);
-  if (!panel || process.env.BISU_NO_ANIM) { panel?.setOpacity(1); return }
+  if (!panel || process.env.DEC_INTERN_NO_ANIM) { panel?.setOpacity(1); return }
   let step = 0;
   fadeTimer = setInterval(() => {
     step++;
@@ -494,7 +494,7 @@ function hidePanel() {
   log('panel hidden');
   // The page drops its event stream here, which is what lets the engine stop Claude Code instead of
   // holding a few hundred megabytes for a panel nobody is looking at.
-  try { panel.webContents.send('bisu:hidden') } catch {}
+  try { panel.webContents.send('dec-intern:hidden') } catch {}
   panel.hide();
 }
 
@@ -519,7 +519,7 @@ function openFull() {
 
 function showError(message) {
   const html = `<!doctype html><meta charset="utf-8"><body style="font:13px -apple-system;padding:18px;color:#b3261e;background:#fbf7f5">
-  <b>bisu could not start</b><pre style="white-space:pre-wrap;font:12px ui-monospace;color:#333">${String(message).replace(/[<&]/g, c => c === '<' ? '&lt;' : '&amp;')}</pre>
+  <b>Dec Intern could not start</b><pre style="white-space:pre-wrap;font:12px ui-monospace;color:#333">${String(message).replace(/[<&]/g, c => c === '<' ? '&lt;' : '&amp;')}</pre>
   <p style="color:#666">Fix it, then choose “Restart engine” from the menu bar icon.</p></body>`;
   if (!panel) createPanel();
   panel.setOpacity(1);
@@ -653,9 +653,9 @@ function askForAccessibility() {
 }
 
 // ---- ipc ----
-ipcMain.handle('bisu:context', () => pendingContext);
-ipcMain.handle('bisu:consume', () => { pendingContext = null; return true });
-ipcMain.handle('bisu:selection-enabled', (_e, on) => {
+ipcMain.handle('dec-intern:context', () => pendingContext);
+ipcMain.handle('dec-intern:consume', () => { pendingContext = null; return true });
+ipcMain.handle('dec-intern:selection-enabled', (_e, on) => {
   if (typeof on === 'boolean') saveState({selection: on});
   return readState().selection !== false;
 });
@@ -663,20 +663,20 @@ ipcMain.handle('bisu:selection-enabled', (_e, on) => {
 // and sending a size keeps the two in step even when a frame is dropped.
 // Probe: a helper spawned by the app is a different code identity for TCC than the app itself, so
 // this says whether Accessibility actually reaches the computer-use helper.
-ipcMain.handle('bisu:cu-probe', async () => {
-  const bin = path.join(app.getPath('userData'), 'bin', 'bisu-cu');
+ipcMain.handle('dec-intern:cu-probe', async () => {
+  const bin = path.join(app.getPath('userData'), 'bin', 'dec-intern-cu');
   if (!fs.existsSync(bin)) return {ok: false, err: 'helper not built'};
   return run(bin, ['trust'], 8000);
 });
 
-ipcMain.handle('bisu:resize', (_e, {width, height} = {}) => {  if (!panel) return null;
+ipcMain.handle('dec-intern:resize', (_e, {width, height} = {}) => {  if (!panel) return null;
   const b = panel.getBounds();
   const next = clampSize({width: Number(width) || b.width, height: Number(height) || b.height, x: b.x, y: b.y});
   if (next.width === b.width && next.height === b.height) return b;
   panel.setSize(next.width, next.height, false);
   return panel.getBounds();
 });
-ipcMain.handle('bisu:accessibility', () => ({
+ipcMain.handle('dec-intern:accessibility', () => ({
   trusted: axTrusted(),
   enabled: readState().selection !== false,
   dismissed: readState().axDismissed === true,
@@ -684,14 +684,14 @@ ipcMain.handle('bisu:accessibility', () => ({
   // opens is nagging, and the menu keeps the same action available afterwards.
   shown: readState().axHintShown === true,
 }));
-ipcMain.on('bisu:ax-shown', () => saveState({axHintShown: true}));
-ipcMain.on('bisu:ax-dismiss', () => saveState({axDismissed: true, axHintShown: true}));
-ipcMain.on('bisu:ax-grant', () => askForAccessibility());
-ipcMain.on('bisu:session', (_e, {sessionId, cwd} = {}) => {
+ipcMain.on('dec-intern:ax-shown', () => saveState({axHintShown: true}));
+ipcMain.on('dec-intern:ax-dismiss', () => saveState({axDismissed: true, axHintShown: true}));
+ipcMain.on('dec-intern:ax-grant', () => askForAccessibility());
+ipcMain.on('dec-intern:session', (_e, {sessionId, cwd} = {}) => {
   if (sessionId && /^[0-9a-f-]{36}$/.test(sessionId)) saveState({sessionId, cwd: cwd || readState().cwd});
 });
-ipcMain.on('bisu:hide', hidePanel);
-ipcMain.on('bisu:full', () => { hidePanel(); openFull() });
+ipcMain.on('dec-intern:hide', hidePanel);
+ipcMain.on('dec-intern:full', () => { hidePanel(); openFull() });
 
 // ---- boot ----
 if (!app.requestSingleInstanceLock()) {
@@ -732,7 +732,7 @@ if (!app.requestSingleInstanceLock()) {
     readSpend();
     setInterval(readSpend, 5 * 60e3);
     // Only for development: show the popover straight away instead of waiting for ⌥Space.
-    if (process.env.BISU_APP_SHOW) showPanel({capture: false});
+    if (process.env.DEC_INTERN_APP_SHOW) showPanel({capture: false});
   });
 
   app.on('will-quit', () => {

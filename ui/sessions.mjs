@@ -1,6 +1,6 @@
 // What was said in past runs, searchable.
 //
-// Claude Code keeps every conversation as a transcript under ~/.claude/projects. bisu's memory is
+// Claude Code keeps every conversation as a transcript under ~/.claude/projects. Dec Intern's memory is
 // only what the person asked to keep; this is the other half: a full-text index over the transcripts
 // themselves, so "지난주에 결제 테스트 어떻게 됐지" is one tool call instead of a guess.
 //
@@ -16,9 +16,10 @@
 //   node sessions.mjs search [projects] <query>      → printed the way the tool shows it
 //   node sessions.mjs show   [projects] <session id>
 //
-// Only bisu's own runs are indexed (a transcript whose model is an OpenRouter slug), so what the
+// Only Dec Intern's own runs are indexed (a transcript whose model is an OpenRouter slug), so what the
 // person says to their normal `claude` never reaches an OpenRouter model through a search result.
-// BISU_SEARCH_ALL=1 indexes every Claude Code transcript instead; changing it rebuilds the index.
+// DEC_INTERN_SEARCH_ALL=1 indexes every Claude Code transcript instead; changing it rebuilds the index.
+import './migrate.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -26,14 +27,14 @@ import {execFile} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
 
-// Claude Code's transcripts and those of bisu's own engine (engine/store.mjs), joined with ':'.
-export const PROJECTS = [path.join(os.homedir(), '.claude', 'projects'), process.env.BISU_SESSIONS_DIR || path.join(os.homedir(), 'Library', 'Application Support', 'bisu', 'sessions')].join(':');
-const DB = process.env.BISU_SESSIONS_DB || path.join(os.homedir(), 'Library', 'Application Support', 'bisu', 'sessions.sqlite');
-const ALL = process.env.BISU_SEARCH_ALL === '1';
+// Claude Code's transcripts and those of Dec Intern's own engine (engine/store.mjs), joined with ':'.
+export const PROJECTS = [path.join(os.homedir(), '.claude', 'projects'), process.env.DEC_INTERN_SESSIONS_DIR || path.join(os.homedir(), 'Library', 'Application Support', 'dec-intern', 'sessions')].join(':');
+const DB = process.env.DEC_INTERN_SESSIONS_DB || path.join(os.homedir(), 'Library', 'Application Support', 'dec-intern', 'sessions.sqlite');
+const ALL = process.env.DEC_INTERN_SEARCH_ALL === '1';
 const OPENROUTER_MODEL = /"model":"[a-z0-9][a-z0-9._-]*\//; // provider/model: only OpenRouter names look like this
 const MAX_TEXT = 6000;     // per message in the index
 const SHOW_BUDGET = 16000; // per session_show answer
-const WHO = ALL ? 'assistant' : 'bisu'; // who answered, in the printed lines
+const WHO = ALL ? 'assistant' : 'dec-intern'; // who answered, in the printed lines
 
 // ---- the database ----
 
@@ -57,7 +58,7 @@ function open() {
     CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
       INSERT INTO fts(fts, rowid, text) VALUES ('delete', old.id, old.text);
     END;`);
-  // Which bot the conversation belonged to (bisu's own engine writes it on every line; Claude Code
+  // Which bot the conversation belonged to (Dec Intern's own engine writes it on every line; Claude Code
   // transcripts have none). Added to indexes made before it existed.
   try { db.exec('ALTER TABLE sessions ADD COLUMN bot TEXT') } catch {}
   return db;
@@ -104,10 +105,10 @@ function parse(text) {
     if (j.type === 'user') {
       // Lines that start with a tag are the harness talking (command output, reminders), not the person.
       if (t.startsWith('<') || t.startsWith('[Request interrupted')) continue;
-      const ctx = t.indexOf('<bisu-context>');
+      const ctx = t.indexOf('<dec-intern-context>');
       if (ctx > 0) t = t.slice(0, ctx).trim();
-      // A worker's report reaches bisu as a message too (engine/cli.mjs): the team's, not the person's.
-      const team = t.startsWith('(bisu: 맡긴 일');
+      // A worker's report reaches dec-intern as a message too (engine/cli.mjs): the team's, not the person's.
+      const team = t.startsWith('(dec-intern: 맡긴 일');
       if (!team) { if (!s.prompt) s.prompt = t.slice(0, 300); s.turns++ }
       streaming = null;
       messages.push({session: s.id, ts, role: team ? 'team' : 'user', text: t.slice(0, MAX_TEXT)});
@@ -129,7 +130,7 @@ function parse(text) {
 export function index(projects = PROJECTS) {
   const t0 = Date.now();
   const db = open();
-  const scope = ALL ? 'all' : 'bisu';
+  const scope = ALL ? 'all' : 'dec-intern';
   const prev = db.prepare(`SELECT v FROM meta WHERE k = 'scope'`).get()?.v;
   if (prev !== scope) {
     db.exec('DELETE FROM messages; DELETE FROM sessions; DELETE FROM files');
@@ -184,7 +185,7 @@ export function refresh(projects = PROJECTS, {maxAge = 20_000} = {}) {
   if (refreshing) return refreshing;
   refreshing = new Promise(resolve => {
     const env = {PATH: process.env.PATH || '/usr/bin:/bin', HOME: os.homedir()};
-    for (const k of ['BISU_SESSIONS_DB', 'BISU_SEARCH_ALL']) if (process.env[k]) env[k] = process.env[k];
+    for (const k of ['DEC_INTERN_SESSIONS_DB', 'DEC_INTERN_SEARCH_ALL']) if (process.env[k]) env[k] = process.env[k];
     execFile(process.execPath, [fileURLToPath(import.meta.url), 'index', projects], {env, timeout: 180_000, maxBuffer: 1 << 20, encoding: 'utf8'}, (e, out, err) => {
       refreshing = null;
       refreshedAt = Date.now();
@@ -202,7 +203,7 @@ const likeEscape = s => s.replace(/[\\%_]/g, c => `\\${c}`);
 const terms = q => String(q || '').split(/\s+/).map(t => t.replace(/^["']+|["']+$/g, '')).filter(Boolean).slice(0, 8);
 const home = os.homedir();
 const short = p => p ? (p.startsWith(home) ? '~' + p.slice(home.length) : p) : '(no folder)';
-const botTag = s => s.bot && s.bot !== 'bisu' ? ` · 봇 ${s.bot}` : ''; // the default bot is just bisu
+const botTag = s => s.bot && s.bot !== 'dec-intern' ? ` · 봇 ${s.bot}` : ''; // the default bot is just dec-intern
 const who = role => role === 'user' ? 'person' : role === 'team' ? 'team' : WHO;
 const day = ts => ts ? new Date(ts).toLocaleDateString('ko-KR', {year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short'}).replace(/\. /g, '-').replace(/\.$/, '').replace(/-\(/, ' (') : '?';
 const clock = ts => ts ? new Date(ts).toLocaleTimeString('ko-KR', {hour: '2-digit', minute: '2-digit', hour12: false}) : '';
@@ -263,7 +264,7 @@ export function search(query, {days = 0, project = '', bot = '', limit = 8, perS
 
 export function searchText(query, opts = {}, note = '') {
   const r = search(query, opts);
-  const scope = ALL ? 'every Claude Code transcript' : 'bisu runs only';
+  const scope = ALL ? 'every Claude Code transcript' : 'dec-intern runs only';
   const head = [];
   if (!r.words.length) return 'session_search needs a query: a few words that would appear in the conversation.';
   if (!r.sessions.length) head.push(`No past session mentions ${r.words.map(w => `"${w}"`).join(' ')}${opts.days ? ` in the last ${opts.days} days` : ''}${opts.project ? ` under "${opts.project}"` : ''}${opts.bot ? ` for bot "${opts.bot}"` : ''}. (index: ${r.total} sessions, ${scope}${note ? `; ${note}` : ''})`);

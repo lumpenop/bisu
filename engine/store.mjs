@@ -1,14 +1,15 @@
-// Where bisu's own engine keeps conversations: one JSONL file per session.
+// Where Dec Intern's own engine keeps conversations: one JSONL file per session.
 //
 // The records use the same outer shape as Claude Code's transcripts (type user/assistant, sessionId,
-// timestamp, cwd, message with content blocks and usage), so bisu's history list and its full-text
+// timestamp, cwd, message with content blocks and usage), so Dec Intern's history list and its full-text
 // search read both kinds with the same code. Resuming rebuilds the OpenAI-format conversation the
 // model needs from those records.
+import '../ui/migrate.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export const ROOT = process.env.BISU_SESSIONS_DIR || path.join(os.homedir(), 'Library', 'Application Support', 'bisu', 'sessions');
+export const ROOT = process.env.DEC_INTERN_SESSIONS_DIR || path.join(os.homedir(), 'Library', 'Application Support', 'dec-intern', 'sessions');
 const slug = cwd => String(cwd).replace(/[^A-Za-z0-9]/g, '-');
 
 export function fileFor(sessionId, cwd) {
@@ -29,9 +30,9 @@ export function find(sessionId) {
 
 export class Transcript {
   constructor(sessionId, cwd) { this.sessionId = sessionId; this.cwd = cwd; this.file = fileFor(sessionId, cwd) }
-  // Every line also names the bot that was talking (BISU_BOT), so session_search can say whose
+  // Every line also names the bot that was talking (DEC_INTERN_BOT), so session_search can say whose
   // conversation a hit is and filter by it.
-  write(rec) { fs.appendFileSync(this.file, JSON.stringify({...rec, sessionId: this.sessionId, cwd: this.cwd, bot: process.env.BISU_BOT || undefined, timestamp: new Date().toISOString()}) + '\n') }
+  write(rec) { fs.appendFileSync(this.file, JSON.stringify({...rec, sessionId: this.sessionId, cwd: this.cwd, bot: process.env.DEC_INTERN_BOT || undefined, timestamp: new Date().toISOString()}) + '\n') }
   user(text) { this.write({type: 'user', message: {role: 'user', content: text}}) }
   assistant({model, text, toolCalls, usage, id}) {
     const content = [];

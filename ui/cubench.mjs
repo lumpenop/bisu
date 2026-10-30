@@ -1,9 +1,9 @@
 // The computer-use benchmark (engine/eval/cu-bench.mjs), run from Settings rather than a terminal:
-// it inherits the engine's keys and, being bisu's own child, bisu's Accessibility grant.
+// it inherits the engine's keys and, being Dec Intern's own child, Dec Intern's Accessibility grant.
 //
 // One run at a time. "check" and "dry" start at once; a real run waits a little first, so whoever
 // pressed the button can step away before the mouse starts moving. Its output is kept for the page,
-// and its results are read back from the file it writes, which stays in bisu's support folder so the
+// and its results are read back from the file it writes, which stays in Dec Intern's support folder so the
 // last run is still there after a restart.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,8 +13,8 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(here);
-const BENCH = () => process.env.BISU_CU_BENCH || path.join(root, 'engine', 'eval', 'cu-bench.mjs');
-const DIR = process.env.BISU_CU_BENCH_DIR || path.join(os.homedir(), 'Library', 'Application Support', 'bisu', 'cu-bench');
+const BENCH = () => process.env.DEC_INTERN_CU_BENCH || path.join(root, 'engine', 'eval', 'cu-bench.mjs');
+const DIR = process.env.DEC_INTERN_CU_BENCH_DIR || path.join(os.homedir(), 'Library', 'Application Support', 'dec-intern', 'cu-bench');
 const MODES = new Set(['check', 'dry', 'run']);
 const MODELS = new Set(['glm-5.3', 'glm-5.3-flash']);
 const LOG_KEEP = 400;
@@ -22,7 +22,7 @@ const LOG_KEEP = 400;
 let run = null; // {mode, repeat, models, startsAt, startedAt, endedAt, exit, log, out, child, timer, stopped}
 
 const rowsOf = file => { try { return fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)) } catch { return [] } };
-// The newest results file, for a page opened after bisu restarted.
+// The newest results file, for a page opened after dec-intern restarted.
 function lastFile() {
   try { return fs.readdirSync(DIR).filter(f => f.endsWith('.jsonl')).sort().map(f => path.join(DIR, f)).pop() || null } catch { return null }
 }
@@ -43,7 +43,7 @@ export function snapshot() {
 export function start({ mode = 'check', repeat = 2, models = 'glm-5.3', delaySec } = {}) {
   if (run && run.exit == null) throw Object.assign(Error('이미 하고 있어요. 끝나거나 멈춘 뒤에 다시 눌러 주세요.'), { status: 409 });
   if (!MODES.has(mode)) throw Object.assign(Error('bad mode'), { status: 400 });
-  if (!fs.existsSync(BENCH())) throw Object.assign(Error('이 bisu에는 시험이 들어 있지 않아요. 앱을 다시 설치해 주세요.'), { status: 404 });
+  if (!fs.existsSync(BENCH())) throw Object.assign(Error('이 덱 인턴에는 시험이 들어 있지 않아요. 앱을 다시 설치해 주세요.'), { status: 404 });
   const list = String(models).split(',').filter(m => MODELS.has(m));
   const n = Math.min(3, Math.max(1, Math.round(Number(repeat) || 2)));
   const wait = mode === 'run' ? Math.min(300, Math.max(0, Number(delaySec ?? 30))) : 0;

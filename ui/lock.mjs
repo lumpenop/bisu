@@ -1,6 +1,6 @@
 // One engine runs the schedule.
 //
-// The menu bar app and `bisu ui` are each a full engine, and both may be open at once. Without this,
+// The menu bar app and `dec-intern ui` are each a full engine, and both may be open at once. Without this,
 // each would run every scheduled job and every suggestion on its own clock — twice the spend, and two
 // agents editing the same folder for a job that may edit. The first engine to tick takes a lock file
 // with its pid; the others skip their ticks while that pid is alive, and take over when it is gone.
@@ -10,9 +10,9 @@ import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
-const LOCK = process.env.BISU_SCHEDULER_LOCK || path.join(os.homedir(), 'Library', 'Application Support', 'bisu', 'scheduler.lock');
+const LOCK = process.env.DEC_INTERN_SCHEDULER_LOCK || path.join(os.homedir(), 'Library', 'Application Support', 'dec-intern', 'scheduler.lock');
 
-// Alive and still a bisu engine: a pid left behind by a crash can be reused by any other program.
+// Alive and still a dec-intern engine: a pid left behind by a crash can be reused by any other program.
 function engineAlive(pid) {
   try { process.kill(pid, 0) } catch (e) { if (e.code !== 'EPERM') return false }
   try { return /^(\S*\/)?node(\s|$)/.test(execFileSync('/bin/ps', ['-o', 'command=', '-p', String(pid)], {encoding: 'utf8', timeout: 3000})) } catch { return false }

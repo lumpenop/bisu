@@ -13,7 +13,7 @@ import path from 'node:path';
 const [mode, projectsDir, daysArg, extra] = process.argv.slice(2);
 const SINCE = Date.now() - (Number(daysArg) || 60) * 864e5;
 
-// Several folders may be given, joined with ':' — Claude Code's transcripts and bisu's own.
+// Several folders may be given, joined with ':' — Claude Code's transcripts and Dec Intern's own.
 function* allFiles(dirs) { for (const d of String(dirs).split(':').filter(Boolean)) yield* jsonlFiles(d) }
 function* jsonlFiles(dir, depth = 0) {
   let entries = [];
@@ -63,7 +63,7 @@ function runs(slugSource) {
       if (j.type === 'ai-title' && j.aiTitle) s.title = j.aiTitle;
       if (j.type === 'user' && !j.isSidechain && !s.prompt) {
         const t = textOf(j.message?.content).trim();
-        if (t && !t.startsWith('<')) s.prompt = t.replace(/<bisu-context>[\s\S]*?(<\/bisu-context>|$)/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300) || null;
+        if (t && !t.startsWith('<')) s.prompt = t.replace(/<dec-intern-context>[\s\S]*?(<\/dec-intern-context>|$)/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300) || null;
       }
       const m = j.message;
       if (j.type === 'assistant' && m?.model && m.usage) {
@@ -82,7 +82,7 @@ function runs(slugSource) {
   });
   return [...sessions.values()]
     .filter(s => Object.keys(s.usage).some(k => slug.test(k)))
-    // Runs bisu started on its own: a suggestion look-around begins with "지금: ", a scheduled job
+    // Runs dec-intern started on its own: a suggestion look-around begins with "지금: ", a scheduled job
     // with "[예약 작업 ". The page keeps them out of the conversation list unless asked.
     .map(({ seen, ...rest }) => ({ ...rest, kind: /^지금: /.test(rest.prompt || '') ? 'suggest' : /^\[예약 작업 /.test(rest.prompt || '') ? 'job' : 'chat' }))
     .sort((a, b) => (b.start || 0) - (a.start || 0))

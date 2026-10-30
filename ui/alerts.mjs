@@ -1,9 +1,9 @@
-// What bisu says when nobody is looking at it: macOS banners, a word before the next meeting, and
+// What dec-intern says when nobody is looking at it: macOS banners, a word before the next meeting, and
 // keeping the Mac awake so it can still answer.
 //
-// Notices are kept here and the shell (mac/native/bisu.swift) collects them from /api/notices every
+// Notices are kept here and the shell (mac/native/dec-intern.swift) collects them from /api/notices every
 // few seconds, the same way it already reads the chats for the menu bar icon, and shows each one as
-// a macOS notification. It leaves out the ones about a conversation when bisu's window is on screen.
+// a macOS notification. It leaves out the ones about a conversation when Dec Intern's window is on screen.
 // Telegram (ui/telegram.mjs) is told about each notice too and sends the meeting ones.
 //
 // Awake: while on power, `caffeinate -s` keeps the system from sleeping (-w ties it to our pid, so a
@@ -14,7 +14,7 @@
 // A job marked 「실행 중엔 맥 깨어 있게」 holds it while it runs, whatever the mode.
 //
 // Meetings: once a minute, events that start within `before` minutes (10 by default) and have not
-// been announced. Read the way the briefing reads them: only if bisu already has full access.
+// been announced. Read the way the briefing reads them: only if dec-intern already has full access.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -24,7 +24,7 @@ import { eventKit, parseWhen, ymd } from '../engine/calendar.mjs';
 import * as proactive from './proactive.mjs';
 import { holdsSchedule } from './lock.mjs';
 
-const CONFIG_DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'bisu');
+const CONFIG_DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'dec-intern');
 const FILE = path.join(CONFIG_DIR, 'alerts.json');
 const BEFORE = [0, 5, 10, 15, 30];
 const KINDS = ['approvals', 'replies', 'cards', 'events'];
@@ -56,7 +56,7 @@ function save(patch) {
     const tmp = FILE + '.' + process.pid + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(s, null, 1));
     fs.renameSync(tmp, FILE);
-  } catch (e) { console.error('bisu alerts: cannot save:', e.message) }
+  } catch (e) { console.error('dec-intern alerts: cannot save:', e.message) }
   return s;
 }
 
@@ -110,7 +110,7 @@ function cards() {
   for (const it of [...proactive.snapshot().items].reverse()) {
     if (it.status !== 'new' || cardsSeen.has(it.id) || (it.at || 0) < BOOT_AT) continue;
     cardsSeen.add(it.id);
-    const head = it.kind !== 'job' ? 'bisu가 하나 찾았어요' : it.job === 'briefing' ? '아침 브리핑' : it.job === 'goal' ? (it.ask ? '목표 · 물어볼 게 있어요' : '목표') : '예약 작업';
+    const head = it.kind !== 'job' ? '덱 인턴이 하나 찾았어요' : it.job === 'briefing' ? '아침 브리핑' : it.job === 'goal' ? (it.ask ? '목표 · 물어볼 게 있어요' : '목표') : '예약 작업';
     notice({ kind: 'card', title: `${head} · ${it.title || ''}`.replace(/ · $/, ''), body: plain(it.body).slice(0, 240) });
   }
 }
@@ -163,7 +163,7 @@ async function meetings() {
 // ---- awake ----
 let caf = null;
 function keepAwake(on) {
-  if (on && !caf && process.env.BISU_AWAKE !== '0') {
+  if (on && !caf && process.env.DEC_INTERN_AWAKE !== '0') {
     caf = spawn('/usr/bin/caffeinate', ['-s', '-w', String(process.pid)], { stdio: 'ignore' });
     const me = caf;
     caf.on('exit', () => { if (caf === me) caf = null });
