@@ -144,11 +144,17 @@ export const TOOLS = {
     run(ctx, {pattern, path: p}) {
       const base = resolvePath(ctx, p || '.');
       if (!fs.statSync(base, {throwIfNoEntry: false})?.isDirectory()) return err(`No such folder: ${rel(ctx, base)}`);
-      const re = globToRegExp(pattern || '**/*');
-      const hits = [];
-      for (const f of walk(base)) if (re.test(path.relative(base, f))) { let m = 0; try { m = fs.statSync(f).mtimeMs } catch {} hits.push([f, m]) }
+      // A bare name ("users.csv", "*.md") that matches nothing at the top is looked for in every folder below: the
+      // model asked for the file, not for the folder it happens to be in.
+      const files = [...walk(base)].map(f => [f, path.relative(base, f)]);
+      let re = globToRegExp(pattern || '**/*');
+      let hits = files.filter(([, r]) => re.test(r));
+      let deep = false;
+      if (!hits.length && pattern && !pattern.includes('/')) { re = globToRegExp('**/' + pattern); hits = files.filter(([, r]) => re.test(r)); deep = hits.length > 0 }
+      hits = hits.map(([f]) => { let m = 0; try { m = fs.statSync(f).mtimeMs } catch {} return [f, m] });
       hits.sort((x, y) => y[1] - x[1]);
-      if (!hits.length) return ok(`No files match ${pattern}.`);
+      if (!hits.length) return ok(`No files match ${pattern}${pattern && !pattern.includes('/') ? ' anywhere under this folder' : ''}.`);
+      if (deep) return ok(`No ${pattern} at the top; found below:\n` + hits.slice(0, 200).map(([f]) => rel(ctx, f)).join('\n'));
       return ok(hits.slice(0, 200).map(([f]) => rel(ctx, f)).join('\n') + (hits.length > 200 ? `\n… ${hits.length - 200} more` : ''));
     },
   },

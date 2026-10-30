@@ -80,13 +80,13 @@ const clip = (s, n) => { s = String(s ?? ''); return s.length > n ? s.slice(0, n
 
 // ---- what kind of request is this ----
 export const ROUTES = {
-  chat: 'Conversation or a question that general knowledge answers, with no files, commands, web or memory needed. Not a question about the people, numbers or contents in the person\'s own files.',
-  work: 'Needs to look at or change files in the working folder, or run commands there (reading, searching, editing, testing) — including questions about data the folder holds (how many users, which orders, what a setting is).',
+  chat: 'Conversation or a question that general knowledge answers, with no files, commands, web or memory needed. Not a question about the people, numbers or contents in the person\'s own files, and not something done or to be done on their lists ("했어, 체크해줘" is calendar).',
+  work: 'Needs to look at or change files in the working folder, or run commands there (reading, searching, editing, testing) — including questions about data the folder holds (how many users, which orders, what a setting is). Adding to one of their lists or ticking something off is calendar, not work.',
   build: 'A sizeable piece of building: a new feature, many files, a whole page, a refactor across the project.',
   past: 'Refers to earlier conversations or earlier work with Dec Intern ("지난번에", "전에 얘기한", "그때"), or asks what another bot, a worker dec-intern handed work to, or a scheduled job did or found ("리서치 봇이 뭐 찾았어?", "어젯밤 예약 작업 어떻게 됐어?").',
   mac: "Operate the Mac outside the working folder: other apps, the screen, clipboard, windows, files elsewhere.",
   schedule: 'Asks the assistant itself to do a task later or repeatedly — check, summarize, report or run something then ("매일 아침 8시에 뉴스 요약해줘", "내일 9시에 빌드 돌려줘"). Not an event in their calendar, and not just reminding them of something.',
-  calendar: 'Their calendar or reminders: what is on (today, this week), adding, moving or cancelling an event or appointment, finding a free time, their to-do lists, or being reminded of something at a time ("3시에 알려줘", "잊지 않게").',
+  calendar: 'Their calendar or reminders: what is on (today, this week), adding, moving or cancelling an event or appointment (a recurring one too), finding a free time, their to-do lists — adding to one ("장보기에 두부 추가해줘"), ticking off something they did ("택배 반품 했어, 체크해줘", "장보기 끝났어") — or being reminded of something at a time ("3시에 알려줘", "잊지 않게").',
   remember: 'Asks Dec Intern to remember a fact or preference for future conversations, or to forget one.',
   web: 'Needs current information from the internet (news, prices, docs, anything recent).',
 };
@@ -127,7 +127,7 @@ export const HINTS = {
   past: 'This refers to earlier conversations: look them up (session_search, then session_show) before answering; if those tools are not available, say you cannot see past conversations yet.',
   build: 'This is a sizeable job: look at the project first, make a short plan, then work through it and verify (run the tests or the app) before answering.',
   schedule: 'This asks you to do something later or recurring: create a scheduled job (schedule_job) if that tool is available; otherwise say it cannot be scheduled yet. Only reminding them of something is a reminder (reminder_add), not a job.',
-  calendar: 'This is about their calendar or reminders: use the calendar and reminder tools. Look before changing (calendar_list, reminders_list) and use the ids they show. Take dates from the Now section and confirm with the weekday. "~에 알려줘" is a reminder with that time (reminder_add), not a scheduled job.',
+  calendar: 'This is about their calendar or reminders: use the calendar and reminder tools. Look before changing (calendar_list, reminders_list) and use the ids they show. Take dates from the Now section and confirm with the weekday. "~에 알려줘" is a reminder with that time (reminder_add), not a scheduled job. "X 했어, 체크해줘" means the reminder X is done: reminders_list, then reminder_change with completed true. "매주 월요일 9시" is one calendar_add with repeat weekly, starting the next such day. A tool that failed (timed out, denied) is told to the person as not done — never say it was added.',
   remember: 'This asks you to remember or forget something: update memory (remember) if that tool is available.',
   mac: 'This is about the Mac outside the folder (apps, screen, clipboard): use the Mac tools if available; otherwise say what you would need.',
   split: 'This request has several independent parts. First write one line naming the parts, then hand each part to a worker with delegate in this same turn (one complete brief each: the files, the goal, what done looks like), tell the person in a line that the parts are under way, and end your turn: do not do the work yourself. When the reports come back, check each against the request, send_back what is wrong or missing, and only then tell the person what was done.',

@@ -13,6 +13,10 @@ const clipFor = (s, n = 4000) => s.length > n ? s.slice(0, n) + `\n… (${s.leng
 // one of the engine's tools. (A JSON answer about something else does not match: the value must be a tool's name.)
 const TOOL_AS_TEXT = /```(?:json)?\s*[\[{][\s\S]*?"(?:tool_name|call|tool|function|name)"\s*:\s*"(?:read_file|write_file|edit_file|list_files|search_files|run_command|web_fetch|web_search|delegate|send_back|answer_worker|remember|forget|profile_set|memory_compact|secret_list|schedule_job|goal_\w+|bot_\w+|routine_\w+|browser_\w+|calendar_\w+|reminders?_\w+|session_\w+|cu_\w+)"/;
 
+// A first reply that only says what it is about to do ("파일 목록부터 보고 … 찾아볼게.", "list_files{path:\".\"}") and makes no call:
+// short, ending in an intention or a pseudo-call, nothing done yet.
+const ONLY_INTENT = /^(?=[\s\S]{0,400}$)(?:[\s\S]*(?:볼게|볼게요|할게|할게요|보겠습니다|하겠습니다|확인해\s*보죠|찾아보죠|해\s*보죠)[.!…\s]*$|[\s\S]*(?:(?:찾아|확인해|살펴|읽어|열어|돌려|실행해|고쳐|세어|뒤져|보고)\s*(?:볼게|볼께|보겠)|목록(?:을|부터)\s*볼게|^\s*(?:I will|I'll|Let me|First,? I)\b|I need to (?:find|look|check|read|see))[\s\S]*$|[\s\S]*\b(?:list_files|read_file|search_files|run_command|edit_file|write_file|web_fetch|web_search|calendar_\w+|reminders?_\w+)\s*[({][\s\S]*$)/;
+
 export async function runTurn({
   model, system, messages, tools = Object.keys(TOOLS), extraTools = {}, ctx,
   thinking = true, effort, maxSteps = 40, onEvent = () => {}, canUseTool = async () => ({allow: true}),
@@ -72,10 +76,10 @@ export async function runTurn({
     }
     // GLM now and then writes the tool calls it meant to make as a JSON block in its text ("tool_name", "call",
     // "arguments") and stops. That is not an answer either: ask once for the calls themselves.
-    if (!calls.length && TOOL_AS_TEXT.test(String(res.text || '')) && !stats.jsonText && !ctx.signal?.aborted) {
+    if (!calls.length && !stats.jsonText && !ctx.signal?.aborted && (TOOL_AS_TEXT.test(String(res.text || '')) || (stats.toolCalls === 0 && ONLY_INTENT.test(String(res.text || '').trim())))) {
       stats.jsonText++;
       messages.push({role: 'assistant', content: res.text});
-      messages.push({role: 'user', content: '(덱 인턴: 도구 호출을 글로 적지 말고 실제로 호출해. 방금 적은 그 호출들을 지금 도구로 실행해 줘.)'});
+      messages.push({role: 'user', content: '(덱 인턴: 하겠다고만 말하고 끝났어. 말로 적지 말고 지금 바로 도구를 호출해서 해 줘.)'});
       continue;
     }
     const reply = {role: 'assistant', content: res.text || '', ...(calls.length ? {tool_calls: calls.map(c => ({id: c.id, type: 'function', function: {name: c.name, arguments: c.arguments}}))} : {})};
