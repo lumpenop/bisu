@@ -9,6 +9,10 @@ import {TOOLS, toolSpecs, parseArgs} from './tools.mjs';
 
 const clipFor = (s, n = 4000) => s.length > n ? s.slice(0, n) + `\n… (${s.length - n} more characters)` : s;
 
+// A tool call written out as text: a fenced JSON object or list whose "tool_name" / "call" / "tool" / "function" / "name" is
+// one of the engine's tools. (A JSON answer about something else does not match: the value must be a tool's name.)
+const TOOL_AS_TEXT = /```(?:json)?\s*[\[{][\s\S]*?"(?:tool_name|call|tool|function|name)"\s*:\s*"(?:read_file|write_file|edit_file|list_files|search_files|run_command|web_fetch|web_search|delegate|send_back|answer_worker|remember|forget|profile_set|memory_compact|secret_list|schedule_job|goal_\w+|bot_\w+|routine_\w+|browser_\w+|calendar_\w+|reminders?_\w+|session_\w+|cu_\w+)"/;
+
 export async function runTurn({
   model, system, messages, tools = Object.keys(TOOLS), extraTools = {}, ctx,
   thinking = true, effort, maxSteps = 40, onEvent = () => {}, canUseTool = async () => ({allow: true}),
@@ -18,7 +22,7 @@ export async function runTurn({
 }) {
   const all = {...TOOLS, ...extraTools};
   const specs = toolSpecs(tools, extraTools);
-  const stats = {steps: 0, toolCalls: 0, invalid: 0, repeats: 0, denied: 0, empty: 0, nudges: 0, loops: 0, claimNudges: 0, actions: [], prompt: 0, completion: 0, cached: 0, reasoning: 0, cost: 0, firstMs: null, stop: 'done', text: ''};
+  const stats = {steps: 0, toolCalls: 0, invalid: 0, repeats: 0, denied: 0, empty: 0, nudges: 0, loops: 0, claimNudges: 0, jsonText: 0, actions: [], prompt: 0, completion: 0, cached: 0, reasoning: 0, cost: 0, firstMs: null, stop: 'done', text: ''};
   const seen = new Map();
   const t0 = Date.now();
   for (;;) {
@@ -65,6 +69,14 @@ export async function runTurn({
         messages.push({role: 'user', content: '(덱 인턴: 방금 답이 비어 있었어. 지금까지 알아낸 것과 한 일을 바탕으로 사람에게 바로 답해줘. 일이 남았으면 이어서 해.)'});
         continue;
       }
+    }
+    // GLM now and then writes the tool calls it meant to make as a JSON block in its text ("tool_name", "call",
+    // "arguments") and stops. That is not an answer either: ask once for the calls themselves.
+    if (!calls.length && TOOL_AS_TEXT.test(String(res.text || '')) && !stats.jsonText && !ctx.signal?.aborted) {
+      stats.jsonText++;
+      messages.push({role: 'assistant', content: res.text});
+      messages.push({role: 'user', content: '(덱 인턴: 도구 호출을 글로 적지 말고 실제로 호출해. 방금 적은 그 호출들을 지금 도구로 실행해 줘.)'});
+      continue;
     }
     const reply = {role: 'assistant', content: res.text || '', ...(calls.length ? {tool_calls: calls.map(c => ({id: c.id, type: 'function', function: {name: c.name, arguments: c.arguments}}))} : {})};
     messages.push(reply);

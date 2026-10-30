@@ -17,6 +17,13 @@ const ok = text => ({text});
 const err = text => ({text, error: true});
 export const isDefaultBot = () => !process.env.DEC_INTERN_BOT || process.env.DEC_INTERN_BOT === bots.DEFAULT;
 
+// A routine of this bot by its name or slug: exact first, then a name that contains the words.
+function findRoutine(q) {
+  const s = String(q || '').trim().toLowerCase();
+  const list = routines.list(process.env.DEC_INTERN_BOT || 'dec-intern');
+  return list.find(r => r.slug === s || r.name.toLowerCase() === s) ?? list.find(r => r.name.toLowerCase().includes(s) || s.includes(r.name.toLowerCase())) ?? null;
+}
+
 export const DEC_INTERN_TOOLS = {
   secret_list: {
     description: 'The API keys the person keeps in Dec (their browser): names, sites and the variable each is handed in — never values. Call it before a command or project that needs a key (then run_command with keys), when they ask what keys they have, or when something fails with a missing key or 401.',
@@ -239,6 +246,39 @@ export const DEC_INTERN_TOOLS = {
     run(ctx, {name, steps, inputs = [], tools = 'read'}) {
       try { const r = routines.save({name, steps, inputs, tools, bot: process.env.DEC_INTERN_BOT || 'dec-intern', source: process.env.DEC_INTERN_TEACH === '1' ? 'teach' : ''}); return ok(`Saved the routine "${r.name}" (${r.slug}). It is in 루틴, where it can be run, paused or scheduled.`) }
       catch (e) { return err(e.message) }
+    },
+  },
+  routine_list: {
+    description: 'This bot\'s saved routines (name, what it needs as inputs, paused or not), for "루틴 뭐 있어", or to find the one the person means before routine_run.',
+    parameters: {type: 'object', properties: {}},
+    kind: 'read',
+    run() {
+      const list = routines.list(process.env.DEC_INTERN_BOT || 'dec-intern');
+      if (!list.length) return ok('No routines saved for this bot yet. One is saved with routine_save when the person asks to keep what was just done.');
+      return ok(list.map(r => `- ${r.name} (${r.slug})${r.inputs.length ? ` — inputs: ${r.inputs.join(', ')}` : ''} · ${r.tools}${r.paused ? ' · paused' : ''}`).join('\n'));
+    },
+  },
+  routine_run: {
+    description: 'Run one of this bot\'s saved routines now, in this conversation — "루틴 돌려줘", "저장해 둔 그거 해줘". Give its name (routine_list shows them) and the inputs it asks for; the steps come back for you to do right away with the usual tools. A paused routine is not run.',
+    parameters: {type: 'object', properties: {name: {type: 'string', description: 'the routine\'s name or slug'}, values: {type: 'object', description: 'its inputs, by name', additionalProperties: {type: 'string'}}}, required: ['name']},
+    kind: 'read',
+    run(ctx, {name, values = {}}) {
+      const r = findRoutine(name);
+      if (!r) return err(`No routine called "${name}" for this bot. ${routines.list(process.env.DEC_INTERN_BOT || 'dec-intern').map(x => x.name).join(', ') || 'None is saved yet.'}`);
+      if (r.paused) return err(`"${r.name}" is paused: the person resumes it in 루틴, or asks you to (routine_pause with paused false).`);
+      const missing = r.inputs.filter(k => values[k] == null || !String(values[k]).trim());
+      if (missing.length) return err(`"${r.name}" needs ${missing.join(', ')}: ask the person for ${missing.length > 1 ? 'them' : 'it'} in one question, then call again with values.`);
+      return ok(`Do this now, in this conversation, step by step, with the usual tools (each step that changes something asks as usual):\n\n${routines.prompt(r, values)}`);
+    },
+  },
+  routine_pause: {
+    description: 'Pause or resume one of this bot\'s routines ("그 루틴 잠깐 멈춰", "다시 켜 줘"): a paused routine is not run by hand or by its schedule.',
+    parameters: {type: 'object', properties: {name: {type: 'string'}, paused: {type: 'boolean'}}, required: ['name', 'paused']},
+    kind: 'memory',
+    run(ctx, {name, paused}) {
+      const r = findRoutine(name);
+      if (!r) return err(`No routine called "${name}" for this bot.`);
+      try { routines.update(r.slug, {paused: !!paused}); return ok(`"${r.name}" is ${paused ? 'paused' : 'back on'}.`) } catch (e) { return err(e.message) }
     },
   },
   schedule_job: {
